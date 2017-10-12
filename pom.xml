@@ -4,9 +4,15 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>com.hazelcas.jet</groupId>
+    <groupId>com.hazelcast.jet</groupId>
     <artifactId>jet-soak-testing</artifactId>
+    <packaging>pom</packaging>
     <version>1.0-SNAPSHOT</version>
+    <description>Soak Tests for Hazelcast Jet</description>
+    <modules>
+        <module>kafka-test</module>
+        <module>hdfs-test</module>
+    </modules>
 
     <dependencies>
         <dependency>
@@ -19,50 +25,10 @@
             <artifactId>hazelcast-jet</artifactId>
             <version>0.4</version>
         </dependency>
-        <dependency>
-            <groupId>com.hazelcast.jet</groupId>
-            <artifactId>hazelcast-jet-kafka</artifactId>
-            <version>0.4</version>
-        </dependency>
     </dependencies>
 
     <build>
         <plugins>
-            <plugin>
-                <groupId>org.testpackage</groupId>
-                <artifactId>testpackage-maven-plugin</artifactId>
-                <executions>
-                    <execution>
-                        <phase>package</phase>
-                        <goals>
-                            <goal>fatjar</goal>
-                        </goals>
-                        <configuration>
-                            <package-name>com.hazelcast.jet.tests.kafka</package-name>
-                            <flags>-Xmx2G</flags>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
-            <plugin>
-                <groupId>org.codehaus.mojo</groupId>
-                <artifactId>build-helper-maven-plugin</artifactId>
-                <version>1.4</version>
-                <executions>
-                    <execution>
-                        <id>add-test-source</id>
-                        <phase>generate-sources</phase>
-                        <goals>
-                            <goal>add-source</goal>
-                        </goals>
-                        <configuration>
-                            <sources>
-                                <source>${basedir}/src/test/java</source>
-                            </sources>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>

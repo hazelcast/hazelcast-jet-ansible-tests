@@ -59,6 +59,12 @@ public class WordGenerator extends AbstractProcessor {
     }
 
     public static DistributedSupplier<Processor> getSupplier(String inputPath, long distinct, long total) {
-        return () -> new WordGenerator(inputPath, distinct, total);
+        DistributedSupplier<Processor> supplier = new DistributedSupplier<Processor>() {
+            @Override
+            public Processor get() {
+                return new WordGenerator(inputPath, distinct, total);
+            }
+        };
+        return supplier;
     }
 }

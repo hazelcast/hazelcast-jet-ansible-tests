@@ -1,25 +1,16 @@
 package com.hazelcast.jet.tests.kafka;
 
-import com.hazelcast.jet.AggregateOperation;
-import com.hazelcast.jet.AggregateOperations;
-import com.hazelcast.jet.DAG;
 import com.hazelcast.jet.JetInstance;
-import com.hazelcast.jet.TimestampKind;
-import com.hazelcast.jet.TimestampedEntry;
-import com.hazelcast.jet.Vertex;
-import com.hazelcast.jet.WatermarkPolicies;
-import com.hazelcast.jet.WindowDefinition;
 import com.hazelcast.jet.accumulator.LongAccumulator;
+import com.hazelcast.jet.aggregate.AggregateOperation1;
+import com.hazelcast.jet.aggregate.AggregateOperations;
+import com.hazelcast.jet.core.DAG;
+import com.hazelcast.jet.core.TimestampKind;
+import com.hazelcast.jet.core.TimestampedEntry;
+import com.hazelcast.jet.core.Vertex;
+import com.hazelcast.jet.core.WatermarkPolicies;
+import com.hazelcast.jet.core.WindowDefinition;
 import com.hazelcast.jet.server.JetBootstrap;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Paths;
-import java.util.AbstractMap.SimpleImmutableEntry;
-import java.util.Properties;
-import java.util.UUID;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
-import java.util.stream.Collectors;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.junit.Before;
 import org.junit.Test;
@@ -30,19 +21,29 @@ import test.kafka.Trade;
 import test.kafka.TradeDeserializer;
 import test.kafka.TradeProducer;
 
-import static com.hazelcast.jet.Edge.between;
-import static com.hazelcast.jet.Partitioner.HASH_CODE;
-import static com.hazelcast.jet.WatermarkEmissionPolicy.emitByFrame;
-import static com.hazelcast.jet.WindowDefinition.slidingWindowDef;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.AbstractMap.SimpleImmutableEntry;
+import java.util.Properties;
+import java.util.UUID;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
+import java.util.stream.Collectors;
+
+import static com.hazelcast.jet.core.Edge.between;
+import static com.hazelcast.jet.core.Partitioner.HASH_CODE;
+import static com.hazelcast.jet.core.WatermarkEmissionPolicy.emitByFrame;
+import static com.hazelcast.jet.core.WindowDefinition.slidingWindowDef;
+import static com.hazelcast.jet.core.processor.KafkaProcessors.streamKafkaP;
+import static com.hazelcast.jet.core.processor.Processors.accumulateByFrameP;
+import static com.hazelcast.jet.core.processor.Processors.combineToSlidingWindowP;
+import static com.hazelcast.jet.core.processor.Processors.insertWatermarksP;
+import static com.hazelcast.jet.core.processor.Processors.mapP;
+import static com.hazelcast.jet.core.processor.SinkProcessors.writeFileP;
 import static com.hazelcast.jet.function.DistributedFunctions.entryKey;
 import static com.hazelcast.jet.function.DistributedFunctions.entryValue;
 import static com.hazelcast.jet.impl.util.Util.uncheckCall;
-import static com.hazelcast.jet.processor.KafkaProcessors.streamKafka;
-import static com.hazelcast.jet.processor.Processors.accumulateByFrame;
-import static com.hazelcast.jet.processor.Processors.combineToSlidingWindow;
-import static com.hazelcast.jet.processor.Processors.insertWatermarks;
-import static com.hazelcast.jet.processor.Processors.map;
-import static com.hazelcast.jet.processor.Sinks.writeFile;
 import static java.lang.String.valueOf;
 import static java.lang.System.currentTimeMillis;
 
@@ -81,25 +82,25 @@ public class KafkaTest {
     @Test
     public void kafkaTest() throws IOException, ExecutionException, InterruptedException {
         WindowDefinition windowDef = slidingWindowDef(windowSize, slideBy);
-        AggregateOperation<Object, LongAccumulator, Long> counting = AggregateOperations.counting();
+        AggregateOperation1<Object, LongAccumulator, Long> counting = AggregateOperations.counting();
 
         DAG dag = new DAG();
-        Vertex readKafka = dag.newVertex("read-kafka", streamKafka(kafkaProps, topic))
+        Vertex readKafka = dag.newVertex("read-kafka", streamKafkaP(kafkaProps, topic))
                               .localParallelism(1);
-        Vertex extractTrade = dag.newVertex("extract-trade", map(entryValue()));
+        Vertex extractTrade = dag.newVertex("extract-trade", mapP(entryValue()));
         Vertex insertPunctuation = dag.newVertex("insert-punctuation",
-                insertWatermarks(Trade::getTime, WatermarkPolicies.limitingLagAndLull(lagMs, lagMs), emitByFrame(windowDef)));
+                insertWatermarksP(Trade::getTime, WatermarkPolicies.limitingLagAndLull(lagMs, lagMs), emitByFrame(windowDef)));
         Vertex accumulateByF = dag.newVertex("accumulate-by-frame",
-                accumulateByFrame(Trade::getTicker, Trade::getTime, TimestampKind.EVENT, windowDef, counting));
-        Vertex slidingW = dag.newVertex("sliding-window", combineToSlidingWindow(windowDef, counting));
+                accumulateByFrameP(Trade::getTicker, Trade::getTime, TimestampKind.EVENT, windowDef, counting));
+        Vertex slidingW = dag.newVertex("sliding-window", combineToSlidingWindowP(windowDef, counting));
         Vertex formatOutput = dag.newVertex("format-output",
-                map((TimestampedEntry entry) -> {
+                mapP((TimestampedEntry entry) -> {
                     long timeMs = currentTimeMillis();
                     long latencyMs = timeMs - entry.getTimestamp();
                     return String.format("%d,%s,%s,%d,%d", entry.getTimestamp(), entry.getKey(), entry.getValue(),
                             timeMs, latencyMs);
                 }));
-        Vertex fileSink = dag.newVertex("write-file", writeFile(outputPath)).localParallelism(1);
+        Vertex fileSink = dag.newVertex("write-file", writeFileP(outputPath)).localParallelism(1);
 
         dag
                 .edge(between(readKafka, extractTrade).isolated())

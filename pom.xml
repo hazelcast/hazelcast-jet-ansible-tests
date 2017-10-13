@@ -14,6 +14,10 @@
         <module>hdfs-test</module>
     </modules>
 
+    <properties>
+        <jet.version>0.5-SNAPSHOT</jet.version>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>org.testpackage</groupId>
@@ -23,7 +27,7 @@
         <dependency>
             <groupId>com.hazelcast.jet</groupId>
             <artifactId>hazelcast-jet</artifactId>
-            <version>0.4</version>
+            <version>${jet.version}</version>
         </dependency>
     </dependencies>
 

@@ -114,7 +114,7 @@ public class KafkaTest {
 
         JetInstance jet = JetBootstrap.getInstance();
         System.out.println("Executing job..");
-        Future<Void> execute = jet.newJob(dag).execute();
+        Future<Void> execute = jet.newJob(dag).getFuture();
 
         try {
             Thread.sleep(5000);

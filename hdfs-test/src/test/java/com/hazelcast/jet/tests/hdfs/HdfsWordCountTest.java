@@ -17,25 +17,17 @@ package com.hazelcast.jet.tests.hdfs;/*
 import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.Pipeline;
 import com.hazelcast.jet.Source;
-import com.hazelcast.jet.core.AbstractProcessor;
 import com.hazelcast.jet.core.DAG;
 import com.hazelcast.jet.core.Vertex;
 import com.hazelcast.jet.core.processor.Processors;
 import com.hazelcast.jet.server.JetBootstrap;
-import com.hazelcast.util.ExceptionUtil;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
+import java.util.StringTokenizer;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.TextInputFormat;
 import org.apache.hadoop.mapred.TextOutputFormat;
 import org.junit.Before;
 import org.junit.Test;
-
-import java.io.DataOutputStream;
-import java.io.IOException;
-import java.io.OutputStreamWriter;
-import java.util.StringTokenizer;
 
 import static com.hazelcast.jet.Sinks.writeList;
 import static com.hazelcast.jet.Sources.fromProcessor;
@@ -49,6 +41,7 @@ import static com.hazelcast.jet.core.processor.Processors.flatMapP;
 import static com.hazelcast.jet.function.DistributedFunctions.entryKey;
 import static com.hazelcast.jet.function.DistributedFunctions.entryValue;
 import static com.hazelcast.jet.function.DistributedFunctions.wholeItem;
+import static hdfs.tests.WordGenerator.getSupplier;
 
 public class HdfsWordCountTest {
 
@@ -68,8 +61,7 @@ public class HdfsWordCountTest {
 
         Pipeline pipeline = Pipeline.create();
 
-        Source<Object> source = fromProcessor("generator",
-                () -> new WordGenerator(inputPath, distinct, total));
+        Source<Object> source = fromProcessor("generator", getSupplier(inputPath, distinct, total));
         pipeline.drawFrom(source).drainTo(writeList("resultList"));
 
         jet.newJob(pipeline).join();
@@ -113,50 +105,6 @@ public class HdfsWordCountTest {
            .edge(between(combine, consumer));
 
         jet.newJob(dag).join();
-    }
-
-    public static class WordGenerator extends AbstractProcessor {
-
-        private final String path;
-        private final long distinct;
-        private final long total;
-
-        public WordGenerator(String path, long distinct, long total) {
-            this.path = path;
-            this.distinct = distinct;
-            this.total = total;
-        }
-
-        @Override
-        public boolean complete() {
-            try {
-                FileSystem fs = FileSystem.get(new Configuration());
-                DataOutputStream hdfsFile = fs.create(new Path(path));
-                try (OutputStreamWriter stream = new OutputStreamWriter(hdfsFile)) {
-                    writeToFile(stream, distinct, total);
-                }
-                return tryEmit("done!");
-            } catch (IOException e) {
-                throw ExceptionUtil.rethrow(e);
-            }
-        }
-
-        @Override
-        public boolean isCooperative() {
-            return false;
-        }
-
-        private void writeToFile(OutputStreamWriter stream, long distinctWords, long numWords) throws IOException {
-            for (long i = 0; i < numWords; i++) {
-                stream.write(i % distinctWords + "");
-                if (i % 20 == 0) {
-                    stream.write("\n");
-                } else {
-                    stream.write(" ");
-                }
-            }
-            stream.write("\n");
-        }
     }
 
 }

@@ -65,10 +65,7 @@ public class HdfsWordCountTest {
         outputPath = System.getProperty("hdfs_output_path", "output");
         distinct = Long.parseLong(System.getProperty("hdfs_distinct", "1000000"));
         total = Long.parseLong(System.getProperty("hdfs_total", "10000000"));
-    }
 
-    @Before
-    public void generateWords() {
         Pipeline pipeline = Pipeline.create();
 
         Source<Object> source = fromProcessor("generator",
@@ -78,6 +75,7 @@ public class HdfsWordCountTest {
         jet.newJob(pipeline).join();
 
     }
+
 
     @Test
     public void test() {

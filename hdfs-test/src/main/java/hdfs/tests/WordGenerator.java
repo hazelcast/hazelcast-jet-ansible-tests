@@ -4,12 +4,13 @@ import com.hazelcast.jet.core.AbstractProcessor;
 import com.hazelcast.jet.core.Processor;
 import com.hazelcast.jet.function.DistributedSupplier;
 import com.hazelcast.util.ExceptionUtil;
-import java.io.DataOutputStream;
-import java.io.IOException;
-import java.io.OutputStreamWriter;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+
+import java.io.DataOutputStream;
+import java.io.IOException;
+import java.io.OutputStreamWriter;
 
 /**
  * date: 10/13/17
@@ -25,6 +26,16 @@ public class WordGenerator extends AbstractProcessor {
         this.path = path;
         this.distinct = distinct;
         this.total = total;
+    }
+
+    public static DistributedSupplier<Processor> getSupplier(String inputPath, long distinct, long total) {
+        DistributedSupplier<Processor> supplier = new DistributedSupplier<Processor>() {
+            @Override
+            public Processor get() {
+                return new WordGenerator(inputPath, distinct, total);
+            }
+        };
+        return supplier;
     }
 
     @Override
@@ -56,10 +67,5 @@ public class WordGenerator extends AbstractProcessor {
             }
         }
         stream.write("\n");
-    }
-
-    public static DistributedSupplier<Processor> getSupplier(String inputPath, long distinct, long total) {
-        DistributedSupplier<Processor> supplier = () -> new WordGenerator(inputPath, distinct, total);
-        return supplier;
     }
 }

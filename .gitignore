@@ -6,6 +6,7 @@ target/
 *.class
 *.iml
 dependency-reduced-pom.xml
+.testpackage
 
 # Log file
 *.log

@@ -14,20 +14,29 @@ package com.hazelcast.jet.tests.hdfs;/*
  * limitations under the License.
  */
 
+import com.hazelcast.jet.HdfsSources;
 import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.Pipeline;
+import com.hazelcast.jet.Sinks;
 import com.hazelcast.jet.Source;
+import com.hazelcast.jet.Util;
+import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.core.DAG;
 import com.hazelcast.jet.core.Vertex;
 import com.hazelcast.jet.core.processor.Processors;
 import com.hazelcast.jet.server.JetBootstrap;
-import java.util.StringTokenizer;
+import com.hazelcast.jet.stream.IStreamMap;
+import hdfs.tests.MetaSupplier;
+import hdfs.tests.WordGenerator;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.TextInputFormat;
 import org.apache.hadoop.mapred.TextOutputFormat;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
+
+import java.util.StringTokenizer;
 
 import static com.hazelcast.jet.Sinks.writeList;
 import static com.hazelcast.jet.Sources.fromProcessor;
@@ -41,9 +50,12 @@ import static com.hazelcast.jet.core.processor.Processors.flatMapP;
 import static com.hazelcast.jet.function.DistributedFunctions.entryKey;
 import static com.hazelcast.jet.function.DistributedFunctions.entryValue;
 import static com.hazelcast.jet.function.DistributedFunctions.wholeItem;
-import static hdfs.tests.WordGenerator.getSupplier;
+import static org.junit.Assert.assertEquals;
 
 public class HdfsWordCountTest {
+
+    private static final String MAP_NAME = "wordCountMap";
+    private static final String TAB_STRING = "\t";
 
     private JetInstance jet;
     private String inputPath;
@@ -54,24 +66,27 @@ public class HdfsWordCountTest {
     @Before
     public void init() {
         jet = JetBootstrap.getInstance();
-        inputPath = System.getProperty("hdfs_input_path", "input");
-        outputPath = System.getProperty("hdfs_output_path", "output");
+        inputPath = System.getProperty("hdfs_input_path", "/hdfs-input");
+        outputPath = System.getProperty("hdfs_output_path", "/hdfs-output");
         distinct = Long.parseLong(System.getProperty("hdfs_distinct", "1000000"));
         total = Long.parseLong(System.getProperty("hdfs_total", "10000000"));
 
         Pipeline pipeline = Pipeline.create();
 
-        Source<Object> source = fromProcessor("generator", getSupplier(inputPath, distinct, total));
+        Source<Object> source = fromProcessor("generator", WordGenerator.getSupplier(inputPath, distinct, total));
         pipeline.drawFrom(source).drainTo(writeList("resultList"));
 
-        jet.newJob(pipeline).join();
+        JobConfig jobConfig = new JobConfig();
+        jobConfig.addClass(HdfsWordCountTest.class);
+        jobConfig.addClass(WordGenerator.class);
+        jobConfig.addClass(MetaSupplier.class);
 
+        jet.newJob(pipeline, jobConfig).join();
     }
 
 
     @Test
     public void test() {
-
         DAG dag = new DAG();
         JobConf conf = new JobConf();
         conf.setOutputFormat(TextOutputFormat.class);
@@ -104,7 +119,36 @@ public class HdfsWordCountTest {
                    .partitioned(entryKey()))
            .edge(between(combine, consumer));
 
-        jet.newJob(dag).join();
+        JobConfig jobConfig = new JobConfig();
+        jobConfig.addClass(HdfsWordCountTest.class);
+
+        jet.newJob(dag, jobConfig).join();
+        verify();
+    }
+
+    private void verify() {
+        Pipeline pipeline = Pipeline.create();
+
+        JobConf jobConf = new JobConf();
+        jobConf.setInputFormat(TextInputFormat.class);
+        jobConf.setOutputFormat(TextOutputFormat.class);
+        TextInputFormat.addInputPath(jobConf, new Path(outputPath));
+
+        pipeline.drawFrom(HdfsSources.readHdfs(jobConf, (k, v) -> v.toString()))
+                .map(line -> {
+                    String[] wordCountArray = line.split(TAB_STRING);
+                    return Util.entry(wordCountArray[0], Long.parseLong(wordCountArray[1]));
+                }).drainTo(Sinks.writeMap(MAP_NAME));
+
+        JobConfig jobConfig = new JobConfig();
+        jobConfig.addClass(HdfsWordCountTest.class);
+        jet.newJob(pipeline, jobConfig).join();
+
+        IStreamMap<String, Long> wordCountMap = jet.getMap(MAP_NAME);
+        assertEquals(distinct, wordCountMap.size());
+        long[] totalCount = new long[1];
+        wordCountMap.forEach((k, v) -> totalCount[0] += v);
+        assertEquals(total, totalCount[0]);
     }
 
 }

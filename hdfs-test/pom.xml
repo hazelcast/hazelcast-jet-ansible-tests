@@ -52,17 +52,38 @@
     <build>
         <plugins>
             <plugin>
-                <groupId>org.testpackage</groupId>
-                <artifactId>testpackage-maven-plugin</artifactId>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <version>2.1</version>
                 <executions>
                     <execution>
                         <phase>package</phase>
                         <goals>
-                            <goal>fatjar</goal>
+                            <goal>shade</goal>
                         </goals>
                         <configuration>
-                            <package-name>com.hazelcast.jet.tests.hdfs</package-name>
-                            <flags>-Xmx2G</flags>
+                            <transformers>
+                                <transformer
+                                        implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
+                                <transformer
+                                        implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                                    <manifestEntries>
+                                        <Main-Class>org.testpackage.TestPackage</Main-Class>
+                                        <TestPackage-Package>com.hazelcast.jet.tests.hdfs</TestPackage-Package>
+                                    </manifestEntries>
+                                </transformer>
+                            </transformers>
+                            <createDependencyReducedPom>false</createDependencyReducedPom>
+                            <filters>
+                                <filter>
+                                    <artifact>*:*</artifact>
+                                    <excludes>
+                                        <exclude>META-INF/*.SF</exclude>
+                                        <exclude>META-INF/*.DSA</exclude>
+                                        <exclude>META-INF/*.RSA</exclude>
+                                    </excludes>
+                                </filter>
+                            </filters>
                         </configuration>
                     </execution>
                 </executions>

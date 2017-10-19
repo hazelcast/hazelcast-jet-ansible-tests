@@ -20,6 +20,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.stream.Collectors;
 import org.apache.kafka.common.serialization.LongDeserializer;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -53,10 +54,11 @@ public class KafkaTest {
     private int lagMs;
     private int windowSize;
     private int slideBy;
-    private String outputPath;
+    private String outputList;
     private int tickerCount;
     private int countPerTicker;
     private Properties kafkaProps;
+    private JetInstance jet;
 
     @Before
     public void setUp() throws Exception {
@@ -66,10 +68,11 @@ public class KafkaTest {
         lagMs = Integer.parseInt(System.getProperty("lagMs", "1000"));
         windowSize = Integer.parseInt(System.getProperty("windowSize", "5000"));
         slideBy = Integer.parseInt(System.getProperty("slideBy", "1000"));
-        outputPath = System.getProperty("outputPath", System.getProperty("user.dir") + "/jet-output");
-        tickerCount = 20;
-        countPerTicker = 100;
+        outputList = System.getProperty("outputList", System.getProperty("user.dir") + "/jet-output");
+        tickerCount = Integer.parseInt(System.getProperty("tickerCount", "20"));
+        countPerTicker = Integer.parseInt(System.getProperty("countPerTicker", "100"));
         kafkaProps = getKafkaProperties(brokerUri, offsetReset);
+        jet = JetBootstrap.getInstance();
 
         try (TradeProducer tradeProducer = new TradeProducer(brokerUri)) {
             tradeProducer.produce(topic, tickerCount, countPerTicker);
@@ -97,7 +100,7 @@ public class KafkaTest {
                     return String.format("%d,%s,%s,%d,%d", entry.getTimestamp(), entry.getKey(), entry.getValue(),
                             timeMs, latencyMs);
                 }));
-        Vertex fileSink = dag.newVertex("write-file", writeListP(outputPath)).localParallelism(1);
+        Vertex fileSink = dag.newVertex("write-file", writeListP(outputList)).localParallelism(1);
 
         dag
                 .edge(between(readKafka, extractTrade).isolated())
@@ -109,7 +112,6 @@ public class KafkaTest {
                 .edge(between(formatOutput, fileSink));
 
 
-        JetInstance jet = JetBootstrap.getInstance();
         System.out.println("Executing job..");
         Future<Void> execute = jet.newJob(dag).getFuture();
 
@@ -118,33 +120,36 @@ public class KafkaTest {
             System.out.println("Cancelling job...");
             execute.cancel(true);
             execute.get();
-
-            IStreamList<String> list = jet.getList(outputPath);
-            boolean result = list.stream()
-                                 .collect(Collectors.groupingBy(
-                                         l -> l.split(",")[0], Collectors.mapping(
-                                                 l -> {
-                                                     String[] split = l.split(",");
-                                                     return new SimpleImmutableEntry<>(split[1], split[2]);
-                                                 }, Collectors.toSet()
-                                         )
-                                         )
-                                 )
-                                 .entrySet()
-                                 .stream()
-                                 .filter(windowSet -> windowSet.getValue().size() == tickerCount)
-                                 .findFirst()
-                                 .get()
-                                 .getValue()
-                                 .stream()
-                                 .allMatch(countedTicker -> countedTicker.getValue().equals(valueOf(countPerTicker)));
-            VisibleAssertions.assertTrue("tick count per window matches", result);
         } catch (Exception ignored) {
-        } finally {
-            jet.shutdown();
         }
+
+        IStreamList<String> list = jet.getList(outputList);
+        boolean result = list.stream()
+                             .collect(Collectors.groupingBy(
+                                     l -> l.split(",")[0], Collectors.mapping(
+                                             l -> {
+                                                 String[] split = l.split(",");
+                                                 return new SimpleImmutableEntry<>(split[1], split[2]);
+                                             }, Collectors.toSet()
+                                     )
+                                     )
+                             )
+                             .entrySet()
+                             .stream()
+                             .filter(windowSet -> windowSet.getValue().size() == tickerCount)
+                             .findFirst()
+                             .get()
+                             .getValue()
+                             .stream()
+                             .allMatch(countedTicker -> countedTicker.getValue().equals(valueOf(countPerTicker)));
+        VisibleAssertions.assertTrue("tick count per window matches", result);
+
     }
 
+    @After
+    public void tearDown() throws Exception {
+        jet.shutdown();
+    }
 
     private static Properties getKafkaProperties(String brokerUrl, String offsetReset) {
         Properties props = new Properties();
@@ -156,6 +161,5 @@ public class KafkaTest {
         props.setProperty("max.poll.records", "32768");
         return props;
     }
-
 
 }

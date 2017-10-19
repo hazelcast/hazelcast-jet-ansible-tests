@@ -11,6 +11,14 @@ import com.hazelcast.jet.core.Vertex;
 import com.hazelcast.jet.core.WatermarkPolicies;
 import com.hazelcast.jet.core.WindowDefinition;
 import com.hazelcast.jet.server.JetBootstrap;
+import com.hazelcast.jet.stream.IStreamList;
+import java.io.IOException;
+import java.util.AbstractMap.SimpleImmutableEntry;
+import java.util.Properties;
+import java.util.UUID;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
+import java.util.stream.Collectors;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.junit.Before;
 import org.junit.Test;
@@ -21,16 +29,6 @@ import test.kafka.Trade;
 import test.kafka.TradeDeserializer;
 import test.kafka.TradeProducer;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Paths;
-import java.util.AbstractMap.SimpleImmutableEntry;
-import java.util.Properties;
-import java.util.UUID;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
-import java.util.stream.Collectors;
-
 import static com.hazelcast.jet.core.Edge.between;
 import static com.hazelcast.jet.core.Partitioner.HASH_CODE;
 import static com.hazelcast.jet.core.WatermarkEmissionPolicy.emitByFrame;
@@ -40,10 +38,9 @@ import static com.hazelcast.jet.core.processor.Processors.accumulateByFrameP;
 import static com.hazelcast.jet.core.processor.Processors.combineToSlidingWindowP;
 import static com.hazelcast.jet.core.processor.Processors.insertWatermarksP;
 import static com.hazelcast.jet.core.processor.Processors.mapP;
-import static com.hazelcast.jet.core.processor.SinkProcessors.writeFileP;
+import static com.hazelcast.jet.core.processor.SinkProcessors.writeListP;
 import static com.hazelcast.jet.function.DistributedFunctions.entryKey;
 import static com.hazelcast.jet.function.DistributedFunctions.entryValue;
-import static com.hazelcast.jet.impl.util.Util.uncheckCall;
 import static java.lang.String.valueOf;
 import static java.lang.System.currentTimeMillis;
 
@@ -69,7 +66,7 @@ public class KafkaTest {
         lagMs = Integer.parseInt(System.getProperty("lagMs", "1000"));
         windowSize = Integer.parseInt(System.getProperty("windowSize", "5000"));
         slideBy = Integer.parseInt(System.getProperty("slideBy", "1000"));
-        outputPath = System.getProperty("outputPath", "jet-output");
+        outputPath = System.getProperty("outputPath", System.getProperty("user.dir") + "/jet-output");
         tickerCount = 20;
         countPerTicker = 100;
         kafkaProps = getKafkaProperties(brokerUri, offsetReset);
@@ -100,7 +97,7 @@ public class KafkaTest {
                     return String.format("%d,%s,%s,%d,%d", entry.getTimestamp(), entry.getKey(), entry.getValue(),
                             timeMs, latencyMs);
                 }));
-        Vertex fileSink = dag.newVertex("write-file", writeFileP(outputPath)).localParallelism(1);
+        Vertex fileSink = dag.newVertex("write-file", writeListP(outputPath)).localParallelism(1);
 
         dag
                 .edge(between(readKafka, extractTrade).isolated())
@@ -121,33 +118,31 @@ public class KafkaTest {
             System.out.println("Cancelling job...");
             execute.cancel(true);
             execute.get();
+
+            IStreamList<String> list = jet.getList(outputPath);
+            boolean result = list.stream()
+                                 .collect(Collectors.groupingBy(
+                                         l -> l.split(",")[0], Collectors.mapping(
+                                                 l -> {
+                                                     String[] split = l.split(",");
+                                                     return new SimpleImmutableEntry<>(split[1], split[2]);
+                                                 }, Collectors.toSet()
+                                         )
+                                         )
+                                 )
+                                 .entrySet()
+                                 .stream()
+                                 .filter(windowSet -> windowSet.getValue().size() == tickerCount)
+                                 .findFirst()
+                                 .get()
+                                 .getValue()
+                                 .stream()
+                                 .allMatch(countedTicker -> countedTicker.getValue().equals(valueOf(countPerTicker)));
+            VisibleAssertions.assertTrue("tick count per window matches", result);
         } catch (Exception ignored) {
         } finally {
             jet.shutdown();
         }
-
-
-        boolean result = Files.list(Paths.get(outputPath))
-                              .flatMap(f -> uncheckCall(() -> Files.lines(f)))
-                              .collect(Collectors.groupingBy(
-                                      l -> l.split(",")[0], Collectors.mapping(
-                                              l -> {
-                                                  String[] split = l.split(",");
-                                                  return new SimpleImmutableEntry<>(split[1], split[2]);
-                                              }, Collectors.toSet()
-                                      )
-                                      )
-                              )
-                              .entrySet()
-                              .stream()
-                              .filter(windowSet -> windowSet.getValue().size() == tickerCount)
-                              .findFirst()
-                              .get()
-                              .getValue()
-                              .stream()
-                              .allMatch(countedTicker -> countedTicker.getValue().equals(valueOf(countPerTicker)));
-        VisibleAssertions.assertTrue("tick count per window matches", result);
-
     }
 
 

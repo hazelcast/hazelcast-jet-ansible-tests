@@ -11,9 +11,10 @@ import com.hazelcast.jet.core.Vertex;
 import com.hazelcast.jet.core.WatermarkPolicies;
 import com.hazelcast.jet.core.WindowDefinition;
 import com.hazelcast.jet.server.JetBootstrap;
-import com.hazelcast.jet.stream.IStreamList;
 import java.io.IOException;
 import java.util.AbstractMap.SimpleImmutableEntry;
+import java.util.ArrayList;
+import java.util.Map.Entry;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
@@ -68,7 +69,7 @@ public class KafkaTest {
         lagMs = Integer.parseInt(System.getProperty("lagMs", "1000"));
         windowSize = Integer.parseInt(System.getProperty("windowSize", "5000"));
         slideBy = Integer.parseInt(System.getProperty("slideBy", "1000"));
-        outputList = System.getProperty("outputList", System.getProperty("user.dir") + "/jet-output");
+        outputList = System.getProperty("outputList", "jet-output-" + System.currentTimeMillis());
         tickerCount = Integer.parseInt(System.getProperty("tickerCount", "20"));
         countPerTicker = Integer.parseInt(System.getProperty("countPerTicker", "100"));
         kafkaProps = getKafkaProperties(brokerUri, offsetReset);
@@ -100,7 +101,7 @@ public class KafkaTest {
                     return String.format("%d,%s,%s,%d,%d", entry.getTimestamp(), entry.getKey(), entry.getValue(),
                             timeMs, latencyMs);
                 }));
-        Vertex fileSink = dag.newVertex("write-file", writeListP(outputList)).localParallelism(1);
+        Vertex listSink = dag.newVertex("write-list", writeListP(outputList)).localParallelism(1);
 
         dag
                 .edge(between(readKafka, extractTrade).isolated())
@@ -109,7 +110,7 @@ public class KafkaTest {
                 .edge(between(accumulateByF, slidingW).partitioned(entryKey())
                                                       .distributed())
                 .edge(between(slidingW, formatOutput).isolated())
-                .edge(between(formatOutput, fileSink));
+                .edge(between(formatOutput, listSink));
 
 
         System.out.println("Executing job..");
@@ -123,27 +124,26 @@ public class KafkaTest {
         } catch (Exception ignored) {
         }
 
-        IStreamList<String> list = jet.getList(outputList);
-        boolean result = list.stream()
-                             .collect(Collectors.groupingBy(
-                                     l -> l.split(",")[0], Collectors.mapping(
-                                             l -> {
-                                                 String[] split = l.split(",");
-                                                 return new SimpleImmutableEntry<>(split[1], split[2]);
-                                             }, Collectors.toSet()
-                                     )
-                                     )
-                             )
-                             .entrySet()
-                             .stream()
-                             .filter(windowSet -> windowSet.getValue().size() == tickerCount)
-                             .findFirst()
-                             .get()
-                             .getValue()
-                             .stream()
-                             .allMatch(countedTicker -> countedTicker.getValue().equals(valueOf(countPerTicker)));
+        ArrayList<String> localList = new ArrayList<>(jet.getList(outputList));
+        boolean result = localList.stream()
+                                  .collect(Collectors.groupingBy(
+                                          l -> l.split(",")[0], Collectors.mapping(
+                                                  l -> {
+                                                      String[] split = l.split(",");
+                                                      return new SimpleImmutableEntry<>(split[1], split[2]);
+                                                  }, Collectors.<Entry>toSet()
+                                          )
+                                          )
+                                  )
+                                  .entrySet()
+                                  .stream()
+                                  .filter(windowSet -> windowSet.getValue().size() == tickerCount)
+                                  .findFirst()
+                                  .get()
+                                  .getValue()
+                                  .stream()
+                                  .allMatch(countedTicker -> countedTicker.getValue().equals(valueOf(countPerTicker)));
         VisibleAssertions.assertTrue("tick count per window matches", result);
-
     }
 
     @After

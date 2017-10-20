@@ -32,7 +32,6 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.TextInputFormat;
 import org.apache.hadoop.mapred.TextOutputFormat;
-import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -50,6 +49,7 @@ import static com.hazelcast.jet.core.processor.Processors.flatMapP;
 import static com.hazelcast.jet.function.DistributedFunctions.entryKey;
 import static com.hazelcast.jet.function.DistributedFunctions.entryValue;
 import static com.hazelcast.jet.function.DistributedFunctions.wholeItem;
+import static hdfs.tests.WordGenerator.getGeneratorSupplier;
 import static org.junit.Assert.assertEquals;
 
 public class HdfsWordCountTest {
@@ -58,6 +58,7 @@ public class HdfsWordCountTest {
     private static final String TAB_STRING = "\t";
 
     private JetInstance jet;
+    private String hdfsUri;
     private String inputPath;
     private String outputPath;
     private long distinct;
@@ -66,6 +67,7 @@ public class HdfsWordCountTest {
     @Before
     public void init() {
         jet = JetBootstrap.getInstance();
+        hdfsUri = System.getProperty("hdfs_name_node", "");
         inputPath = System.getProperty("hdfs_input_path", "/hdfs-input");
         outputPath = System.getProperty("hdfs_output_path", "/hdfs-output");
         distinct = Long.parseLong(System.getProperty("hdfs_distinct", "1000000"));
@@ -73,7 +75,7 @@ public class HdfsWordCountTest {
 
         Pipeline pipeline = Pipeline.create();
 
-        Source<Object> source = fromProcessor("generator", WordGenerator.getSupplier(inputPath, distinct, total));
+        Source<Object> source = fromProcessor("generator", getGeneratorSupplier(hdfsUri, inputPath, distinct, total));
         pipeline.drawFrom(source).drainTo(writeList("resultList"));
 
         JobConfig jobConfig = new JobConfig();
@@ -89,6 +91,7 @@ public class HdfsWordCountTest {
     public void test() {
         DAG dag = new DAG();
         JobConf conf = new JobConf();
+        conf.set("fs.defaultFS", hdfsUri);
         conf.setOutputFormat(TextOutputFormat.class);
         conf.setInputFormat(TextInputFormat.class);
         TextInputFormat.addInputPath(conf, new Path(inputPath));
@@ -130,6 +133,7 @@ public class HdfsWordCountTest {
         Pipeline pipeline = Pipeline.create();
 
         JobConf jobConf = new JobConf();
+        jobConf.set("fs.defaultFS", hdfsUri);
         jobConf.setInputFormat(TextInputFormat.class);
         jobConf.setOutputFormat(TextOutputFormat.class);
         TextInputFormat.addInputPath(jobConf, new Path(outputPath));

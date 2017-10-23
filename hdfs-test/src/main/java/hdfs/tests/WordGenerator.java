@@ -5,7 +5,9 @@ import com.hazelcast.jet.core.ProcessorMetaSupplier;
 import com.hazelcast.util.ExceptionUtil;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.LocalFileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hdfs.DistributedFileSystem;
 
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -36,6 +38,8 @@ public class WordGenerator extends AbstractProcessor {
         try {
             Configuration conf = new Configuration();
             conf.set("fs.defaultFS", hdfsUri);
+            conf.set("fs.hdfs.impl", DistributedFileSystem.class.getName());
+            conf.set("fs.file.impl", LocalFileSystem.class.getName());
             FileSystem fs = FileSystem.get(URI.create(hdfsUri), conf);
             Path p = new Path(path);
             DataOutputStream hdfsFile = fs.create(p);

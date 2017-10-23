@@ -28,7 +28,9 @@ import com.hazelcast.jet.server.JetBootstrap;
 import com.hazelcast.jet.stream.IStreamMap;
 import hdfs.tests.MetaSupplier;
 import hdfs.tests.WordGenerator;
+import org.apache.hadoop.fs.LocalFileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.TextInputFormat;
 import org.apache.hadoop.mapred.TextOutputFormat;
@@ -92,6 +94,8 @@ public class HdfsWordCountTest {
         DAG dag = new DAG();
         JobConf conf = new JobConf();
         conf.set("fs.defaultFS", hdfsUri);
+        conf.set("fs.hdfs.impl", DistributedFileSystem.class.getName());
+        conf.set("fs.file.impl", LocalFileSystem.class.getName());
         conf.setOutputFormat(TextOutputFormat.class);
         conf.setInputFormat(TextInputFormat.class);
         TextInputFormat.addInputPath(conf, new Path(inputPath));
@@ -132,13 +136,15 @@ public class HdfsWordCountTest {
     private void verify() {
         Pipeline pipeline = Pipeline.create();
 
-        JobConf jobConf = new JobConf();
-        jobConf.set("fs.defaultFS", hdfsUri);
-        jobConf.setInputFormat(TextInputFormat.class);
-        jobConf.setOutputFormat(TextOutputFormat.class);
-        TextInputFormat.addInputPath(jobConf, new Path(outputPath));
+        JobConf conf = new JobConf();
+        conf.set("fs.defaultFS", hdfsUri);
+        conf.set("fs.hdfs.impl", DistributedFileSystem.class.getName());
+        conf.set("fs.file.impl", LocalFileSystem.class.getName());
+        conf.setInputFormat(TextInputFormat.class);
+        conf.setOutputFormat(TextOutputFormat.class);
+        TextInputFormat.addInputPath(conf, new Path(outputPath));
 
-        pipeline.drawFrom(HdfsSources.readHdfs(jobConf, (k, v) -> v.toString()))
+        pipeline.drawFrom(HdfsSources.readHdfs(conf, (k, v) -> v.toString()))
                 .map(line -> {
                     String[] wordCountArray = line.split(TAB_STRING);
                     return Util.entry(wordCountArray[0], Long.parseLong(wordCountArray[1]));

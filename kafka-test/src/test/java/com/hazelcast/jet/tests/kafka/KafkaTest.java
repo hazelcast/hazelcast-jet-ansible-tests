@@ -20,7 +20,7 @@ import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.stream.Collectors;
-import org.apache.kafka.common.serialization.LongDeserializer;
+import org.apache.kafka.common.serialization.StringDeserializer;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -42,7 +42,6 @@ import static com.hazelcast.jet.core.processor.Processors.insertWatermarksP;
 import static com.hazelcast.jet.core.processor.Processors.mapP;
 import static com.hazelcast.jet.core.processor.SinkProcessors.writeListP;
 import static com.hazelcast.jet.function.DistributedFunctions.entryKey;
-import static com.hazelcast.jet.function.DistributedFunctions.entryValue;
 import static java.lang.String.valueOf;
 import static java.lang.System.currentTimeMillis;
 
@@ -86,9 +85,7 @@ public class KafkaTest {
         AggregateOperation1<Object, LongAccumulator, Long> counting = AggregateOperations.counting();
 
         DAG dag = new DAG();
-        Vertex readKafka = dag.newVertex("read-kafka", streamKafkaP(kafkaProps, topic))
-                              .localParallelism(1);
-        Vertex extractTrade = dag.newVertex("extract-trade", mapP(entryValue()));
+        Vertex readKafka = dag.newVertex("read-kafka", streamKafkaP(kafkaProps, (key, value) -> value, topic)).localParallelism(1);
         Vertex insertPunctuation = dag.newVertex("insert-punctuation",
                 insertWatermarksP(Trade::getTime, WatermarkPolicies.limitingLagAndLull(lagMs, lagMs), emitByFrame(windowDef)));
         Vertex accumulateByF = dag.newVertex("accumulate-by-frame",
@@ -101,11 +98,10 @@ public class KafkaTest {
                     return String.format("%d,%s,%s,%d,%d", entry.getTimestamp(), entry.getKey(), entry.getValue(),
                             timeMs, latencyMs);
                 }));
-        Vertex listSink = dag.newVertex("write-list", writeListP(outputList)).localParallelism(1);
+        Vertex listSink = dag.newVertex("write-list", writeListP(outputList));
 
         dag
-                .edge(between(readKafka, extractTrade).isolated())
-                .edge(between(extractTrade, insertPunctuation).isolated())
+                .edge(between(readKafka, insertPunctuation).isolated())
                 .edge(between(insertPunctuation, accumulateByF).partitioned(Trade::getTicker, HASH_CODE))
                 .edge(between(accumulateByF, slidingW).partitioned(entryKey())
                                                       .distributed())
@@ -117,7 +113,7 @@ public class KafkaTest {
         Future<Void> execute = jet.newJob(dag).getFuture();
 
         try {
-            Thread.sleep(10000);
+            Thread.sleep(5000);
             System.out.println("Cancelling job...");
             execute.cancel(true);
             execute.get();
@@ -125,6 +121,7 @@ public class KafkaTest {
         }
 
         ArrayList<String> localList = new ArrayList<>(jet.getList(outputList));
+        localList.forEach(System.out::println);
         boolean result = localList.stream()
                                   .collect(Collectors.groupingBy(
                                           l -> l.split(",")[0], Collectors.mapping(
@@ -155,7 +152,7 @@ public class KafkaTest {
         Properties props = new Properties();
         props.setProperty("bootstrap.servers", brokerUrl);
         props.setProperty("group.id", UUID.randomUUID().toString());
-        props.setProperty("key.deserializer", LongDeserializer.class.getName());
+        props.setProperty("key.deserializer", StringDeserializer.class.getName());
         props.setProperty("value.deserializer", TradeDeserializer.class.getName());
         props.setProperty("auto.offset.reset", offsetReset);
         props.setProperty("max.poll.records", "32768");

@@ -117,7 +117,7 @@ public class KafkaTest {
         Future<Void> execute = jet.newJob(dag).getFuture();
 
         try {
-            Thread.sleep(5000);
+            Thread.sleep(10000);
             System.out.println("Cancelling job...");
             execute.cancel(true);
             execute.get();

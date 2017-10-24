@@ -11,6 +11,7 @@
     <description>Soak Tests for Hazelcast Jet</description>
     <modules>
         <module>kafka-test</module>
+        <module>kafka-long-running-test</module>
         <module>hdfs-test</module>
     </modules>
 

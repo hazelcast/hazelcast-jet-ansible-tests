@@ -14,30 +14,39 @@ package com.hazelcast.jet.tests.hdfs;/*
  * limitations under the License.
  */
 
-import com.hazelcast.jet.HdfsSources;
 import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.Pipeline;
-import com.hazelcast.jet.Sinks;
 import com.hazelcast.jet.Source;
-import com.hazelcast.jet.Util;
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.core.DAG;
 import com.hazelcast.jet.core.Vertex;
 import com.hazelcast.jet.core.processor.Processors;
 import com.hazelcast.jet.server.JetBootstrap;
-import com.hazelcast.jet.stream.IStreamMap;
 import hdfs.tests.MetaSupplier;
 import hdfs.tests.WordGenerator;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocalFileSystem;
+import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.RemoteIterator;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.TextInputFormat;
 import org.apache.hadoop.mapred.TextOutputFormat;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.net.URI;
 import java.util.StringTokenizer;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 import static com.hazelcast.jet.Sinks.writeList;
 import static com.hazelcast.jet.Sources.fromProcessor;
@@ -52,11 +61,15 @@ import static com.hazelcast.jet.function.DistributedFunctions.entryKey;
 import static com.hazelcast.jet.function.DistributedFunctions.entryValue;
 import static com.hazelcast.jet.function.DistributedFunctions.wholeItem;
 import static hdfs.tests.WordGenerator.getGeneratorSupplier;
+import static java.lang.Integer.parseInt;
+import static java.lang.Long.parseLong;
+import static java.util.concurrent.TimeUnit.MINUTES;
+import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.Assert.assertEquals;
 
+@RunWith(JUnit4.class)
 public class HdfsWordCountTest {
 
-    private static final String MAP_NAME = "wordCountMap";
     private static final String TAB_STRING = "\t";
 
     private JetInstance jet;
@@ -65,15 +78,27 @@ public class HdfsWordCountTest {
     private String outputPath;
     private long distinct;
     private long total;
+    private int threadCount;
+    private long durationNanos;
+    private Throwable error;
+
+    public static void main(String[] args) throws Exception {
+        HdfsWordCountTest test = new HdfsWordCountTest();
+        test.init();
+        test.verify(0);
+    }
 
     @Before
     public void init() {
         jet = JetBootstrap.getInstance();
-        hdfsUri = System.getProperty("hdfs_name_node", "");
-        inputPath = System.getProperty("hdfs_input_path", "/hdfs-input");
-        outputPath = System.getProperty("hdfs_output_path", "/hdfs-output");
-        distinct = Long.parseLong(System.getProperty("hdfs_distinct", "1000000"));
-        total = Long.parseLong(System.getProperty("hdfs_total", "10000000"));
+        long timestamp = System.nanoTime();
+        hdfsUri = System.getProperty("hdfs_name_node", "hdfs://localhost:8020");
+        inputPath = System.getProperty("hdfs_input_path", "hdfs-input-") + timestamp;
+        outputPath = System.getProperty("hdfs_output_path", "hdfs-output-") + timestamp;
+        distinct = parseLong(System.getProperty("hdfs_distinct", "1000000"));
+        total = parseLong(System.getProperty("hdfs_total", "10000000"));
+        threadCount = parseInt(System.getProperty("hdfs_thread_count", "4"));
+        durationNanos = SECONDS.toNanos(parseLong(System.getProperty("hdfs_duration_seconds", "600")));
 
         Pipeline pipeline = Pipeline.create();
 
@@ -88,9 +113,31 @@ public class HdfsWordCountTest {
         jet.newJob(pipeline, jobConfig).join();
     }
 
-
     @Test
-    public void test() {
+    public void test() throws Throwable {
+        long begin = System.nanoTime();
+        ExecutorService executorService = Executors.newFixedThreadPool(threadCount);
+        for (int i = 0; i < threadCount; i++) {
+            final int threadIndex = i;
+            executorService.submit(() -> {
+                while ((System.nanoTime() - begin) < durationNanos && error == null) {
+                    try {
+                        executeJob(threadIndex);
+                        verify(threadIndex);
+                    } catch (Throwable t) {
+                        error = t;
+                    }
+                }
+            });
+        }
+        executorService.shutdown();
+        executorService.awaitTermination(durationNanos + MINUTES.toNanos(1), TimeUnit.NANOSECONDS);
+        if (error != null) {
+            throw error;
+        }
+    }
+
+    private void executeJob(int threadIndex) {
         DAG dag = new DAG();
         JobConf conf = new JobConf();
         conf.set("fs.defaultFS", hdfsUri);
@@ -99,7 +146,7 @@ public class HdfsWordCountTest {
         conf.setOutputFormat(TextOutputFormat.class);
         conf.setInputFormat(TextInputFormat.class);
         TextInputFormat.addInputPath(conf, new Path(inputPath));
-        TextOutputFormat.setOutputPath(conf, new Path(outputPath));
+        TextOutputFormat.setOutputPath(conf, new Path(outputPath + "/" + threadIndex));
 
         Vertex producer = dag.newVertex("reader", readHdfsP(conf,
                 (k, v) -> v.toString())).localParallelism(3);
@@ -130,35 +177,41 @@ public class HdfsWordCountTest {
         jobConfig.addClass(HdfsWordCountTest.class);
 
         jet.newJob(dag, jobConfig).join();
-        verify();
     }
 
-    private void verify() {
-        Pipeline pipeline = Pipeline.create();
-
-        JobConf conf = new JobConf();
+    private void verify(int threadIndex) throws IOException {
+        URI uri = URI.create(hdfsUri);
+        String disableCacheName = String.format("fs.%s.impl.disable.cache", uri.getScheme());
+        Configuration conf = new Configuration();
         conf.set("fs.defaultFS", hdfsUri);
         conf.set("fs.hdfs.impl", DistributedFileSystem.class.getName());
         conf.set("fs.file.impl", LocalFileSystem.class.getName());
-        conf.setInputFormat(TextInputFormat.class);
-        conf.setOutputFormat(TextOutputFormat.class);
-        TextInputFormat.addInputPath(conf, new Path(outputPath));
+        conf.setBoolean(disableCacheName, true);
+        try (FileSystem fs = FileSystem.get(uri, conf)) {
+            String path = outputPath + "/" + threadIndex;
 
-        pipeline.drawFrom(HdfsSources.readHdfs(conf, (k, v) -> v.toString()))
-                .map(line -> {
-                    String[] wordCountArray = line.split(TAB_STRING);
-                    return Util.entry(wordCountArray[0], Long.parseLong(wordCountArray[1]));
-                }).drainTo(Sinks.writeMap(MAP_NAME));
-
-        JobConfig jobConfig = new JobConfig();
-        jobConfig.addClass(HdfsWordCountTest.class);
-        jet.newJob(pipeline, jobConfig).join();
-
-        IStreamMap<String, Long> wordCountMap = jet.getMap(MAP_NAME);
-        assertEquals(distinct, wordCountMap.size());
-        long[] totalCount = new long[1];
-        wordCountMap.forEach((k, v) -> totalCount[0] += v);
-        assertEquals(total, totalCount[0]);
+            Path p = new Path(path);
+            RemoteIterator<LocatedFileStatus> iterator = fs.listFiles(p, false);
+            long totalCount = 0;
+            long wordCount = 0;
+            while (iterator.hasNext()) {
+                LocatedFileStatus status = iterator.next();
+                if (status.getPath().getName().equals("_SUCCESS")) {
+                    continue;
+                }
+                try (BufferedReader reader = new BufferedReader(new InputStreamReader(fs.open(status.getPath())))) {
+                    String line = reader.readLine();
+                    while (line != null) {
+                        wordCount++;
+                        totalCount += parseLong(line.split(TAB_STRING)[1]);
+                        line = reader.readLine();
+                    }
+                }
+            }
+            assertEquals(distinct, wordCount);
+            assertEquals(total, totalCount);
+            fs.delete(p, true);
+        }
     }
 
 }

@@ -9,7 +9,6 @@ import org.apache.hadoop.fs.LocalFileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
 
-import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.net.URI;
@@ -35,18 +34,18 @@ public class WordGenerator extends AbstractProcessor {
 
     @Override
     public boolean complete() {
-        try {
-            Configuration conf = new Configuration();
-            conf.set("fs.defaultFS", hdfsUri);
-            conf.set("fs.hdfs.impl", DistributedFileSystem.class.getName());
-            conf.set("fs.file.impl", LocalFileSystem.class.getName());
-            FileSystem fs = FileSystem.get(URI.create(hdfsUri), conf);
+        URI uri = URI.create(hdfsUri);
+        String disableCacheName = String.format("fs.%s.impl.disable.cache", uri.getScheme());
+        Configuration conf = new Configuration();
+        conf.set("fs.defaultFS", hdfsUri);
+        conf.set("fs.hdfs.impl", DistributedFileSystem.class.getName());
+        conf.set("fs.file.impl", LocalFileSystem.class.getName());
+        conf.setBoolean(disableCacheName, true);
+        try (FileSystem fs = FileSystem.get(uri, conf)) {
             Path p = new Path(path);
-            DataOutputStream hdfsFile = fs.create(p);
-            try (OutputStreamWriter stream = new OutputStreamWriter(hdfsFile)) {
+            try (OutputStreamWriter stream = new OutputStreamWriter(fs.create(p))) {
                 writeToFile(stream, distinct, total);
             }
-            hdfsFile.close();
             return tryEmit("done!");
         } catch (IOException e) {
             throw ExceptionUtil.rethrow(e);

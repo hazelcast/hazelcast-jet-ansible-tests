@@ -13,6 +13,7 @@ import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
@@ -42,11 +43,14 @@ public class LongRunningKafkaTest {
     private JetInstance jet;
     private int distinctInts;
     private int durationInMinutes;
-    private ScheduledExecutorService executorService;
+    private ScheduledExecutorService scheduledExecutorService;
+    private ExecutorService producerExecutorService;
 
     @Before
     public void setUp() throws Exception {
-        executorService = Executors.newScheduledThreadPool(Runtime.getRuntime().availableProcessors());
+        int corePoolSize = Runtime.getRuntime().availableProcessors();
+        scheduledExecutorService = Executors.newScheduledThreadPool(corePoolSize);
+        producerExecutorService = Executors.newFixedThreadPool(corePoolSize);
         brokerUri = System.getProperty("brokerUri", "localhost:9092");
         topic = System.getProperty("topic", String.format("%s-%d", "numbers", System.currentTimeMillis()));
         offsetReset = System.getProperty("offsetReset", "earliest");
@@ -56,12 +60,13 @@ public class LongRunningKafkaTest {
         kafkaProps = getKafkaProperties(brokerUri, offsetReset);
         jet = JetBootstrap.getInstance();
 
-        Runnable runnable = () -> {
-            try (IntProducer intProducer = new IntProducer(brokerUri)) {
-                intProducer.produce(topic, distinctInts);
-            }
-        };
-        executorService.schedule(runnable, 1, TimeUnit.NANOSECONDS);
+        for (int i = 0; i < corePoolSize; i++) {
+            producerExecutorService.submit(() -> {
+                try (IntProducer intProducer = new IntProducer(brokerUri)) {
+                    intProducer.produce(topic, distinctInts);
+                }
+            });
+        }
     }
 
     @Test
@@ -82,7 +87,7 @@ public class LongRunningKafkaTest {
         Future<Void> execute = jet.newJob(dag).getFuture();
 
         CountDownLatch latch = new CountDownLatch(1);
-        executorService.schedule(() -> {
+        scheduledExecutorService.schedule(() -> {
             try {
                 System.out.println("Cancelling job...");
                 execute.cancel(true);
@@ -92,14 +97,16 @@ public class LongRunningKafkaTest {
             latch.countDown();
         }, durationInMinutes, TimeUnit.MINUTES);
         latch.await();
+        IStreamMap<Integer, Integer> results = jet.getMap(outputMap);
+        int count = ((int) results.keySet().stream().distinct().count());
+        VisibleAssertions.assertEquals("Distinct integer count should match", distinctInts, count);
     }
 
     @After
     public void tearDown() throws Exception {
-        IStreamMap<Integer, Integer> results = jet.getMap(outputMap);
-        int count = ((int) results.keySet().stream().distinct().count());
-        VisibleAssertions.assertEquals("Distinct integer count should match", distinctInts, count);
         jet.shutdown();
+        producerExecutorService.shutdown();
+        scheduledExecutorService.shutdown();
     }
 
     private static Properties getKafkaProperties(String brokerUrl, String offsetReset) {

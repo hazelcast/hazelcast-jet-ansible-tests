@@ -8,10 +8,10 @@ import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.config.ProcessingGuarantee;
 import com.hazelcast.jet.core.DAG;
 import com.hazelcast.jet.core.TimestampKind;
-import com.hazelcast.jet.core.TimestampedEntry;
 import com.hazelcast.jet.core.Vertex;
 import com.hazelcast.jet.core.WatermarkPolicies;
 import com.hazelcast.jet.core.WindowDefinition;
+import com.hazelcast.jet.datamodel.TimestampedEntry;
 import com.hazelcast.jet.server.JetBootstrap;
 import java.io.IOException;
 import java.util.AbstractMap.SimpleImmutableEntry;
@@ -87,7 +87,7 @@ public class LongRunningKafkaTest {
 
         producerExecutorService.submit(() -> {
             try (TradeProducer tradeProducer = new TradeProducer(brokerUri)) {
-                tradeProducer.produce(topic,countPerTicker);
+                tradeProducer.produce(topic, countPerTicker);
             }
         });
     }
@@ -98,7 +98,7 @@ public class LongRunningKafkaTest {
         AggregateOperation1<Object, LongAccumulator, Long> counting = AggregateOperations.counting();
 
         DAG dag = new DAG();
-        Vertex readKafka = dag.newVertex("read-kafka", streamKafkaP(kafkaProps, (key, value) -> value, topic)).localParallelism(1);
+        Vertex readKafka = dag.newVertex("read-kafka", streamKafkaP(kafkaProps, (key, value) -> value, topic));
         Vertex insertPunctuation = dag.newVertex("insert-punctuation",
                 insertWatermarksP(Trade::getTime, WatermarkPolicies.withFixedLag(lagMs), emitByFrame(windowDef)));
         Vertex accumulateByF = dag.newVertex("accumulate-by-frame",
@@ -125,7 +125,7 @@ public class LongRunningKafkaTest {
         jobConfig.setSnapshotIntervalMillis(5000);
         jobConfig.setProcessingGuarantee(ProcessingGuarantee.AT_LEAST_ONCE);
         System.out.println("Executing job..");
-        Future<Void> execute = jet.newJob(dag,jobConfig).getFuture();
+        Future<Void> execute = jet.newJob(dag, jobConfig).getFuture();
 
         CountDownLatch latch = new CountDownLatch(1);
         scheduledExecutorService.schedule(() -> {

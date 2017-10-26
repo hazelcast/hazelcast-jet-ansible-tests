@@ -7,8 +7,8 @@
     <artifactId>hdfs-test</artifactId>
 
     <parent>
-        <artifactId>jet-soak-testing</artifactId>
         <groupId>com.hazelcast.jet</groupId>
+        <artifactId>hazelcast-jet-ansible-tests</artifactId>
         <version>1.0-SNAPSHOT</version>
     </parent>
 

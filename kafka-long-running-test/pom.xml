@@ -7,10 +7,14 @@
     <artifactId>kafka-long-running-test</artifactId>
 
     <parent>
-        <artifactId>jet-soak-testing</artifactId>
         <groupId>com.hazelcast.jet</groupId>
+        <artifactId>hazelcast-jet-ansible-tests</artifactId>
         <version>1.0-SNAPSHOT</version>
     </parent>
+
+    <properties>
+        <hadoop.version>2.7.4</hadoop.version>
+    </properties>
 
     <dependencies>
         <dependency>
@@ -18,6 +22,32 @@
             <artifactId>hazelcast-jet-kafka</artifactId>
             <version>${jet.version}</version>
         </dependency>
+        <dependency>
+            <groupId>com.hazelcast.jet</groupId>
+            <artifactId>hazelcast-jet-hadoop</artifactId>
+            <version>${jet.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.hadoop</groupId>
+            <artifactId>hadoop-hdfs</artifactId>
+            <version>${hadoop.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.hadoop</groupId>
+            <artifactId>hadoop-common</artifactId>
+            <version>${hadoop.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.hadoop</groupId>
+            <artifactId>hadoop-mapreduce-client-core</artifactId>
+            <version>${hadoop.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.google.guava</groupId>
+            <artifactId>guava</artifactId>
+            <version>15.0</version>
+        </dependency>
+
     </dependencies>
 
     <build>

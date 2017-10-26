@@ -7,7 +7,7 @@
     <artifactId>kafka-test</artifactId>
 
     <parent>
-        <artifactId>jet-soak-testing</artifactId>
+        <artifactId>hazelcast-jet-ansible-tests</artifactId>
         <groupId>com.hazelcast.jet</groupId>
         <version>1.0-SNAPSHOT</version>
     </parent>

@@ -11,11 +11,15 @@ import com.hazelcast.jet.core.TimestampKind;
 import com.hazelcast.jet.core.Vertex;
 import com.hazelcast.jet.core.WatermarkPolicies;
 import com.hazelcast.jet.core.WindowDefinition;
+import com.hazelcast.jet.core.processor.HdfsProcessors;
 import com.hazelcast.jet.datamodel.TimestampedEntry;
 import com.hazelcast.jet.server.JetBootstrap;
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.net.URI;
 import java.util.AbstractMap.SimpleImmutableEntry;
-import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Map.Entry;
 import java.util.Properties;
 import java.util.UUID;
@@ -27,6 +31,15 @@ import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.LocalFileSystem;
+import org.apache.hadoop.fs.LocatedFileStatus;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.RemoteIterator;
+import org.apache.hadoop.hdfs.DistributedFileSystem;
+import org.apache.hadoop.mapred.JobConf;
+import org.apache.hadoop.mapred.TextOutputFormat;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.junit.After;
 import org.junit.Before;
@@ -47,9 +60,9 @@ import static com.hazelcast.jet.core.processor.Processors.accumulateByFrameP;
 import static com.hazelcast.jet.core.processor.Processors.combineToSlidingWindowP;
 import static com.hazelcast.jet.core.processor.Processors.insertWatermarksP;
 import static com.hazelcast.jet.core.processor.Processors.mapP;
-import static com.hazelcast.jet.core.processor.SinkProcessors.writeListP;
+import static com.hazelcast.jet.function.DistributedFunction.identity;
 import static com.hazelcast.jet.function.DistributedFunctions.entryKey;
-import static java.lang.String.valueOf;
+import static java.lang.Integer.valueOf;
 import static java.lang.System.currentTimeMillis;
 
 @RunWith(JUnit4.class)
@@ -61,25 +74,27 @@ public class LongRunningKafkaTest {
     private int lagMs;
     private int windowSize;
     private int slideBy;
-    private String outputList;
+    private String outputPath;
     private int countPerTicker;
     private Properties kafkaProps;
     private JetInstance jet;
     private int durationInMinutes;
     private ScheduledExecutorService scheduledExecutorService;
     private ExecutorService producerExecutorService;
+    private String hdfsUri;
 
     @Before
     public void setUp() throws Exception {
         scheduledExecutorService = Executors.newScheduledThreadPool(Runtime.getRuntime().availableProcessors());
         producerExecutorService = Executors.newSingleThreadExecutor();
+        hdfsUri = System.getProperty("hdfs_name_node", "localhost:8020");
         brokerUri = System.getProperty("brokerUri", "localhost:9092");
         topic = System.getProperty("topic", String.format("%s-%d", "trades", System.currentTimeMillis()));
         offsetReset = System.getProperty("offsetReset", "earliest");
         lagMs = Integer.parseInt(System.getProperty("lagMs", "10"));
         windowSize = Integer.parseInt(System.getProperty("windowSize", "20"));
         slideBy = Integer.parseInt(System.getProperty("slideBy", "10"));
-        outputList = System.getProperty("outputList", "jet-output-" + System.currentTimeMillis());
+        outputPath = System.getProperty("outputPath", "jet-output-" + System.currentTimeMillis());
         countPerTicker = Integer.parseInt(System.getProperty("countPerTicker", "100"));
         durationInMinutes = Integer.parseInt(System.getProperty("durationInMinutes", "1"));
         kafkaProps = getKafkaProperties(brokerUri, offsetReset);
@@ -111,7 +126,15 @@ public class LongRunningKafkaTest {
                     return String.format("%d,%s,%s,%d,%d", entry.getTimestamp(), entry.getKey(), entry.getValue(),
                             timeMs, latencyMs);
                 }));
-        Vertex listSink = dag.newVertex("write-list", writeListP(outputList));
+
+        JobConf conf = new JobConf();
+        conf.set("fs.defaultFS", hdfsUri);
+        conf.set("fs.hdfs.impl", DistributedFileSystem.class.getName());
+        conf.set("fs.file.impl", LocalFileSystem.class.getName());
+        conf.setOutputFormat(TextOutputFormat.class);
+        TextOutputFormat.setOutputPath(conf, new Path(outputPath));
+
+        Vertex hdfsSink = dag.newVertex("write-hdfs", HdfsProcessors.writeHdfsP(conf, identity(), identity()));
 
         dag
                 .edge(between(readKafka, insertPunctuation).isolated())
@@ -119,7 +142,7 @@ public class LongRunningKafkaTest {
                 .edge(between(accumulateByF, slidingW).partitioned(entryKey())
                                                       .distributed())
                 .edge(between(slidingW, formatOutput).isolated())
-                .edge(between(formatOutput, listSink));
+                .edge(between(formatOutput, hdfsSink));
 
         JobConfig jobConfig = new JobConfig();
         jobConfig.setSnapshotIntervalMillis(5000);
@@ -138,28 +161,50 @@ public class LongRunningKafkaTest {
             latch.countDown();
         }, durationInMinutes, TimeUnit.MINUTES);
         latch.await();
-        ArrayList<String> localList = new ArrayList<>(jet.getList(outputList));
-        localList.forEach(System.out::println);
-        boolean result = localList.stream()
-                                  .collect(Collectors.groupingBy(
-                                          l -> l.split(",")[0], Collectors.mapping(
-                                                  l -> {
-                                                      String[] split = l.split(",");
-                                                      return new SimpleImmutableEntry<>(split[1], split[2]);
-                                                  }, Collectors.<Entry>toSet()
-                                          )
-                                          )
-                                  )
-                                  .entrySet()
-                                  .stream()
-                                  .filter(windowSet -> windowSet.getValue().size() == windowSize)
-                                  .findFirst()
-                                  .get()
-                                  .getValue()
-                                  .stream()
-                                  .allMatch(countedTicker -> countedTicker.getValue().equals(valueOf(countPerTicker)));
-        VisibleAssertions.assertTrue("tick count per window matches", result);
+        verify();
     }
+
+    private void verify() throws IOException {
+        URI uri = URI.create(hdfsUri);
+        String disableCacheName = String.format("fs.%s.impl.disable.cache", uri.getScheme());
+        Configuration conf = new Configuration();
+        conf.set("fs.defaultFS", hdfsUri);
+        conf.set("fs.hdfs.impl", DistributedFileSystem.class.getName());
+        conf.set("fs.file.impl", LocalFileSystem.class.getName());
+        conf.setBoolean(disableCacheName, true);
+        try (FileSystem fs = FileSystem.get(uri, conf)) {
+            String path = outputPath;
+            Path p = new Path(path);
+            RemoteIterator<LocatedFileStatus> iterator = fs.listFiles(p, false);
+            while (iterator.hasNext()) {
+                LocatedFileStatus status = iterator.next();
+                if (status.getPath().getName().equals("_SUCCESS")) {
+                    continue;
+                }
+                try (BufferedReader reader = new BufferedReader(new InputStreamReader(fs.open(status.getPath())))) {
+                    boolean result = reader.lines()
+                                           .collect(Collectors.groupingBy(
+                                                   l -> l.split(",")[0], Collectors.mapping(
+                                                           l -> {
+                                                               String[] split = l.split(",");
+                                                               return new SimpleImmutableEntry<>(split[1], split[2]);
+                                                           }, Collectors.<Entry>toSet()
+                                                   )
+                                                   )
+                                           )
+                                           .entrySet()
+                                           .stream()
+                                           .filter(windowSet -> windowSet.getValue().size() == windowSize)
+                                           .map(Entry::getValue)
+                                           .flatMap(Collection::stream)
+                                           .allMatch(countedTicker -> countedTicker.getValue().equals(valueOf(countPerTicker)));
+                    VisibleAssertions.assertTrue("tick count per window matches", result);
+                }
+            }
+//            fs.delete(p, true);
+        }
+    }
+
 
     @After
     public void tearDown() throws Exception {

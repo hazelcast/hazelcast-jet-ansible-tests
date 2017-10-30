@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package test.kafka;
+package tests.kafka;
 
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;

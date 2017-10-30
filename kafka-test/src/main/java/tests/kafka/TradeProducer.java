@@ -14,9 +14,8 @@
  * limitations under the License.
  */
 
-package test.kafka;
+package tests.kafka;
 
-import com.google.common.collect.Iterables;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -28,16 +27,15 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 
-public class LongRunningTradeProducer implements AutoCloseable {
+public class TradeProducer implements AutoCloseable {
 
-    private static final int SLEEPY_MILLIS = 100;
-    private static final int QUANTITY = 100;
     private static final int INITIAL_PRICE = 10000;
+    private static final int QUANTITY = 100;
 
     private KafkaProducer<String, Trade> producer;
     private Map<String, Integer> tickersToPrice = new HashMap<>();
 
-    public LongRunningTradeProducer(String broker) {
+    public TradeProducer(String broker) {
         loadTickers();
         Properties props = new Properties();
         props.setProperty("bootstrap.servers", broker);
@@ -52,14 +50,9 @@ public class LongRunningTradeProducer implements AutoCloseable {
         producer.close();
     }
 
-    public void produce(String topic, int countPerTicker) {
+    public void produce(String topic, int tickerCount, int countPerTicker) {
         final long[] timeStamp = {0};
-        Iterables.cycle(tickersToPrice.keySet()).forEach(ticker -> {
-            try {
-                Thread.sleep(SLEEPY_MILLIS);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
+        tickersToPrice.keySet().stream().limit(tickerCount).forEach(ticker -> {
             for (int i = 0; i < countPerTicker; i++) {
                 Trade trade = new Trade(timeStamp[0], ticker, QUANTITY, INITIAL_PRICE);
                 producer.send(new ProducerRecord<>(topic, ticker, trade));
@@ -69,7 +62,7 @@ public class LongRunningTradeProducer implements AutoCloseable {
     }
 
     private void loadTickers() {
-        InputStream tickers = LongRunningTradeProducer.class.getResourceAsStream("/nasdaqlisted.txt");
+        InputStream tickers = TradeProducer.class.getResourceAsStream("/nasdaqlisted.txt");
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(tickers))) {
             reader.lines().skip(1).map(l -> l.split("\\|")[0]).forEach(t -> tickersToPrice.put(t, INITIAL_PRICE));
         } catch (Exception e) {

@@ -47,9 +47,9 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.testpackage.VisibleAssertions;
-import test.kafka.LongRunningTradeProducer;
-import test.kafka.Trade;
-import test.kafka.TradeDeserializer;
+import tests.kafka.LongRunningTradeProducer;
+import tests.kafka.Trade;
+import tests.kafka.TradeDeserializer;
 
 import java.io.BufferedReader;
 import java.io.IOException;

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package test.kafka;
+package tests.kafka;
 
 import org.apache.kafka.common.serialization.Deserializer;
 

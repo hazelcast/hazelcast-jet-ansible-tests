@@ -1,0 +1,34 @@
+<?xml version="1.0"?>
+<!DOCTYPE suppressions PUBLIC
+        "-//Puppy Crawl//DTD Suppressions 1.1//EN"
+        "http://www.puppycrawl.com/dtds/suppressions_1_1.dtd">
+<suppressions>
+
+    <!-- Connector modules declare classes in a package that already exists in Jet core -->
+    <suppress checks="JavadocPackage" files="hazelcast-jet-(kafka|hadoop)"/>
+
+    <!-- impl packages are private API by contract, allow public members -->
+    <suppress checks="VisibilityModifier" files="[\\/]impl[\\/]"/>
+
+    <!-- Files start with the license header -->
+    <suppress checks="StrictDuplicateCode" files="\.java" lines="1-15"/>
+
+    <!-- Files derived from the Agrona project -->
+    <suppress checks="Header" files="com[\\/]hazelcast[\\/]internal[\\/]util[\\/]concurrent[\\/]update[\\/]"/>
+    <suppress checks="OuterTypeNumber" files="AbstractConcurrentArrayQueue"/>
+
+    <!-- Suppress checking of copyright notice in a file derived from Apache Tez -->
+    <suppress checks="Header" files="TopologicalSorter"/>
+
+    <!-- Exclude these packages from JavaDoc checks -->
+    <suppress checks="JavadocMethod" files="JetException\.java"/>
+    <suppress checks="Javadoc(Package|Type|Method|Variable)" files="SerializerHook"/>
+    <suppress checks="Javadoc(Package|Type|Method|Variable)" files="[\\/](impl|internal)[\\/]"/>
+
+    <!-- Generated code in Client Protocol Templates -->
+    <suppress checks="LineLength|MethodName|MethodCount|ParameterNumber|WhitespaceAround"
+              files="com[\\/]hazelcast[\\/]client[\\/]impl[\\/]protocol[\\/]template[\\/].*Template\.java$"/>
+
+    <!-- Suppress checks for test code -->
+    <suppress checks="Javadoc|Name|MagicNumber|VisibilityModifier" files="[\\/]src[\\/]test[\\/]"/>
+</suppressions>

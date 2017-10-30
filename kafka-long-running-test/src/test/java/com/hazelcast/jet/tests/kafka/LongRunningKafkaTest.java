@@ -1,3 +1,19 @@
+/*
+ * Copyright (c) 2008-2017, Hazelcast, Inc. All Rights Reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.hazelcast.jet.tests.kafka;
 
 import com.hazelcast.jet.JetInstance;
@@ -14,23 +30,7 @@ import com.hazelcast.jet.core.WindowDefinition;
 import com.hazelcast.jet.core.processor.HdfsProcessors;
 import com.hazelcast.jet.datamodel.TimestampedEntry;
 import com.hazelcast.jet.server.JetBootstrap;
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.net.URI;
-import java.util.AbstractMap.SimpleImmutableEntry;
-import java.util.Collection;
-import java.util.Map.Entry;
-import java.util.Properties;
-import java.util.UUID;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
+import com.hazelcast.util.UuidUtil;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocalFileSystem;
@@ -47,9 +47,27 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.testpackage.VisibleAssertions;
+import test.kafka.LongRunningTradeProducer;
 import test.kafka.Trade;
 import test.kafka.TradeDeserializer;
-import test.kafka.TradeProducer;
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.net.URI;
+import java.util.AbstractMap.SimpleImmutableEntry;
+import java.util.Collection;
+import java.util.Map.Entry;
+import java.util.Properties;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 import static com.hazelcast.jet.core.Edge.between;
 import static com.hazelcast.jet.core.Partitioner.HASH_CODE;
@@ -101,7 +119,7 @@ public class LongRunningKafkaTest {
         jet = JetBootstrap.getInstance();
 
         producerExecutorService.submit(() -> {
-            try (TradeProducer tradeProducer = new TradeProducer(brokerUri)) {
+            try (LongRunningTradeProducer tradeProducer = new LongRunningTradeProducer(brokerUri)) {
                 tradeProducer.produce(topic, countPerTicker);
             }
         });
@@ -181,27 +199,31 @@ public class LongRunningKafkaTest {
                 if (status.getPath().getName().equals("_SUCCESS")) {
                     continue;
                 }
-                try (BufferedReader reader = new BufferedReader(new InputStreamReader(fs.open(status.getPath())))) {
-                    boolean result = reader.lines()
-                                           .collect(Collectors.groupingBy(
-                                                   l -> l.split(",")[0], Collectors.mapping(
-                                                           l -> {
-                                                               String[] split = l.split(",");
-                                                               return new SimpleImmutableEntry<>(split[1], split[2]);
-                                                           }, Collectors.<Entry>toSet()
-                                                   )
-                                                   )
-                                           )
-                                           .entrySet()
-                                           .stream()
-                                           .filter(windowSet -> windowSet.getValue().size() == windowSize)
-                                           .map(Entry::getValue)
-                                           .flatMap(Collection::stream)
-                                           .allMatch(countedTicker -> countedTicker.getValue().equals(valueOf(countPerTicker)));
-                    VisibleAssertions.assertTrue("tick count per window matches", result);
-                }
+                validateResults(fs.open(status.getPath()));
             }
 //            fs.delete(p, true);
+        }
+    }
+
+    private void validateResults(InputStream inputStream) throws IOException {
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream))) {
+            boolean result = reader.lines()
+                                   .collect(Collectors.groupingBy(
+                                           l -> l.split(",")[0], Collectors.mapping(
+                                                   l -> {
+                                                       String[] split = l.split(",");
+                                                       return new SimpleImmutableEntry<>(split[1], split[2]);
+                                                   }, Collectors.<Entry>toSet()
+                                           )
+                                           )
+                                   )
+                                   .entrySet()
+                                   .stream()
+                                   .filter(windowSet -> windowSet.getValue().size() == windowSize)
+                                   .map(Entry::getValue)
+                                   .flatMap(Collection::stream)
+                                   .allMatch(countedTicker -> countedTicker.getValue().equals(valueOf(countPerTicker)));
+            VisibleAssertions.assertTrue("tick count per window matches", result);
         }
     }
 
@@ -216,7 +238,7 @@ public class LongRunningKafkaTest {
     private static Properties getKafkaProperties(String brokerUrl, String offsetReset) {
         Properties props = new Properties();
         props.setProperty("bootstrap.servers", brokerUrl);
-        props.setProperty("group.id", UUID.randomUUID().toString());
+        props.setProperty("group.id", UuidUtil.newUnsecureUuidString());
         props.setProperty("key.deserializer", StringDeserializer.class.getName());
         props.setProperty("value.deserializer", TradeDeserializer.class.getName());
         props.setProperty("auto.offset.reset", offsetReset);

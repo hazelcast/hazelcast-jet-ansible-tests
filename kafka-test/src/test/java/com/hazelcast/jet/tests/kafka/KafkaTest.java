@@ -1,3 +1,19 @@
+/*
+ * Copyright (c) 2008-2017, Hazelcast, Inc. All Rights Reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.hazelcast.jet.tests.kafka;
 
 import com.hazelcast.jet.JetInstance;
@@ -11,15 +27,7 @@ import com.hazelcast.jet.core.WatermarkPolicies;
 import com.hazelcast.jet.core.WindowDefinition;
 import com.hazelcast.jet.datamodel.TimestampedEntry;
 import com.hazelcast.jet.server.JetBootstrap;
-import java.io.IOException;
-import java.util.AbstractMap.SimpleImmutableEntry;
-import java.util.ArrayList;
-import java.util.Map.Entry;
-import java.util.Properties;
-import java.util.UUID;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
-import java.util.stream.Collectors;
+import com.hazelcast.util.UuidUtil;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.junit.After;
 import org.junit.Before;
@@ -30,6 +38,15 @@ import org.testpackage.VisibleAssertions;
 import test.kafka.Trade;
 import test.kafka.TradeDeserializer;
 import test.kafka.TradeProducer;
+
+import java.io.IOException;
+import java.util.AbstractMap.SimpleImmutableEntry;
+import java.util.ArrayList;
+import java.util.Map.Entry;
+import java.util.Properties;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
+import java.util.stream.Collectors;
 
 import static com.hazelcast.jet.core.Edge.between;
 import static com.hazelcast.jet.core.Partitioner.HASH_CODE;
@@ -87,17 +104,23 @@ public class KafkaTest {
         DAG dag = new DAG();
         Vertex readKafka = dag.newVertex("read-kafka", streamKafkaP(kafkaProps, (key, value) -> value, topic));
         Vertex insertPunctuation = dag.newVertex("insert-punctuation",
-                insertWatermarksP(Trade::getTime, WatermarkPolicies.limitingLagAndLull(lagMs, lagMs), emitByFrame(windowDef)));
+                insertWatermarksP(
+                        Trade::getTime, WatermarkPolicies.limitingLagAndLull(lagMs, lagMs), emitByFrame(windowDef)
+                )
+        );
         Vertex accumulateByF = dag.newVertex("accumulate-by-frame",
                 accumulateByFrameP(Trade::getTicker, Trade::getTime, TimestampKind.EVENT, windowDef, counting));
-        Vertex slidingW = dag.newVertex("sliding-window", combineToSlidingWindowP(windowDef, counting));
+        Vertex slidingW = dag.newVertex(
+                "sliding-window", combineToSlidingWindowP(windowDef, counting)
+        );
         Vertex formatOutput = dag.newVertex("format-output",
                 mapP((TimestampedEntry entry) -> {
                     long timeMs = currentTimeMillis();
                     long latencyMs = timeMs - entry.getTimestamp();
                     return String.format("%d,%s,%s,%d,%d", entry.getTimestamp(), entry.getKey(), entry.getValue(),
                             timeMs, latencyMs);
-                }));
+                })
+        );
         Vertex listSink = dag.newVertex("write-list", writeListP(outputList));
 
         dag
@@ -151,7 +174,7 @@ public class KafkaTest {
     private static Properties getKafkaProperties(String brokerUrl, String offsetReset) {
         Properties props = new Properties();
         props.setProperty("bootstrap.servers", brokerUrl);
-        props.setProperty("group.id", UUID.randomUUID().toString());
+        props.setProperty("group.id", UuidUtil.newUnsecureUUID().toString());
         props.setProperty("key.deserializer", StringDeserializer.class.getName());
         props.setProperty("value.deserializer", TradeDeserializer.class.getName());
         props.setProperty("auto.offset.reset", offsetReset);

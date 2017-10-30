@@ -1,4 +1,4 @@
-package com.hazelcast.jet.tests.hdfs;/*
+/*
  * Copyright (c) 2008-2017, Hazelcast, Inc. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,6 +14,8 @@ package com.hazelcast.jet.tests.hdfs;/*
  * limitations under the License.
  */
 
+package com.hazelcast.jet.tests.hdfs;
+
 import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.Pipeline;
 import com.hazelcast.jet.Source;
@@ -22,8 +24,6 @@ import com.hazelcast.jet.core.DAG;
 import com.hazelcast.jet.core.Vertex;
 import com.hazelcast.jet.core.processor.Processors;
 import com.hazelcast.jet.server.JetBootstrap;
-import hdfs.tests.MetaSupplier;
-import hdfs.tests.WordGenerator;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocalFileSystem;
@@ -38,6 +38,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+import tests.hdfs.WordGenerator;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -48,7 +49,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
-import static com.hazelcast.jet.Sinks.writeList;
 import static com.hazelcast.jet.Sources.fromProcessor;
 import static com.hazelcast.jet.aggregate.AggregateOperations.counting;
 import static com.hazelcast.jet.core.Edge.between;
@@ -60,12 +60,12 @@ import static com.hazelcast.jet.core.processor.Processors.flatMapP;
 import static com.hazelcast.jet.function.DistributedFunctions.entryKey;
 import static com.hazelcast.jet.function.DistributedFunctions.entryValue;
 import static com.hazelcast.jet.function.DistributedFunctions.wholeItem;
-import static hdfs.tests.WordGenerator.getGeneratorSupplier;
 import static java.lang.Integer.parseInt;
 import static java.lang.Long.parseLong;
 import static java.util.concurrent.TimeUnit.MINUTES;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.Assert.assertEquals;
+import static tests.hdfs.WordGenerator.wordGenerator;
 
 @RunWith(JUnit4.class)
 public class HdfsWordCountTest {
@@ -102,13 +102,13 @@ public class HdfsWordCountTest {
 
         Pipeline pipeline = Pipeline.create();
 
-        Source<Object> source = fromProcessor("generator", getGeneratorSupplier(hdfsUri, inputPath, distinct, total));
-        pipeline.drawFrom(source).drainTo(writeList("resultList"));
+        Source<Object> source = fromProcessor("generator", wordGenerator(hdfsUri, inputPath, distinct, total));
+        pipeline.drawFrom(source);
 
         JobConfig jobConfig = new JobConfig();
         jobConfig.addClass(HdfsWordCountTest.class);
         jobConfig.addClass(WordGenerator.class);
-        jobConfig.addClass(MetaSupplier.class);
+        jobConfig.addClass(WordGenerator.MetaSupplier.class);
 
         jet.newJob(pipeline, jobConfig).join();
     }

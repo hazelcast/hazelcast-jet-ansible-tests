@@ -95,9 +95,9 @@ public final class WordGenerator extends AbstractProcessor {
         stream.write("\n");
     }
 
-    public static ProcessorMetaSupplier wordGenerator(String hdfsUri, String inputPath, long distinct, long total) {
+    public static ProcessorMetaSupplier wordGenerator(String hdfsUri, String outputPath, long distinct, long total) {
         return new MetaSupplier((path, memberSize) ->
-                new WordGenerator(hdfsUri, inputPath + "/" + path, distinct, total / memberSize));
+                new WordGenerator(hdfsUri, outputPath + "/" + path, distinct, total / memberSize));
     }
 
     public static class MetaSupplier implements ProcessorMetaSupplier {

@@ -28,17 +28,6 @@ import com.hazelcast.jet.core.WindowDefinition;
 import com.hazelcast.jet.datamodel.TimestampedEntry;
 import com.hazelcast.jet.server.JetBootstrap;
 import com.hazelcast.util.UuidUtil;
-import org.apache.kafka.common.serialization.StringDeserializer;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
-import org.testpackage.VisibleAssertions;
-import tests.kafka.Trade;
-import tests.kafka.TradeDeserializer;
-import tests.kafka.TradeProducer;
-
 import java.io.IOException;
 import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.ArrayList;
@@ -47,6 +36,16 @@ import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.stream.Collectors;
+import org.apache.kafka.common.serialization.StringDeserializer;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.JUnitCore;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
+import tests.kafka.Trade;
+import tests.kafka.TradeDeserializer;
+import tests.kafka.TradeProducer;
 
 import static com.hazelcast.jet.core.Edge.between;
 import static com.hazelcast.jet.core.Partitioner.HASH_CODE;
@@ -61,6 +60,7 @@ import static com.hazelcast.jet.core.processor.SinkProcessors.writeListP;
 import static com.hazelcast.jet.function.DistributedFunctions.entryKey;
 import static java.lang.String.valueOf;
 import static java.lang.System.currentTimeMillis;
+import static org.junit.Assert.assertTrue;
 
 @RunWith(JUnit4.class)
 public class KafkaTest {
@@ -94,6 +94,10 @@ public class KafkaTest {
         try (TradeProducer tradeProducer = new TradeProducer(brokerUri)) {
             tradeProducer.produce(topic, tickerCount, countPerTicker);
         }
+    }
+
+    public static void main(String[] args) {
+        JUnitCore.main(KafkaTest.class.getName());
     }
 
     @Test
@@ -163,7 +167,7 @@ public class KafkaTest {
                                   .getValue()
                                   .stream()
                                   .allMatch(countedTicker -> countedTicker.getValue().equals(valueOf(countPerTicker)));
-        VisibleAssertions.assertTrue("tick count per window matches", result);
+        assertTrue("tick count per window matches", result);
     }
 
     @After

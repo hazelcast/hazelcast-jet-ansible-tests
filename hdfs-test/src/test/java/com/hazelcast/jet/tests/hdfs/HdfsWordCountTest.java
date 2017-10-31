@@ -28,6 +28,14 @@ import com.hazelcast.jet.core.ProcessorSupplier;
 import com.hazelcast.jet.core.Vertex;
 import com.hazelcast.jet.core.processor.Processors;
 import com.hazelcast.jet.server.JetBootstrap;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.net.URI;
+import java.util.StringTokenizer;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocalFileSystem;
@@ -40,18 +48,10 @@ import org.apache.hadoop.mapred.TextInputFormat;
 import org.apache.hadoop.mapred.TextOutputFormat;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.JUnitCore;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import tests.hdfs.WordGenerator;
-
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.net.URI;
-import java.util.StringTokenizer;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 
 import static com.hazelcast.jet.aggregate.AggregateOperations.counting;
 import static com.hazelcast.jet.core.Edge.between;
@@ -86,9 +86,7 @@ public class HdfsWordCountTest {
     private Throwable error;
 
     public static void main(String[] args) throws Exception {
-        HdfsWordCountTest test = new HdfsWordCountTest();
-        test.init();
-        test.verify(0);
+        JUnitCore.main(HdfsWordCountTest.class.getName());
     }
 
     @Before

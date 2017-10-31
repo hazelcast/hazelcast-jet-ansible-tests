@@ -14,6 +14,7 @@
 
     <properties>
         <main.basedir>${project.parent.basedir}</main.basedir>
+        <guava.version>19.0</guava.version>
     </properties>
 
     <dependencies>
@@ -21,6 +22,11 @@
             <groupId>com.hazelcast.jet</groupId>
             <artifactId>hazelcast-jet-kafka</artifactId>
             <version>${jet.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.google.guava</groupId>
+            <artifactId>guava</artifactId>
+            <version>${guava.version}</version>
         </dependency>
     </dependencies>
 
@@ -43,8 +49,7 @@
                                 <transformer
                                         implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                                     <manifestEntries>
-                                        <Main-Class>org.testpackage.TestPackage</Main-Class>
-                                        <TestPackage-Package>com.hazelcast.jet.tests.kafka</TestPackage-Package>
+                                        <Main-Class>com.hazelcast.jet.tests.kafka.LongRunningKafkaSessionWindowTest</Main-Class>
                                     </manifestEntries>
                                 </transformer>
                             </transformers>

@@ -31,26 +31,6 @@ import com.hazelcast.jet.core.processor.HdfsProcessors;
 import com.hazelcast.jet.datamodel.TimestampedEntry;
 import com.hazelcast.jet.server.JetBootstrap;
 import com.hazelcast.util.UuidUtil;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.LocalFileSystem;
-import org.apache.hadoop.fs.LocatedFileStatus;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.RemoteIterator;
-import org.apache.hadoop.hdfs.DistributedFileSystem;
-import org.apache.hadoop.mapred.JobConf;
-import org.apache.hadoop.mapred.TextOutputFormat;
-import org.apache.kafka.common.serialization.StringDeserializer;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
-import org.testpackage.VisibleAssertions;
-import tests.kafka.LongRunningTradeProducer;
-import tests.kafka.Trade;
-import tests.kafka.TradeDeserializer;
-
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
@@ -68,6 +48,25 @@ import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.LocalFileSystem;
+import org.apache.hadoop.fs.LocatedFileStatus;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.RemoteIterator;
+import org.apache.hadoop.hdfs.DistributedFileSystem;
+import org.apache.hadoop.mapred.JobConf;
+import org.apache.hadoop.mapred.TextOutputFormat;
+import org.apache.kafka.common.serialization.StringDeserializer;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.JUnitCore;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
+import tests.kafka.LongRunningTradeProducer;
+import tests.kafka.Trade;
+import tests.kafka.TradeDeserializer;
 
 import static com.hazelcast.jet.core.Edge.between;
 import static com.hazelcast.jet.core.Partitioner.HASH_CODE;
@@ -82,6 +81,7 @@ import static com.hazelcast.jet.function.DistributedFunction.identity;
 import static com.hazelcast.jet.function.DistributedFunctions.entryKey;
 import static java.lang.Integer.valueOf;
 import static java.lang.System.currentTimeMillis;
+import static org.junit.Assert.assertTrue;
 
 @RunWith(JUnit4.class)
 public class LongRunningKafkaTest {
@@ -100,6 +100,10 @@ public class LongRunningKafkaTest {
     private ScheduledExecutorService scheduledExecutorService;
     private ExecutorService producerExecutorService;
     private String hdfsUri;
+
+    public static void main(String[] args) {
+        JUnitCore.main(LongRunningKafkaTest.class.getName());
+    }
 
     @Before
     public void setUp() throws Exception {
@@ -223,7 +227,7 @@ public class LongRunningKafkaTest {
                                    .map(Entry::getValue)
                                    .flatMap(Collection::stream)
                                    .allMatch(countedTicker -> countedTicker.getValue().equals(valueOf(countPerTicker)));
-            VisibleAssertions.assertTrue("tick count per window matches", result);
+            assertTrue("tick count per window matches", result);
         }
     }
 

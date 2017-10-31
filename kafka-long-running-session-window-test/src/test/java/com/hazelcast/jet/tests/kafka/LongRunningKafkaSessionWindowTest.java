@@ -38,6 +38,7 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.JUnitCore;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import tests.kafka.HashJoinP;
@@ -58,6 +59,7 @@ import static com.hazelcast.jet.core.processor.Processors.noopP;
 @RunWith(JUnit4.class)
 public class LongRunningKafkaSessionWindowTest {
 
+    private int sessionTimeout;
     private String brokerUri;
     private String topic;
     private String offsetReset;
@@ -69,6 +71,10 @@ public class LongRunningKafkaSessionWindowTest {
     private ScheduledExecutorService scheduledExecutorService;
     private ExecutorService producerExecutorService;
 
+    public static void main(String[] args) {
+        JUnitCore.main(LongRunningKafkaSessionWindowTest.class.getName());
+    }
+
     @Before
     public void setUp() throws Exception {
         scheduledExecutorService = Executors.newScheduledThreadPool(Runtime.getRuntime().availableProcessors());
@@ -78,6 +84,7 @@ public class LongRunningKafkaSessionWindowTest {
         offsetReset = System.getProperty("offsetReset", "earliest");
         lagMs = Integer.parseInt(System.getProperty("lagMs", "100"));
         countPerTicker = Integer.parseInt(System.getProperty("countPerTicker", "20"));
+        sessionTimeout = Integer.parseInt(System.getProperty("sessionTimeout", "100"));
         durationInMinutes = Integer.parseInt(System.getProperty("durationInMinutes", "3"));
         kafkaProps = getKafkaProperties(brokerUri, offsetReset);
         jet = JetBootstrap.getInstance();
@@ -97,7 +104,8 @@ public class LongRunningKafkaSessionWindowTest {
                 insertWatermarksP(Trade::getTime, WatermarkPolicies.withFixedLag(lagMs), emitByMinStep(lagMs)));
 
         Vertex aggregateSessionWindow = dag.newVertex("session-window",
-                aggregateToSessionWindowP(100, Trade::getTime, Trade::getTicker, summingDouble(Trade::getPrice)));
+                aggregateToSessionWindowP(sessionTimeout, Trade::getTime, Trade::getTicker,
+                        summingDouble(Trade::getPrice)));
 
         Vertex readVerificationRecords = dag.newVertex("read-verification-kafka",
                 streamKafkaP(kafkaProps, (key, value) -> value, topic + "-result"));

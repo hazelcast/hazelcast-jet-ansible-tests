@@ -18,9 +18,13 @@ package com.hazelcast.jet.tests.hdfs;
 
 import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.Pipeline;
+import com.hazelcast.jet.Sink;
+import com.hazelcast.jet.Sinks;
 import com.hazelcast.jet.Source;
+import com.hazelcast.jet.Sources;
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.core.DAG;
+import com.hazelcast.jet.core.ProcessorSupplier;
 import com.hazelcast.jet.core.Vertex;
 import com.hazelcast.jet.core.processor.Processors;
 import com.hazelcast.jet.server.JetBootstrap;
@@ -49,7 +53,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
-import static com.hazelcast.jet.Sources.fromProcessor;
 import static com.hazelcast.jet.aggregate.AggregateOperations.counting;
 import static com.hazelcast.jet.core.Edge.between;
 import static com.hazelcast.jet.core.Partitioner.HASH_CODE;
@@ -102,9 +105,9 @@ public class HdfsWordCountTest {
 
         Pipeline pipeline = Pipeline.create();
 
-        Source<Object> source = fromProcessor("generator", wordGenerator(hdfsUri, inputPath, distinct, total));
-
-        pipeline.drawFrom(source).customTransform("noop", Processors.noopP());
+        Source<Object> source = Sources.fromProcessor("generator", wordGenerator(hdfsUri, inputPath, distinct, total));
+        Sink<Object> noopSink = Sinks.fromProcessor("noopSink", ProcessorSupplier.of(Processors.noopP()));
+        pipeline.drawFrom(source).drainTo(noopSink);
 
         JobConfig jobConfig = new JobConfig();
         jobConfig.addClass(HdfsWordCountTest.class);

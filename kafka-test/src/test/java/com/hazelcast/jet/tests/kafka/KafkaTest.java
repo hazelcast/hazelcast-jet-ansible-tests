@@ -31,6 +31,7 @@ import com.hazelcast.util.UuidUtil;
 import java.io.IOException;
 import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Map.Entry;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
@@ -58,7 +59,6 @@ import static com.hazelcast.jet.core.processor.Processors.insertWatermarksP;
 import static com.hazelcast.jet.core.processor.Processors.mapP;
 import static com.hazelcast.jet.core.processor.SinkProcessors.writeListP;
 import static com.hazelcast.jet.function.DistributedFunctions.entryKey;
-import static java.lang.String.valueOf;
 import static java.lang.System.currentTimeMillis;
 import static org.junit.Assert.assertTrue;
 
@@ -82,12 +82,12 @@ public class KafkaTest {
         brokerUri = System.getProperty("brokerUri", "localhost:9092");
         topic = System.getProperty("topic", String.format("%s-%d", "trades", System.currentTimeMillis()));
         offsetReset = System.getProperty("offsetReset", "earliest");
-        lagMs = Integer.parseInt(System.getProperty("lagMs", "1000"));
-        windowSize = Integer.parseInt(System.getProperty("windowSize", "5000"));
-        slideBy = Integer.parseInt(System.getProperty("slideBy", "1000"));
+        lagMs = Integer.parseInt(System.getProperty("lagMs", "10"));
+        windowSize = Integer.parseInt(System.getProperty("windowSize", "50"));
+        slideBy = Integer.parseInt(System.getProperty("slideBy", "10"));
         outputList = System.getProperty("outputList", "jet-output-" + System.currentTimeMillis());
-        tickerCount = Integer.parseInt(System.getProperty("tickerCount", "20"));
-        countPerTicker = Integer.parseInt(System.getProperty("countPerTicker", "100"));
+        tickerCount = Integer.parseInt(System.getProperty("tickerCount", "500"));
+        countPerTicker = Integer.parseInt(System.getProperty("countPerTicker", "7"));
         kafkaProps = getKafkaProperties(brokerUri, offsetReset);
         jet = JetBootstrap.getInstance();
 
@@ -109,7 +109,7 @@ public class KafkaTest {
         Vertex readKafka = dag.newVertex("read-kafka", streamKafkaP(kafkaProps, (key, value) -> value, topic));
         Vertex insertPunctuation = dag.newVertex("insert-punctuation",
                 insertWatermarksP(
-                        Trade::getTime, WatermarkPolicies.limitingLagAndLull(lagMs, lagMs), emitByFrame(windowDef)
+                        Trade::getTime, WatermarkPolicies.withFixedLag(lagMs), emitByFrame(windowDef)
                 )
         );
         Vertex accumulateByF = dag.newVertex("accumulate-by-frame",
@@ -148,7 +148,6 @@ public class KafkaTest {
         }
 
         ArrayList<String> localList = new ArrayList<>(jet.getList(outputList));
-        localList.forEach(System.out::println);
         boolean result = localList.stream()
                                   .collect(Collectors.groupingBy(
                                           l -> l.split(",")[0], Collectors.mapping(
@@ -161,12 +160,10 @@ public class KafkaTest {
                                   )
                                   .entrySet()
                                   .stream()
-                                  .filter(windowSet -> windowSet.getValue().size() == tickerCount)
-                                  .findFirst()
-                                  .get()
-                                  .getValue()
-                                  .stream()
-                                  .allMatch(countedTicker -> countedTicker.getValue().equals(valueOf(countPerTicker)));
+                                  .map(Entry::getValue)
+                                  .flatMap(Collection::stream)
+                                  .allMatch(countedTicker -> countedTicker
+                                          .getValue().equals(String.valueOf(countPerTicker)));
         assertTrue("tick count per window matches", result);
     }
 

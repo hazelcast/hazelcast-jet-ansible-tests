@@ -79,7 +79,7 @@ import static com.hazelcast.jet.core.processor.Processors.insertWatermarksP;
 import static com.hazelcast.jet.core.processor.Processors.mapP;
 import static com.hazelcast.jet.function.DistributedFunction.identity;
 import static com.hazelcast.jet.function.DistributedFunctions.entryKey;
-import static java.lang.Integer.valueOf;
+import static java.lang.String.valueOf;
 import static java.lang.System.currentTimeMillis;
 import static org.junit.Assert.assertTrue;
 
@@ -156,7 +156,11 @@ public class LongRunningKafkaTest {
         conf.setOutputFormat(TextOutputFormat.class);
         TextOutputFormat.setOutputPath(conf, new Path(outputPath));
 
-        Vertex hdfsSink = dag.newVertex("write-hdfs", HdfsProcessors.writeHdfsP(conf, identity(), identity()));
+        Vertex hdfsSink = dag.newVertex("write-hdfs", HdfsProcessors.writeHdfsP(
+                conf,
+                (String l) -> l.split(",")[0],
+                identity())
+        );
 
         dag
                 .edge(between(readKafka, insertPunctuation).isolated())
@@ -205,13 +209,14 @@ public class LongRunningKafkaTest {
                 }
                 validateResults(fs.open(status.getPath()));
             }
-//            fs.delete(p, true);
+            fs.delete(p, true);
         }
     }
 
     private void validateResults(InputStream inputStream) throws IOException {
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream))) {
             boolean result = reader.lines()
+                                   .map(l -> l.split("\t")[1])
                                    .collect(Collectors.groupingBy(
                                            l -> l.split(",")[0], Collectors.mapping(
                                                    l -> {

@@ -103,7 +103,8 @@ public class HdfsWordCountTest {
         Pipeline pipeline = Pipeline.create();
 
         Source<Object> source = fromProcessor("generator", wordGenerator(hdfsUri, inputPath, distinct, total));
-        pipeline.drawFrom(source);
+
+        pipeline.drawFrom(source).customTransform("noop", Processors.noopP());
 
         JobConfig jobConfig = new JobConfig();
         jobConfig.addClass(HdfsWordCountTest.class);

@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-package test.kafka;
+package tests.kafka;
 
 import java.io.Serializable;
 
-public class Trade implements Serializable{
+public class Trade implements Serializable {
 
     private final long time;
     private final String ticker;

@@ -1,7 +1,7 @@
 # Hazelcast Jet Soak Tests
 
 This repository contains a set of tests for
-[Hazelcast Jet Soak Testing Environment](https://github.com/hazelcast/hazelcast-jet-ansible).
+[Hazelcast Jet Soak Testing Environment](https://github.com/hazelcast/hazelcast-jet-ansible). Instructions on how to run the test suite and set up the environment are there. 
 
 The tests are should be plain JUnit unit tests which are packaged to include
 all their dependencies (fat/uber jar) and to be executable. This way we can

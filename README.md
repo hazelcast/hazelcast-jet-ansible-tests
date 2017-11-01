@@ -8,7 +8,7 @@ all their dependencies (fat/uber jar) and to be executable. This way we can
 add the jar itself as a resource to a Jet job and execute any test we want without
  messing with the test environment classpath.
 
-Continious Delivery is set up for this project, so whenever a commit happens in
+Continuous Delivery is set up for this project, so whenever a commit happens in
 this repository, the build is triggered and if successfull resulting jars will
 be uploaded to the [Amazon S3 Jet Test Jars](http://s3.amazonaws.com/jet-test-jars)
 bucket.

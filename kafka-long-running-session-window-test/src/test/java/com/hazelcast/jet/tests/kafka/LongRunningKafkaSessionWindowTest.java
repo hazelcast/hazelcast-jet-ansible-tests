@@ -33,7 +33,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.junit.After;
 import org.junit.Before;
@@ -55,6 +54,7 @@ import static com.hazelcast.jet.core.processor.KafkaProcessors.streamKafkaP;
 import static com.hazelcast.jet.core.processor.Processors.aggregateToSessionWindowP;
 import static com.hazelcast.jet.core.processor.Processors.insertWatermarksP;
 import static com.hazelcast.jet.core.processor.Processors.noopP;
+import static java.util.concurrent.TimeUnit.MINUTES;
 
 @RunWith(JUnit4.class)
 public class LongRunningKafkaSessionWindowTest {
@@ -139,8 +139,9 @@ public class LongRunningKafkaSessionWindowTest {
             } catch (Exception ignored) {
             }
             latch.countDown();
-        }, durationInMinutes, TimeUnit.MINUTES);
+        }, durationInMinutes, MINUTES);
         latch.await();
+        Thread.sleep(MINUTES.toMillis(2));
     }
 
     @After

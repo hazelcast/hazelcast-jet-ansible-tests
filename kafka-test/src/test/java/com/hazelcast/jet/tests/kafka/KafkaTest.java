@@ -60,6 +60,7 @@ import static com.hazelcast.jet.core.processor.Processors.mapP;
 import static com.hazelcast.jet.core.processor.SinkProcessors.writeListP;
 import static com.hazelcast.jet.function.DistributedFunctions.entryKey;
 import static java.lang.System.currentTimeMillis;
+import static java.util.concurrent.TimeUnit.MINUTES;
 import static org.junit.Assert.assertTrue;
 
 @RunWith(JUnit4.class)
@@ -140,12 +141,14 @@ public class KafkaTest {
         Future<Void> execute = jet.newJob(dag).getFuture();
 
         try {
-            Thread.sleep(5000);
+            Thread.sleep(MINUTES.toMillis(1));
             System.out.println("Cancelling job...");
             execute.cancel(true);
             execute.get();
         } catch (Exception ignored) {
         }
+
+        Thread.sleep(MINUTES.toMillis(2));
 
         ArrayList<String> localList = new ArrayList<>(jet.getList(outputList));
         boolean result = localList.stream()

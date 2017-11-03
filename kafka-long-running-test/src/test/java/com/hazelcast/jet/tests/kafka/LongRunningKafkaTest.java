@@ -46,7 +46,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -81,6 +80,7 @@ import static com.hazelcast.jet.function.DistributedFunction.identity;
 import static com.hazelcast.jet.function.DistributedFunctions.entryKey;
 import static java.lang.String.valueOf;
 import static java.lang.System.currentTimeMillis;
+import static java.util.concurrent.TimeUnit.MINUTES;
 import static org.junit.Assert.assertTrue;
 
 @RunWith(JUnit4.class)
@@ -185,8 +185,9 @@ public class LongRunningKafkaTest {
             } catch (Exception ignored) {
             }
             latch.countDown();
-        }, durationInMinutes, TimeUnit.MINUTES);
+        }, durationInMinutes, MINUTES);
         latch.await();
+        Thread.sleep(MINUTES.toMillis(2));
         verify();
     }
 

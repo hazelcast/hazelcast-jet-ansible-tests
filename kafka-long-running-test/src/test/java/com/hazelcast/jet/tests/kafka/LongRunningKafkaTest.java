@@ -109,7 +109,7 @@ public class LongRunningKafkaTest {
     public void setUp() throws Exception {
         scheduledExecutorService = Executors.newScheduledThreadPool(Runtime.getRuntime().availableProcessors());
         producerExecutorService = Executors.newSingleThreadExecutor();
-        hdfsUri = System.getProperty("hdfs_name_node", "localhost:8020");
+        hdfsUri = System.getProperty("hdfs_name_node", "hdfs://localhost:8020");
         brokerUri = System.getProperty("brokerUri", "localhost:9092");
         topic = System.getProperty("topic", String.format("%s-%d", "trades", System.currentTimeMillis()));
         offsetReset = System.getProperty("offsetReset", "earliest");

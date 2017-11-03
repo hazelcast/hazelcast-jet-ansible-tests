@@ -66,7 +66,6 @@ import static com.hazelcast.jet.function.DistributedFunctions.wholeItem;
 import static java.lang.Integer.parseInt;
 import static java.lang.Long.parseLong;
 import static java.util.concurrent.TimeUnit.MINUTES;
-import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.Assert.assertEquals;
 import static tests.hdfs.WordGenerator.wordGenerator;
 
@@ -99,7 +98,7 @@ public class HdfsWordCountTest {
         distinct = parseLong(System.getProperty("hdfs_distinct", "1000000"));
         total = parseLong(System.getProperty("hdfs_total", "10000000"));
         threadCount = parseInt(System.getProperty("hdfs_thread_count", "4"));
-        durationNanos = SECONDS.toNanos(parseLong(System.getProperty("hdfs_duration_seconds", "600")));
+        durationNanos = MINUTES.toNanos(parseLong(System.getProperty("hdfs_duration_minutes", "30")));
 
         Pipeline pipeline = Pipeline.create();
 

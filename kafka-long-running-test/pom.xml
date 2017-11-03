@@ -60,6 +60,17 @@
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <configuration>
+                    <archive>
+                        <manifest>
+                            <mainClass>com.hazelcast.jet.tests.kafka.LongRunningKafkaTest</mainClass>
+                        </manifest>
+                    </archive>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-shade-plugin</artifactId>
                 <version>2.1</version>
                 <executions>
@@ -90,6 +101,11 @@
                                     </excludes>
                                 </filter>
                             </filters>
+                            <artifactSet>
+                                <includes>
+                                    <include>com.hazelcast.jet.tests:*</include>
+                                </includes>
+                            </artifactSet>
                         </configuration>
                     </execution>
                 </executions>

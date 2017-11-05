@@ -35,7 +35,6 @@ import java.net.URI;
 import java.util.StringTokenizer;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocalFileSystem;
@@ -65,6 +64,7 @@ import static com.hazelcast.jet.function.DistributedFunctions.entryValue;
 import static com.hazelcast.jet.function.DistributedFunctions.wholeItem;
 import static java.lang.Integer.parseInt;
 import static java.lang.Long.parseLong;
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.MINUTES;
 import static org.junit.Assert.assertEquals;
 import static tests.hdfs.WordGenerator.wordGenerator;
@@ -81,7 +81,7 @@ public class HdfsWordCountTest {
     private long distinct;
     private long total;
     private int threadCount;
-    private long durationNanos;
+    private long durationInMillis;
     private Throwable error;
 
     public static void main(String[] args) throws Exception {
@@ -98,7 +98,7 @@ public class HdfsWordCountTest {
         distinct = parseLong(System.getProperty("hdfs_distinct", "1000000"));
         total = parseLong(System.getProperty("hdfs_total", "10000000"));
         threadCount = parseInt(System.getProperty("hdfs_thread_count", "4"));
-        durationNanos = MINUTES.toNanos(parseLong(System.getProperty("hdfs_duration_minutes", "30")));
+        durationInMillis = MINUTES.toMillis(parseLong(System.getProperty("hdfs_duration_minutes", "30")));
 
         Pipeline pipeline = Pipeline.create();
 
@@ -116,12 +116,12 @@ public class HdfsWordCountTest {
 
     @Test
     public void test() throws Throwable {
-        long begin = System.nanoTime();
+        long begin = System.currentTimeMillis();
         ExecutorService executorService = Executors.newFixedThreadPool(threadCount);
         for (int i = 0; i < threadCount; i++) {
             final int threadIndex = i;
             executorService.submit(() -> {
-                while ((System.nanoTime() - begin) < durationNanos && error == null) {
+                while ((System.currentTimeMillis() - begin) < durationInMillis && error == null) {
                     try {
                         executeJob(threadIndex);
                         verify(threadIndex);
@@ -132,7 +132,7 @@ public class HdfsWordCountTest {
             });
         }
         executorService.shutdown();
-        executorService.awaitTermination(durationNanos + MINUTES.toNanos(1), TimeUnit.NANOSECONDS);
+        executorService.awaitTermination(durationInMillis + MINUTES.toMillis(1), MILLISECONDS);
         if (error != null) {
             throw error;
         }

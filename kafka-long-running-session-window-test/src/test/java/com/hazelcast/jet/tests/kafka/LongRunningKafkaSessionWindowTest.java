@@ -17,9 +17,11 @@
 package com.hazelcast.jet.tests.kafka;
 
 import com.hazelcast.jet.JetInstance;
+import com.hazelcast.jet.Job;
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.config.ProcessingGuarantee;
 import com.hazelcast.jet.core.DAG;
+import com.hazelcast.jet.core.JobStatus;
 import com.hazelcast.jet.core.Vertex;
 import com.hazelcast.jet.core.WatermarkPolicies;
 import com.hazelcast.jet.core.processor.DiagnosticProcessors;
@@ -27,7 +29,6 @@ import com.hazelcast.jet.server.JetBootstrap;
 import com.hazelcast.util.UuidUtil;
 import java.io.IOException;
 import java.util.Properties;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -48,6 +49,9 @@ import tests.kafka.TradeProducer;
 import static com.hazelcast.jet.aggregate.AggregateOperations.summingDouble;
 import static com.hazelcast.jet.core.Edge.between;
 import static com.hazelcast.jet.core.Edge.from;
+import static com.hazelcast.jet.core.JobStatus.COMPLETED;
+import static com.hazelcast.jet.core.JobStatus.FAILED;
+import static com.hazelcast.jet.core.JobStatus.RESTARTING;
 import static com.hazelcast.jet.core.Partitioner.HASH_CODE;
 import static com.hazelcast.jet.core.WatermarkEmissionPolicy.emitByMinStep;
 import static com.hazelcast.jet.core.processor.KafkaProcessors.streamKafkaP;
@@ -55,6 +59,7 @@ import static com.hazelcast.jet.core.processor.Processors.aggregateToSessionWind
 import static com.hazelcast.jet.core.processor.Processors.insertWatermarksP;
 import static com.hazelcast.jet.core.processor.Processors.noopP;
 import static java.util.concurrent.TimeUnit.MINUTES;
+import static java.util.concurrent.TimeUnit.SECONDS;
 
 @RunWith(JUnit4.class)
 public class LongRunningKafkaSessionWindowTest {
@@ -67,7 +72,7 @@ public class LongRunningKafkaSessionWindowTest {
     private int countPerTicker;
     private Properties kafkaProps;
     private JetInstance jet;
-    private int durationInMinutes;
+    private long durationInMillis;
     private ScheduledExecutorService scheduledExecutorService;
     private ExecutorService producerExecutorService;
 
@@ -85,7 +90,7 @@ public class LongRunningKafkaSessionWindowTest {
         lagMs = Integer.parseInt(System.getProperty("lagMs", "100"));
         countPerTicker = Integer.parseInt(System.getProperty("countPerTicker", "20"));
         sessionTimeout = Integer.parseInt(System.getProperty("sessionTimeout", "100"));
-        durationInMinutes = Integer.parseInt(System.getProperty("durationInMinutes", "3"));
+        durationInMillis = MINUTES.toMillis(Integer.parseInt(System.getProperty("durationInMinutes", "3")));
         kafkaProps = getKafkaProperties(brokerUri, offsetReset);
         jet = JetBootstrap.getInstance();
 
@@ -128,19 +133,22 @@ public class LongRunningKafkaSessionWindowTest {
         jobConfig.setSnapshotIntervalMillis(5000);
         jobConfig.setProcessingGuarantee(ProcessingGuarantee.AT_LEAST_ONCE);
         System.out.println("Executing job..");
-        Future<Void> execute = jet.newJob(dag, jobConfig).getFuture();
+        Job job = jet.newJob(dag, jobConfig);
+        Future<Void> future = job.getFuture();
 
-        CountDownLatch latch = new CountDownLatch(1);
-        scheduledExecutorService.schedule(() -> {
-            try {
-                System.out.println("Cancelling job...");
-                execute.cancel(true);
-                execute.get();
-            } catch (Exception ignored) {
+        long begin = System.currentTimeMillis();
+        while (System.currentTimeMillis() - begin < durationInMillis) {
+            JobStatus status = job.getJobStatus();
+            if (status == RESTARTING || status == FAILED || status == COMPLETED) {
+                throw new AssertionError("Job is failed, jobStatus: " + status);
             }
-            latch.countDown();
-        }, durationInMinutes, MINUTES);
-        latch.await();
+            MINUTES.sleep(1);
+        }
+
+        future.cancel(true);
+        while (job.getJobStatus() != COMPLETED) {
+            SECONDS.sleep(1);
+        }
         Thread.sleep(MINUTES.toMillis(2));
     }
 

@@ -45,6 +45,7 @@ import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.TextInputFormat;
 import org.apache.hadoop.mapred.TextOutputFormat;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.JUnitCore;
@@ -112,6 +113,11 @@ public class HdfsWordCountTest {
         jobConfig.addClass(WordGenerator.MetaSupplier.class);
 
         jet.newJob(pipeline, jobConfig).join();
+    }
+
+    @After
+    public void tearDown() throws Exception {
+        jet.shutdown();
     }
 
     @Test

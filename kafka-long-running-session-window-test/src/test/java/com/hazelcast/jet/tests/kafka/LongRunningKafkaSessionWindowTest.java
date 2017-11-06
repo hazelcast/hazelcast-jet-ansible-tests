@@ -33,7 +33,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-import java.util.concurrent.ScheduledExecutorService;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.junit.After;
 import org.junit.Before;
@@ -73,7 +72,6 @@ public class LongRunningKafkaSessionWindowTest {
     private Properties kafkaProps;
     private JetInstance jet;
     private long durationInMillis;
-    private ScheduledExecutorService scheduledExecutorService;
     private ExecutorService producerExecutorService;
 
     public static void main(String[] args) {
@@ -82,7 +80,6 @@ public class LongRunningKafkaSessionWindowTest {
 
     @Before
     public void setUp() throws Exception {
-        scheduledExecutorService = Executors.newScheduledThreadPool(Runtime.getRuntime().availableProcessors());
         producerExecutorService = Executors.newSingleThreadExecutor();
         brokerUri = System.getProperty("brokerUri", "localhost:9092");
         topic = System.getProperty("topic", String.format("%s-%d", "trades", System.currentTimeMillis()));
@@ -156,7 +153,6 @@ public class LongRunningKafkaSessionWindowTest {
     public void tearDown() throws Exception {
         jet.shutdown();
         producerExecutorService.shutdown();
-        scheduledExecutorService.shutdown();
     }
 
     private static Properties getKafkaProperties(String brokerUrl, String offsetReset) {

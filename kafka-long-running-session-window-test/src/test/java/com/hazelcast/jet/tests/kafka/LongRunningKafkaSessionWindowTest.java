@@ -28,11 +28,6 @@ import com.hazelcast.jet.datamodel.Session;
 import com.hazelcast.jet.function.DistributedFunction;
 import com.hazelcast.jet.server.JetBootstrap;
 import com.hazelcast.util.UuidUtil;
-import java.io.IOException;
-import java.util.Properties;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -47,6 +42,12 @@ import tests.kafka.Trade;
 import tests.kafka.TradeDeserializer;
 import tests.kafka.TradeProducer;
 import tests.kafka.VerificationProcessor;
+
+import java.io.IOException;
+import java.util.Properties;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import static com.hazelcast.jet.aggregate.AggregateOperations.counting;
 import static com.hazelcast.jet.core.Edge.between;
@@ -155,10 +156,13 @@ public class LongRunningKafkaSessionWindowTest {
             }
             MINUTES.sleep(1);
         }
+        System.out.println("Cancelling job..");
 
         job1.getFuture().cancel(true);
+        job2.getFuture().cancel(true);
 
-        while (job1.getJobStatus() != COMPLETED) {
+        while (job1.getJobStatus() != COMPLETED ||
+                job2.getJobStatus() != COMPLETED) {
             SECONDS.sleep(1);
         }
     }

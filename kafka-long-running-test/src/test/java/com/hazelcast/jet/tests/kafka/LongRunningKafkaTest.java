@@ -38,7 +38,6 @@ import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -162,14 +161,13 @@ public class LongRunningKafkaTest {
         jobConfig.setSnapshotIntervalMillis(5000);
         jobConfig.setProcessingGuarantee(ProcessingGuarantee.AT_LEAST_ONCE);
         System.out.println("Executing job..");
-        Job job = jet.newJob(dag, jobConfig);
-        jet.newJob(dag2);
-        Future<Void> future = job.getFuture();
+        Job job1 = jet.newJob(dag, jobConfig);
+        Job job2 = jet.newJob(dag2);
 
         Thread.sleep(5000);
         long begin = System.currentTimeMillis();
         while (System.currentTimeMillis() - begin < durationInMillis) {
-            JobStatus status = job.getJobStatus();
+            JobStatus status = job2.getJobStatus();
             if (status == RESTARTING || status == FAILED || status == COMPLETED) {
                 throw new AssertionError("Job is failed, jobStatus: " + status);
             }
@@ -177,8 +175,8 @@ public class LongRunningKafkaTest {
         }
         System.out.println("Cancelling job..");
 
-        future.cancel(true);
-        while (job.getJobStatus() != COMPLETED) {
+        job1.getFuture().cancel(true);
+        while (job1.getJobStatus() != COMPLETED) {
             SECONDS.sleep(1);
         }
         Thread.sleep(MINUTES.toMillis(2));

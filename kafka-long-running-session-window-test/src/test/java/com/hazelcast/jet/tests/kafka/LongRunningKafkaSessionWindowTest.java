@@ -24,7 +24,8 @@ import com.hazelcast.jet.core.DAG;
 import com.hazelcast.jet.core.JobStatus;
 import com.hazelcast.jet.core.Vertex;
 import com.hazelcast.jet.core.WatermarkPolicies;
-import com.hazelcast.jet.core.processor.DiagnosticProcessors;
+import com.hazelcast.jet.datamodel.Session;
+import com.hazelcast.jet.function.DistributedFunction;
 import com.hazelcast.jet.server.JetBootstrap;
 import com.hazelcast.util.UuidUtil;
 import java.io.IOException;
@@ -33,19 +34,22 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import org.apache.kafka.common.serialization.LongDeserializer;
+import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.JUnitCore;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
-import tests.kafka.HashJoinP;
 import tests.kafka.Trade;
 import tests.kafka.TradeDeserializer;
 import tests.kafka.TradeProducer;
+import tests.kafka.VerificationProcessor;
 
-import static com.hazelcast.jet.aggregate.AggregateOperations.summingDouble;
+import static com.hazelcast.jet.aggregate.AggregateOperations.counting;
 import static com.hazelcast.jet.core.Edge.between;
 import static com.hazelcast.jet.core.Edge.from;
 import static com.hazelcast.jet.core.JobStatus.COMPLETED;
@@ -54,9 +58,9 @@ import static com.hazelcast.jet.core.JobStatus.RESTARTING;
 import static com.hazelcast.jet.core.Partitioner.HASH_CODE;
 import static com.hazelcast.jet.core.WatermarkEmissionPolicy.emitByMinStep;
 import static com.hazelcast.jet.core.processor.KafkaProcessors.streamKafkaP;
+import static com.hazelcast.jet.core.processor.KafkaProcessors.writeKafkaP;
 import static com.hazelcast.jet.core.processor.Processors.aggregateToSessionWindowP;
 import static com.hazelcast.jet.core.processor.Processors.insertWatermarksP;
-import static com.hazelcast.jet.core.processor.Processors.noopP;
 import static java.util.concurrent.TimeUnit.MINUTES;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
@@ -88,7 +92,7 @@ public class LongRunningKafkaSessionWindowTest {
         countPerTicker = Integer.parseInt(System.getProperty("countPerTicker", "20"));
         sessionTimeout = Integer.parseInt(System.getProperty("sessionTimeout", "100"));
         durationInMillis = MINUTES.toMillis(Integer.parseInt(System.getProperty("durationInMinutes", "3")));
-        kafkaProps = getKafkaProperties(brokerUri, offsetReset);
+        kafkaProps = getKafkaPropertiesForTrades(brokerUri, offsetReset);
         jet = JetBootstrap.getInstance();
 
         producerExecutorService.submit(() -> {
@@ -101,20 +105,29 @@ public class LongRunningKafkaSessionWindowTest {
     @Test
     public void kafkaTest() throws IOException, ExecutionException, InterruptedException {
         DAG dag = new DAG();
+
         Vertex readKafka = dag.newVertex("read-kafka", streamKafkaP(kafkaProps, (key, value) -> value, topic));
+
         Vertex insertPunctuation = dag.newVertex("insert-punctuation",
-                insertWatermarksP(Trade::getTime, WatermarkPolicies.withFixedLag(lagMs), emitByMinStep(lagMs)));
+                insertWatermarksP(Trade::getTime, WatermarkPolicies.withFixedLag(lagMs),
+                        emitByMinStep(lagMs)));
 
         Vertex aggregateSessionWindow = dag.newVertex("session-window",
-                aggregateToSessionWindowP(sessionTimeout, Trade::getTime, Trade::getTicker,
-                        summingDouble(Trade::getPrice)));
+                aggregateToSessionWindowP(sessionTimeout, Trade::getTime,
+                        Trade::getTicker,
+                        counting()));
 
-        Vertex readVerificationRecords = dag.newVertex("read-verification-kafka",
-                streamKafkaP(kafkaProps, (key, value) -> value, topic + "-result"));
+        Vertex writeResultsToKafka = dag.newVertex("write-results-kafka",
+                writeKafkaP(topic + "-result", getKafkaPropertiesForResults(brokerUri, offsetReset),
+                        (DistributedFunction<Session<String, Long>, String>) Session::getKey,
+                        (DistributedFunction<Session<String, Long>, Long>) Session::getResult));
 
-        Vertex joinResultsandVerify = dag.newVertex("verification", HashJoinP.getSupplier());
-        Vertex logger = dag.newVertex("writer", DiagnosticProcessors.peekInputP(noopP()));
+        DAG dag2 = new DAG();
 
+        Vertex readVerificationRecords = dag2.newVertex("read-verification-kafka",
+                streamKafkaP(getKafkaPropertiesForResults(brokerUri, offsetReset), topic + "-result"));
+
+        Vertex verifyRecords = dag2.newVertex("verification", VerificationProcessor.getSupplier(countPerTicker));
 
         dag
                 .edge(between(readKafka, insertPunctuation).isolated())
@@ -122,17 +135,20 @@ public class LongRunningKafkaSessionWindowTest {
                         .partitioned(Trade::getTicker, HASH_CODE)
                         .distributed()
                 )
-                .edge(from(aggregateSessionWindow).to(joinResultsandVerify, 1))
-                .edge(from(readVerificationRecords).broadcast().distributed().to(joinResultsandVerify, 0))
-                .edge(between(joinResultsandVerify, logger));
+                .edge(from(aggregateSessionWindow).to(writeResultsToKafka));
+
+        dag2.edge(from(readVerificationRecords).to(verifyRecords));
 
         JobConfig jobConfig = new JobConfig();
         jobConfig.setSnapshotIntervalMillis(5000);
         jobConfig.setProcessingGuarantee(ProcessingGuarantee.AT_LEAST_ONCE);
         System.out.println("Executing job..");
+
         Job job = jet.newJob(dag, jobConfig);
+        jet.newJob(dag2);
         Future<Void> future = job.getFuture();
 
+        Thread.sleep(5000);
         long begin = System.currentTimeMillis();
         while (System.currentTimeMillis() - begin < durationInMillis) {
             JobStatus status = job.getJobStatus();
@@ -155,12 +171,25 @@ public class LongRunningKafkaSessionWindowTest {
         producerExecutorService.shutdown();
     }
 
-    private static Properties getKafkaProperties(String brokerUrl, String offsetReset) {
+    private static Properties getKafkaPropertiesForTrades(String brokerUrl, String offsetReset) {
         Properties props = new Properties();
         props.setProperty("bootstrap.servers", brokerUrl);
         props.setProperty("group.id", UuidUtil.newUnsecureUuidString());
         props.setProperty("key.deserializer", StringDeserializer.class.getName());
         props.setProperty("value.deserializer", TradeDeserializer.class.getName());
+        props.setProperty("auto.offset.reset", offsetReset);
+        props.setProperty("max.poll.records", "32768");
+        return props;
+    }
+
+    private static Properties getKafkaPropertiesForResults(String brokerUrl, String offsetReset) {
+        Properties props = new Properties();
+        props.setProperty("bootstrap.servers", brokerUrl);
+        props.setProperty("group.id", UuidUtil.newUnsecureUuidString());
+        props.setProperty("key.deserializer", StringDeserializer.class.getName());
+        props.setProperty("value.deserializer", LongDeserializer.class.getName());
+        props.setProperty("key.serializer", StringSerializer.class.getName());
+        props.setProperty("value.serializer", LongSerializer.class.getName());
         props.setProperty("auto.offset.reset", offsetReset);
         props.setProperty("max.poll.records", "32768");
         return props;

@@ -29,35 +29,20 @@ import com.hazelcast.jet.core.TimestampKind;
 import com.hazelcast.jet.core.Vertex;
 import com.hazelcast.jet.core.WatermarkPolicies;
 import com.hazelcast.jet.core.WindowDefinition;
-import com.hazelcast.jet.core.processor.HdfsProcessors;
+import com.hazelcast.jet.core.processor.KafkaProcessors;
 import com.hazelcast.jet.datamodel.TimestampedEntry;
 import com.hazelcast.jet.server.JetBootstrap;
 import com.hazelcast.util.UuidUtil;
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.net.URI;
-import java.util.AbstractMap.SimpleImmutableEntry;
-import java.util.Collection;
-import java.util.Map.Entry;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.stream.Collectors;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.LocalFileSystem;
-import org.apache.hadoop.fs.LocatedFileStatus;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.RemoteIterator;
-import org.apache.hadoop.hdfs.DistributedFileSystem;
-import org.apache.hadoop.mapred.JobConf;
-import org.apache.hadoop.mapred.TextOutputFormat;
+import org.apache.kafka.common.serialization.LongDeserializer;
+import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -67,8 +52,10 @@ import org.junit.runners.JUnit4;
 import tests.kafka.LongRunningTradeProducer;
 import tests.kafka.Trade;
 import tests.kafka.TradeDeserializer;
+import tests.kafka.VerificationProcessor;
 
 import static com.hazelcast.jet.core.Edge.between;
+import static com.hazelcast.jet.core.Edge.from;
 import static com.hazelcast.jet.core.JobStatus.COMPLETED;
 import static com.hazelcast.jet.core.JobStatus.FAILED;
 import static com.hazelcast.jet.core.JobStatus.RESTARTING;
@@ -80,13 +67,10 @@ import static com.hazelcast.jet.core.processor.Processors.accumulateByFrameP;
 import static com.hazelcast.jet.core.processor.Processors.combineToSlidingWindowP;
 import static com.hazelcast.jet.core.processor.Processors.insertWatermarksP;
 import static com.hazelcast.jet.core.processor.Processors.mapP;
-import static com.hazelcast.jet.function.DistributedFunction.identity;
 import static com.hazelcast.jet.function.DistributedFunctions.entryKey;
-import static java.lang.String.valueOf;
 import static java.lang.System.currentTimeMillis;
 import static java.util.concurrent.TimeUnit.MINUTES;
 import static java.util.concurrent.TimeUnit.SECONDS;
-import static org.junit.Assert.assertTrue;
 
 @RunWith(JUnit4.class)
 public class LongRunningKafkaTest {
@@ -102,9 +86,7 @@ public class LongRunningKafkaTest {
     private Properties kafkaProps;
     private JetInstance jet;
     private long durationInMillis;
-    private ScheduledExecutorService scheduledExecutorService;
     private ExecutorService producerExecutorService;
-    private String hdfsUri;
 
     public static void main(String[] args) {
         JUnitCore.main(LongRunningKafkaTest.class.getName());
@@ -112,11 +94,9 @@ public class LongRunningKafkaTest {
 
     @Before
     public void setUp() throws Exception {
-        scheduledExecutorService = Executors.newScheduledThreadPool(Runtime.getRuntime().availableProcessors());
         producerExecutorService = Executors.newSingleThreadExecutor();
-        hdfsUri = System.getProperty("hdfs_name_node", "hdfs://localhost:8020");
         brokerUri = System.getProperty("brokerUri", "localhost:9092");
-        topic = System.getProperty("topic", String.format("%s-%d", "trades", System.currentTimeMillis()));
+        topic = System.getProperty("topic", String.format("%s-%d", "trades-windowing", System.currentTimeMillis()));
         offsetReset = System.getProperty("offsetReset", "earliest");
         lagMs = Integer.parseInt(System.getProperty("lagMs", "10"));
         windowSize = Integer.parseInt(System.getProperty("windowSize", "20"));
@@ -124,7 +104,7 @@ public class LongRunningKafkaTest {
         outputPath = System.getProperty("outputPath", "jet-output-" + System.currentTimeMillis());
         countPerTicker = Integer.parseInt(System.getProperty("countPerTicker", "100"));
         durationInMillis = MINUTES.toMillis(Integer.parseInt(System.getProperty("durationInMinutes", "1")));
-        kafkaProps = getKafkaProperties(brokerUri, offsetReset);
+        kafkaProps = getKafkaPropertiesForTrades(brokerUri, offsetReset);
         jet = JetBootstrap.getInstance();
 
         producerExecutorService.submit(() -> {
@@ -154,17 +134,11 @@ public class LongRunningKafkaTest {
                             timeMs, latencyMs);
                 }));
 
-        JobConf conf = new JobConf();
-        conf.set("fs.defaultFS", hdfsUri);
-        conf.set("fs.hdfs.impl", DistributedFileSystem.class.getName());
-        conf.set("fs.file.impl", LocalFileSystem.class.getName());
-        conf.setOutputFormat(TextOutputFormat.class);
-        TextOutputFormat.setOutputPath(conf, new Path(outputPath));
 
-        Vertex hdfsSink = dag.newVertex("write-hdfs", HdfsProcessors.writeHdfsP(
-                conf,
-                (String l) -> l.split(",")[0],
-                identity())
+        Vertex kafkaSink = dag.newVertex("write-kafka", KafkaProcessors.writeKafkaP(topic + "-results",
+                getKafkaPropertiesForResults(brokerUri, offsetReset),
+                (String s) -> s.split(",")[1],
+                (String s) -> Long.valueOf(s.split(",")[2]))
         );
 
         dag
@@ -173,15 +147,26 @@ public class LongRunningKafkaTest {
                 .edge(between(accumulateByF, slidingW).partitioned(entryKey())
                                                       .distributed())
                 .edge(between(slidingW, formatOutput).isolated())
-                .edge(between(formatOutput, hdfsSink));
+                .edge(between(formatOutput, kafkaSink));
+
+        DAG dag2 = new DAG();
+
+        Vertex readVerificationRecords = dag2.newVertex("read-verification-kafka",
+                streamKafkaP(getKafkaPropertiesForResults(brokerUri, offsetReset), topic + "-results"));
+
+        Vertex verifyRecords = dag2.newVertex("verification", VerificationProcessor.getSupplier(countPerTicker));
+
+        dag2.edge(from(readVerificationRecords).to(verifyRecords));
 
         JobConfig jobConfig = new JobConfig();
         jobConfig.setSnapshotIntervalMillis(5000);
         jobConfig.setProcessingGuarantee(ProcessingGuarantee.AT_LEAST_ONCE);
         System.out.println("Executing job..");
         Job job = jet.newJob(dag, jobConfig);
+        jet.newJob(dag2);
         Future<Void> future = job.getFuture();
 
+        Thread.sleep(5000);
         long begin = System.currentTimeMillis();
         while (System.currentTimeMillis() - begin < durationInMillis) {
             JobStatus status = job.getJobStatus();
@@ -197,54 +182,6 @@ public class LongRunningKafkaTest {
             SECONDS.sleep(1);
         }
         Thread.sleep(MINUTES.toMillis(2));
-        verify();
-    }
-
-    private void verify() throws IOException {
-        System.out.println("Verify output..");
-        URI uri = URI.create(hdfsUri);
-        String disableCacheName = String.format("fs.%s.impl.disable.cache", uri.getScheme());
-        Configuration conf = new Configuration();
-        conf.set("fs.defaultFS", hdfsUri);
-        conf.set("fs.hdfs.impl", DistributedFileSystem.class.getName());
-        conf.set("fs.file.impl", LocalFileSystem.class.getName());
-        conf.setBoolean(disableCacheName, true);
-        try (FileSystem fs = FileSystem.get(uri, conf)) {
-            String path = outputPath;
-            Path p = new Path(path);
-            RemoteIterator<LocatedFileStatus> iterator = fs.listFiles(p, false);
-            while (iterator.hasNext()) {
-                LocatedFileStatus status = iterator.next();
-                if (status.getPath().getName().equals("_SUCCESS")) {
-                    continue;
-                }
-                validateResults(fs.open(status.getPath()));
-            }
-            fs.delete(p, true);
-        }
-    }
-
-    private void validateResults(InputStream inputStream) throws IOException {
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream))) {
-            boolean result = reader.lines()
-                                   .map(l -> l.split("\t")[1])
-                                   .collect(Collectors.groupingBy(
-                                           l -> l.split(",")[0], Collectors.mapping(
-                                                   l -> {
-                                                       String[] split = l.split(",");
-                                                       return new SimpleImmutableEntry<>(split[1], split[2]);
-                                                   }, Collectors.<Entry>toSet()
-                                           )
-                                           )
-                                   )
-                                   .entrySet()
-                                   .stream()
-                                   .filter(windowSet -> windowSet.getValue().size() == windowSize)
-                                   .map(Entry::getValue)
-                                   .flatMap(Collection::stream)
-                                   .allMatch(countedTicker -> countedTicker.getValue().equals(valueOf(countPerTicker)));
-            assertTrue("tick count per window matches", result);
-        }
     }
 
 
@@ -252,10 +189,9 @@ public class LongRunningKafkaTest {
     public void tearDown() throws Exception {
         jet.shutdown();
         producerExecutorService.shutdown();
-        scheduledExecutorService.shutdown();
     }
 
-    private static Properties getKafkaProperties(String brokerUrl, String offsetReset) {
+    private static Properties getKafkaPropertiesForTrades(String brokerUrl, String offsetReset) {
         Properties props = new Properties();
         props.setProperty("bootstrap.servers", brokerUrl);
         props.setProperty("group.id", UuidUtil.newUnsecureUuidString());
@@ -266,4 +202,16 @@ public class LongRunningKafkaTest {
         return props;
     }
 
+    private static Properties getKafkaPropertiesForResults(String brokerUrl, String offsetReset) {
+        Properties props = new Properties();
+        props.setProperty("bootstrap.servers", brokerUrl);
+        props.setProperty("group.id", UuidUtil.newUnsecureUuidString());
+        props.setProperty("key.deserializer", StringDeserializer.class.getName());
+        props.setProperty("value.deserializer", LongDeserializer.class.getName());
+        props.setProperty("key.serializer", StringSerializer.class.getName());
+        props.setProperty("value.serializer", LongSerializer.class.getName());
+        props.setProperty("auto.offset.reset", offsetReset);
+        props.setProperty("max.poll.records", "32768");
+        return props;
+    }
 }

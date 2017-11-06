@@ -54,6 +54,7 @@ public class TradeProducer implements AutoCloseable {
     public void produce(String topic, int countPerTicker) {
         final long[] timeStamp = {0};
         Iterables.cycle(tickersToPrice.entrySet()).forEach((entry) -> {
+
             String ticker = entry.getKey();
             Integer sum = entry.getValue();
             try {
@@ -61,7 +62,6 @@ public class TradeProducer implements AutoCloseable {
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
-            producer.send(new ProducerRecord<>(topic + "-result", ticker, new Trade(-1, ticker, -1, sum)));
             double[] trades = getRandDistArray(countPerTicker, sum);
             for (int i = 0; i < countPerTicker; i++) {
                 Trade trade = new Trade(timeStamp[0]++, ticker, 1, trades[i]);

@@ -26,7 +26,7 @@ import java.util.stream.IntStream;
 
 public class VerificationProcessor extends AbstractProcessor {
 
-    private static final int VERIFIED_COUNT_TO_LOG = 1000;
+    private static final int VERIFIED_COUNT_TO_LOG = 10;
 
     private int expectedCount;
 

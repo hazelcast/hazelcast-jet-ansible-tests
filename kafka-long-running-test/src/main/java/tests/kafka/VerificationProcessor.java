@@ -45,8 +45,8 @@ public class VerificationProcessor extends AbstractProcessor {
 
     @Override
     protected void init(Context context) throws Exception {
-        logger.info("VerificationProcessor for long running kafka test initialized");
         logger = context.logger();
+        logger.info("VerificationProcessor for long running kafka test initialized");
     }
 
     @Override

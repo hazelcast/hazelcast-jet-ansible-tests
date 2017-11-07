@@ -179,18 +179,18 @@ public class LongRunningKafkaTest {
     }
 
     private DAG verificationDAG() {
-        DAG dag2 = new DAG();
+        DAG dag = new DAG();
 
-        Vertex readVerificationRecords = dag2.newVertex("read-verification-kafka", streamKafkaP(
+        Vertex readVerificationRecords = dag.newVertex("read-verification-kafka", streamKafkaP(
                 kafkaPropertiesForResults(brokerUri, offsetReset), topic + "-results")
         ).localParallelism(1);
 
         final int countCopy = countPerTicker;
-        Vertex sink = dag2.newVertex("verification", () -> new VerificationSink(countCopy))
+        Vertex sink = dag.newVertex("verification", () -> new VerificationSink(countCopy))
                           .localParallelism(1);
 
-        dag2.edge(from(readVerificationRecords).to(sink));
-        return dag2;
+        dag.edge(from(readVerificationRecords).to(sink));
+        return dag;
     }
 
 

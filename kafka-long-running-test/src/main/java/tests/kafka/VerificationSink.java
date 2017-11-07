@@ -17,42 +17,33 @@
 package tests.kafka;
 
 import com.hazelcast.jet.core.AbstractProcessor;
-import com.hazelcast.logging.ILogger;
 
 import javax.annotation.Nonnull;
 import java.util.Map.Entry;
+
+import static org.junit.Assert.assertEquals;
 
 public class VerificationSink extends AbstractProcessor {
 
     private static final int VERIFIED_COUNT_TO_LOG = 10;
 
-    private int expectedCount;
+    private long expectedCount;
+    private long verifiedCount;
 
-    private transient long verifiedCount;
-    private transient ILogger logger;
-
-    public VerificationSink(int expectedCount) {
+    public VerificationSink(long expectedCount) {
         this.expectedCount = expectedCount;
-    }
-
-    @Override
-    protected void init(@Nonnull Context context) throws Exception {
-        logger = context.logger();
-        logger.info("VerificationProcessor for long running kafka test initialized");
     }
 
     @Override
     protected boolean tryProcess0(@Nonnull Object item) throws Exception {
         Entry<String, Long> entry = (Entry<String, Long>) item;
         String ticker = entry.getKey();
-        Long count = entry.getValue();
+        long count = entry.getValue();
 
-        if (count.intValue() != expectedCount) {
-            throw new AssertionError("produced results are not matching for ticker -> "
-                    + ticker + " expected -> " + expectedCount + ", actual -> " + count);
-        }
+        assertEquals("Unexpected count for " + ticker, expectedCount, count);
+
         if (++verifiedCount % VERIFIED_COUNT_TO_LOG == 0) {
-            logger.info("Verified window count for long running kafka test: " + verifiedCount);
+            getLogger().info("Verified window count for long running kafka test: " + verifiedCount);
         }
         return true;
     }

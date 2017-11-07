@@ -45,6 +45,7 @@ public class VerificationProcessor extends AbstractProcessor {
 
     @Override
     protected void init(Context context) throws Exception {
+        logger.info("VerificationProcessor for long running kafka test initialized");
         logger = context.logger();
     }
 
@@ -59,7 +60,7 @@ public class VerificationProcessor extends AbstractProcessor {
                     + ticker + " expected -> " + expectedCount + ", actual -> " + count);
         }
         if ((verifiedCount++ % VERIFIED_COUNT_TO_LOG) == 0) {
-            logger.info("Verified count: " + verifiedCount);
+            logger.info("Verified count for long running kafka test: " + verifiedCount);
         }
         return true;
     }

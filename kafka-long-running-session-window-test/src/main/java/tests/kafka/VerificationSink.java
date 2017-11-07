@@ -42,7 +42,7 @@ public class VerificationSink extends AbstractProcessor {
         assertEquals("Unexpected count for " + ticker, expectedCount, count);
 
         if (++verifiedCount % VERIFIED_COUNT_TO_LOG == 0) {
-            getLogger().info("Verified window count for long running kafka test: " + verifiedCount);
+            getLogger().info("Verified window count for long running kafka session test: " + verifiedCount);
         }
         return true;
     }

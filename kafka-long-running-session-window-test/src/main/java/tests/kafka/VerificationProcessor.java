@@ -18,18 +18,34 @@ package tests.kafka;
 
 import com.hazelcast.jet.core.AbstractProcessor;
 import com.hazelcast.jet.core.ProcessorSupplier;
-import java.util.AbstractMap.SimpleImmutableEntry;
+import com.hazelcast.logging.ILogger;
+
 import java.util.Map.Entry;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 public class VerificationProcessor extends AbstractProcessor {
 
+    private static final int VERIFIED_COUNT_TO_LOG = 1000;
 
     private int expectedCount;
 
+    private transient long verifiedCount;
+    private transient ILogger logger;
+
     public VerificationProcessor(int expectedCount) {
         this.expectedCount = expectedCount;
+    }
+
+    public static ProcessorSupplier getSupplier(int expectedCount) {
+        return count -> IntStream.range(0, count).mapToObj(operand ->
+                new VerificationProcessor(expectedCount)).collect(Collectors.toList());
+
+    }
+
+    @Override
+    protected void init(Context context) throws Exception {
+        logger = context.logger();
     }
 
     @Override
@@ -38,18 +54,13 @@ public class VerificationProcessor extends AbstractProcessor {
         String ticker = entry.getKey();
         Long count = entry.getValue();
 
-        if (count.intValue() == expectedCount) {
-            return tryEmit(new SimpleImmutableEntry<>(ticker, count));
-        } else {
+        if (count.intValue() != expectedCount) {
             throw new AssertionError("produced results are not matching for ticker -> "
                     + ticker + " expected -> " + expectedCount + ", actual -> " + count);
         }
-    }
-
-
-    public static ProcessorSupplier getSupplier(int expectedCount) {
-        return count -> IntStream.range(0, count).mapToObj(operand ->
-                new VerificationProcessor(expectedCount)).collect(Collectors.toList());
-
+        if ((verifiedCount++ % VERIFIED_COUNT_TO_LOG) == 0) {
+            logger.info("Verified count: " + verifiedCount);
+        }
+        return true;
     }
 }

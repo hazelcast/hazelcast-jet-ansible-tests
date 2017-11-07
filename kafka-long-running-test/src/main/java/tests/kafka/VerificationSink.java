@@ -17,14 +17,12 @@
 package tests.kafka;
 
 import com.hazelcast.jet.core.AbstractProcessor;
-import com.hazelcast.jet.core.ProcessorSupplier;
 import com.hazelcast.logging.ILogger;
 
+import javax.annotation.Nonnull;
 import java.util.Map.Entry;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
-public class VerificationProcessor extends AbstractProcessor {
+public class VerificationSink extends AbstractProcessor {
 
     private static final int VERIFIED_COUNT_TO_LOG = 10;
 
@@ -33,24 +31,18 @@ public class VerificationProcessor extends AbstractProcessor {
     private transient long verifiedCount;
     private transient ILogger logger;
 
-    public VerificationProcessor(int expectedCount) {
+    public VerificationSink(int expectedCount) {
         this.expectedCount = expectedCount;
     }
 
-    public static ProcessorSupplier getSupplier(int expectedCount) {
-        return count -> IntStream.range(0, count).mapToObj(operand ->
-                new VerificationProcessor(expectedCount)).collect(Collectors.toList());
-
-    }
-
     @Override
-    protected void init(Context context) throws Exception {
+    protected void init(@Nonnull Context context) throws Exception {
         logger = context.logger();
         logger.info("VerificationProcessor for long running kafka test initialized");
     }
 
     @Override
-    protected boolean tryProcess0(Object item) throws Exception {
+    protected boolean tryProcess0(@Nonnull Object item) throws Exception {
         Entry<String, Long> entry = (Entry<String, Long>) item;
         String ticker = entry.getKey();
         Long count = entry.getValue();
@@ -59,8 +51,8 @@ public class VerificationProcessor extends AbstractProcessor {
             throw new AssertionError("produced results are not matching for ticker -> "
                     + ticker + " expected -> " + expectedCount + ", actual -> " + count);
         }
-        if ((verifiedCount++ % VERIFIED_COUNT_TO_LOG) == 0) {
-            logger.info("Verified count for long running kafka test: " + verifiedCount);
+        if (++verifiedCount % VERIFIED_COUNT_TO_LOG == 0) {
+            logger.info("Verified window count for long running kafka test: " + verifiedCount);
         }
         return true;
     }

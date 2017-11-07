@@ -29,7 +29,6 @@ import com.hazelcast.jet.core.TimestampKind;
 import com.hazelcast.jet.core.Vertex;
 import com.hazelcast.jet.core.WatermarkPolicies;
 import com.hazelcast.jet.core.WindowDefinition;
-import com.hazelcast.jet.core.processor.KafkaProcessors;
 import com.hazelcast.jet.datamodel.TimestampedEntry;
 import com.hazelcast.jet.server.JetBootstrap;
 import com.hazelcast.util.UuidUtil;
@@ -46,7 +45,7 @@ import org.junit.runners.JUnit4;
 import tests.kafka.LongRunningTradeProducer;
 import tests.kafka.Trade;
 import tests.kafka.TradeDeserializer;
-import tests.kafka.VerificationProcessor;
+import tests.kafka.VerificationSink;
 
 import java.io.IOException;
 import java.util.Properties;
@@ -63,6 +62,7 @@ import static com.hazelcast.jet.core.Partitioner.HASH_CODE;
 import static com.hazelcast.jet.core.WatermarkEmissionPolicy.emitByFrame;
 import static com.hazelcast.jet.core.WindowDefinition.slidingWindowDef;
 import static com.hazelcast.jet.core.processor.KafkaProcessors.streamKafkaP;
+import static com.hazelcast.jet.core.processor.KafkaProcessors.writeKafkaP;
 import static com.hazelcast.jet.core.processor.Processors.accumulateByFrameP;
 import static com.hazelcast.jet.core.processor.Processors.combineToSlidingWindowP;
 import static com.hazelcast.jet.core.processor.Processors.insertWatermarksP;
@@ -81,7 +81,6 @@ public class LongRunningKafkaTest {
     private int lagMs;
     private int windowSize;
     private int slideBy;
-    private String outputPath;
     private int countPerTicker;
     private Properties kafkaProps;
     private JetInstance jet;
@@ -101,10 +100,9 @@ public class LongRunningKafkaTest {
         lagMs = Integer.parseInt(System.getProperty("lagMs", "10"));
         windowSize = Integer.parseInt(System.getProperty("windowSize", "20"));
         slideBy = Integer.parseInt(System.getProperty("slideBy", "10"));
-        outputPath = System.getProperty("outputPath", "jet-output-" + System.currentTimeMillis());
         countPerTicker = Integer.parseInt(System.getProperty("countPerTicker", "100"));
         durationInMillis = MINUTES.toMillis(Integer.parseInt(System.getProperty("durationInMinutes", "1")));
-        kafkaProps = getKafkaPropertiesForTrades(brokerUri, offsetReset);
+        kafkaProps = kafkaPropertiesForTrades(brokerUri, offsetReset);
         jet = JetBootstrap.getInstance();
 
         producerExecutorService.submit(() -> {
@@ -116,59 +114,18 @@ public class LongRunningKafkaTest {
 
     @Test
     public void kafkaTest() throws IOException, ExecutionException, InterruptedException {
-        WindowDefinition windowDef = slidingWindowDef(windowSize, slideBy);
-        AggregateOperation1<Object, LongAccumulator, Long> counting = AggregateOperations.counting();
-
-        DAG dag = new DAG();
-        Vertex readKafka = dag.newVertex("read-kafka", streamKafkaP(kafkaProps, (key, value) -> value, topic));
-        Vertex insertPunctuation = dag.newVertex("insert-punctuation",
-                insertWatermarksP(Trade::getTime, WatermarkPolicies.withFixedLag(lagMs), emitByFrame(windowDef)));
-        Vertex accumulateByF = dag.newVertex("accumulate-by-frame",
-                accumulateByFrameP(Trade::getTicker, Trade::getTime, TimestampKind.EVENT, windowDef, counting));
-        Vertex slidingW = dag.newVertex("sliding-window", combineToSlidingWindowP(windowDef, counting));
-        Vertex formatOutput = dag.newVertex("format-output",
-                mapP((TimestampedEntry entry) -> {
-                    long timeMs = currentTimeMillis();
-                    long latencyMs = timeMs - entry.getTimestamp();
-                    return String.format("%d,%s,%s,%d,%d", entry.getTimestamp(), entry.getKey(), entry.getValue(),
-                            timeMs, latencyMs);
-                }));
-
-
-        Vertex kafkaSink = dag.newVertex("write-kafka", KafkaProcessors.writeKafkaP(topic + "-results",
-                getKafkaPropertiesForResults(brokerUri, offsetReset),
-                (String s) -> s.split(",")[1],
-                (String s) -> Long.valueOf(s.split(",")[2]))
-        );
-
-        dag
-                .edge(between(readKafka, insertPunctuation).isolated())
-                .edge(between(insertPunctuation, accumulateByF).partitioned(Trade::getTicker, HASH_CODE))
-                .edge(between(accumulateByF, slidingW).partitioned(entryKey())
-                                                      .distributed())
-                .edge(between(slidingW, formatOutput).isolated())
-                .edge(between(formatOutput, kafkaSink));
-
-        DAG dag2 = new DAG();
-
-        Vertex readVerificationRecords = dag2.newVertex("read-verification-kafka",
-                streamKafkaP(getKafkaPropertiesForResults(brokerUri, offsetReset), topic + "-results"));
-
-        Vertex verifyRecords = dag2.newVertex("verification", VerificationProcessor.getSupplier(countPerTicker));
-
-        dag2.edge(from(readVerificationRecords).to(verifyRecords));
-
+        System.out.println("Executing test job..");
         JobConfig jobConfig = new JobConfig();
         jobConfig.setSnapshotIntervalMillis(5000);
         jobConfig.setProcessingGuarantee(ProcessingGuarantee.AT_LEAST_ONCE);
-        System.out.println("Executing job..");
-        Job job1 = jet.newJob(dag, jobConfig);
-        Job job2 = jet.newJob(dag2);
+        Job testJob = jet.newJob(testDAG(), jobConfig);
 
-        Thread.sleep(5000);
+        System.out.println("Executing verification job..");
+        Job verificationJob = jet.newJob(verificationDAG());
+
         long begin = System.currentTimeMillis();
         while (System.currentTimeMillis() - begin < durationInMillis) {
-            JobStatus status = job2.getJobStatus();
+            JobStatus status = verificationJob.getJobStatus();
             if (status == RESTARTING || status == FAILED || status == COMPLETED) {
                 throw new AssertionError("Job is failed, jobStatus: " + status);
             }
@@ -176,12 +133,64 @@ public class LongRunningKafkaTest {
         }
         System.out.println("Cancelling job..");
 
-        job1.getFuture().cancel(true);
-        job2.getFuture().cancel(true);
-        while (job1.getJobStatus() != COMPLETED ||
-                job2.getJobStatus() != COMPLETED) {
+        testJob.getFuture().cancel(true);
+        verificationJob.getFuture().cancel(true);
+        while (testJob.getJobStatus() != COMPLETED ||
+                verificationJob.getJobStatus() != COMPLETED) {
             SECONDS.sleep(1);
         }
+    }
+
+    private DAG testDAG() {
+        WindowDefinition windowDef = slidingWindowDef(windowSize, slideBy);
+        AggregateOperation1<Object, LongAccumulator, Long> counting = AggregateOperations.counting();
+
+        DAG dag = new DAG();
+        Vertex readKafka = dag.newVertex("read-kafka", streamKafkaP(kafkaProps, (key, value) -> value, topic));
+        Vertex insertWm = dag.newVertex("insert-watermark", insertWatermarksP(
+                Trade::getTime, WatermarkPolicies.withFixedLag(lagMs), emitByFrame(windowDef))
+        );
+        Vertex accumulateByF = dag.newVertex("accumulate-by-frame", accumulateByFrameP(
+                Trade::getTicker, Trade::getTime, TimestampKind.EVENT, windowDef, counting)
+        );
+        Vertex slidingW = dag.newVertex("sliding-window", combineToSlidingWindowP(windowDef, counting));
+        Vertex formatOutput = dag.newVertex("format-output",
+                mapP((TimestampedEntry entry) -> {
+                    long timeMs = currentTimeMillis();
+                    long latencyMs = timeMs - entry.getTimestamp();
+                    return String.format("%d,%s,%s,%d,%d", entry.getTimestamp(), entry.getKey(), entry.getValue(),
+                            timeMs, latencyMs);
+                })).localParallelism(1);
+        Vertex sink = dag.newVertex("write-kafka", writeKafkaP(
+                topic + "-results",
+                kafkaPropertiesForResults(brokerUri, offsetReset),
+                (String s) -> s.split(",")[1],
+                (String s) -> Long.valueOf(s.split(",")[2])
+        )).localParallelism(1);
+
+        dag
+                .edge(between(readKafka, insertWm).isolated())
+                .edge(between(insertWm, accumulateByF).partitioned(Trade::getTicker, HASH_CODE))
+                .edge(between(accumulateByF, slidingW).partitioned(entryKey())
+                                                      .distributed())
+                .edge(between(slidingW, formatOutput).isolated())
+                .edge(between(formatOutput, sink));
+        return dag;
+    }
+
+    private DAG verificationDAG() {
+        DAG dag2 = new DAG();
+
+        Vertex readVerificationRecords = dag2.newVertex("read-verification-kafka", streamKafkaP(
+                kafkaPropertiesForResults(brokerUri, offsetReset), topic + "-results")
+        ).localParallelism(1);
+
+        final int countCopy = countPerTicker;
+        Vertex sink = dag2.newVertex("verification", () -> new VerificationSink(countCopy))
+                          .localParallelism(1);
+
+        dag2.edge(from(readVerificationRecords).to(sink));
+        return dag2;
     }
 
 
@@ -191,7 +200,7 @@ public class LongRunningKafkaTest {
         producerExecutorService.shutdown();
     }
 
-    private static Properties getKafkaPropertiesForTrades(String brokerUrl, String offsetReset) {
+    private static Properties kafkaPropertiesForTrades(String brokerUrl, String offsetReset) {
         Properties props = new Properties();
         props.setProperty("bootstrap.servers", brokerUrl);
         props.setProperty("group.id", UuidUtil.newUnsecureUuidString());
@@ -202,7 +211,7 @@ public class LongRunningKafkaTest {
         return props;
     }
 
-    private static Properties getKafkaPropertiesForResults(String brokerUrl, String offsetReset) {
+    private static Properties kafkaPropertiesForResults(String brokerUrl, String offsetReset) {
         Properties props = new Properties();
         props.setProperty("bootstrap.servers", brokerUrl);
         props.setProperty("group.id", UuidUtil.newUnsecureUuidString());

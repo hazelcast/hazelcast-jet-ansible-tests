@@ -160,13 +160,13 @@ public class LongRunningKafkaTest {
                     long latencyMs = timeMs - entry.getTimestamp();
                     return String.format("%d,%s,%s,%d,%d", entry.getTimestamp(), entry.getKey(), entry.getValue(),
                             timeMs, latencyMs);
-                })).localParallelism(2);
+                }));
         Vertex sink = dag.newVertex("write-kafka", writeKafkaP(
                 topic + "-results",
                 kafkaPropertiesForResults(brokerUri, offsetReset),
                 (String s) -> s.split(",")[1],
                 (String s) -> Long.valueOf(s.split(",")[2])
-        )).localParallelism(1);
+        ));
 
         dag
                 .edge(between(readKafka, insertWm).isolated())

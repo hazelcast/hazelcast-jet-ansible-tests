@@ -125,13 +125,13 @@ public class LongRunningKafkaTest {
 
         long begin = System.currentTimeMillis();
         while (System.currentTimeMillis() - begin < durationInMillis) {
+            MINUTES.sleep(1);
             JobStatus status = verificationJob.getJobStatus();
             if (status == RESTARTING || status == FAILED || status == COMPLETED) {
                 throw new AssertionError("Job is failed, jobStatus: " + status);
             }
-            MINUTES.sleep(1);
         }
-        System.out.println("Cancelling job..");
+        System.out.println("Cancelling jobs..");
 
         testJob.getFuture().cancel(true);
         verificationJob.getFuture().cancel(true);

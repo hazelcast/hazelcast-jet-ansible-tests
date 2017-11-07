@@ -41,7 +41,7 @@ import org.junit.runners.JUnit4;
 import tests.kafka.Trade;
 import tests.kafka.TradeDeserializer;
 import tests.kafka.TradeProducer;
-import tests.kafka.VerificationProcessor;
+import tests.kafka.VerificationSink;
 
 import java.io.IOException;
 import java.util.Properties;
@@ -92,7 +92,7 @@ public class LongRunningKafkaSessionWindowTest {
         countPerTicker = Integer.parseInt(System.getProperty("countPerTicker", "20"));
         sessionTimeout = Integer.parseInt(System.getProperty("sessionTimeout", "100"));
         durationInMillis = MINUTES.toMillis(Integer.parseInt(System.getProperty("durationInMinutes", "3")));
-        kafkaProps = getKafkaPropertiesForTrades(brokerUri, offsetReset);
+        kafkaProps = kafkaPropertiesForTrades(brokerUri, offsetReset);
         jet = JetBootstrap.getInstance();
 
         producerExecutorService.submit(() -> {
@@ -104,11 +104,41 @@ public class LongRunningKafkaSessionWindowTest {
 
     @Test
     public void kafkaTest() throws IOException, ExecutionException, InterruptedException {
+        System.out.println("Executing job..");
+        JobConfig jobConfig = new JobConfig();
+        jobConfig.setSnapshotIntervalMillis(5000);
+        jobConfig.setProcessingGuarantee(ProcessingGuarantee.AT_LEAST_ONCE);
+
+        Job testJob = jet.newJob(testDAG(), jobConfig);
+
+        System.out.println("Executing verification job..");
+        Job verificationJob = jet.newJob(verificationDAG());
+
+        long begin = System.currentTimeMillis();
+        while (System.currentTimeMillis() - begin < durationInMillis) {
+            MINUTES.sleep(1);
+            JobStatus status = verificationJob.getJobStatus();
+            if (status == RESTARTING || status == FAILED || status == COMPLETED) {
+                throw new AssertionError("Job is failed, jobStatus: " + status);
+            }
+        }
+        System.out.println("Cancelling jobs..");
+
+        testJob.getFuture().cancel(true);
+        verificationJob.getFuture().cancel(true);
+
+        while (testJob.getJobStatus() != COMPLETED ||
+                verificationJob.getJobStatus() != COMPLETED) {
+            SECONDS.sleep(1);
+        }
+    }
+
+    private DAG testDAG() {
         DAG dag = new DAG();
 
         Vertex readKafka = dag.newVertex("read-kafka", streamKafkaP(kafkaProps, (key, value) -> value, topic));
 
-        Vertex insertPunctuation = dag.newVertex("insert-punctuation",
+        Vertex insertWm = dag.newVertex("insert-watermark",
                 insertWatermarksP(Trade::getTime, WatermarkPolicies.withFixedLag(lagMs),
                         emitByMinStep(lagMs)));
 
@@ -118,53 +148,34 @@ public class LongRunningKafkaSessionWindowTest {
                         counting()));
 
         Vertex writeResultsToKafka = dag.newVertex("write-results-kafka",
-                writeKafkaP(topic + "-result", getKafkaPropertiesForResults(brokerUri, offsetReset),
+                writeKafkaP(topic + "-result", kafkaPropertiesForResults(brokerUri, offsetReset),
                         (DistributedFunction<Session<String, Long>, String>) Session::getKey,
                         (DistributedFunction<Session<String, Long>, Long>) Session::getResult));
 
-        DAG dag2 = new DAG();
-
-        Vertex readVerificationRecords = dag2.newVertex("read-verification-kafka",
-                streamKafkaP(getKafkaPropertiesForResults(brokerUri, offsetReset), topic + "-result"));
-
-        Vertex verifyRecords = dag2.newVertex("verification", VerificationProcessor.getSupplier(countPerTicker));
-
         dag
-                .edge(between(readKafka, insertPunctuation).isolated())
-                .edge(between(insertPunctuation, aggregateSessionWindow)
+                .edge(between(readKafka, insertWm).isolated())
+                .edge(between(insertWm, aggregateSessionWindow)
                         .partitioned(Trade::getTicker, HASH_CODE)
                         .distributed()
                 )
                 .edge(from(aggregateSessionWindow).to(writeResultsToKafka));
 
-        dag2.edge(from(readVerificationRecords).to(verifyRecords));
+        return dag;
+    }
 
-        JobConfig jobConfig = new JobConfig();
-        jobConfig.setSnapshotIntervalMillis(5000);
-        jobConfig.setProcessingGuarantee(ProcessingGuarantee.AT_LEAST_ONCE);
-        System.out.println("Executing job..");
 
-        Job job1 = jet.newJob(dag, jobConfig);
-        Job job2 = jet.newJob(dag2);
+    private DAG verificationDAG() {
+        DAG dag = new DAG();
 
-        Thread.sleep(5000);
-        long begin = System.currentTimeMillis();
-        while (System.currentTimeMillis() - begin < durationInMillis) {
-            JobStatus status = job2.getJobStatus();
-            if (status == RESTARTING || status == FAILED || status == COMPLETED) {
-                throw new AssertionError("Job is failed, jobStatus: " + status);
-            }
-            MINUTES.sleep(1);
-        }
-        System.out.println("Cancelling job..");
+        Vertex readVerificationRecords = dag.newVertex("read-verification-kafka",
+                streamKafkaP(kafkaPropertiesForResults(brokerUri, offsetReset), topic + "-result"));
 
-        job1.getFuture().cancel(true);
-        job2.getFuture().cancel(true);
+        long countCopy = countPerTicker;
+        Vertex verifyRecords = dag.newVertex("verification", () -> new VerificationSink(countCopy));
 
-        while (job1.getJobStatus() != COMPLETED ||
-                job2.getJobStatus() != COMPLETED) {
-            SECONDS.sleep(1);
-        }
+
+        dag.edge(from(readVerificationRecords).to(verifyRecords));
+        return dag;
     }
 
     @After
@@ -173,7 +184,7 @@ public class LongRunningKafkaSessionWindowTest {
         producerExecutorService.shutdown();
     }
 
-    private static Properties getKafkaPropertiesForTrades(String brokerUrl, String offsetReset) {
+    private static Properties kafkaPropertiesForTrades(String brokerUrl, String offsetReset) {
         Properties props = new Properties();
         props.setProperty("bootstrap.servers", brokerUrl);
         props.setProperty("group.id", UuidUtil.newUnsecureUuidString());
@@ -184,7 +195,7 @@ public class LongRunningKafkaSessionWindowTest {
         return props;
     }
 
-    private static Properties getKafkaPropertiesForResults(String brokerUrl, String offsetReset) {
+    private static Properties kafkaPropertiesForResults(String brokerUrl, String offsetReset) {
         Properties props = new Properties();
         props.setProperty("bootstrap.servers", brokerUrl);
         props.setProperty("group.id", UuidUtil.newUnsecureUuidString());

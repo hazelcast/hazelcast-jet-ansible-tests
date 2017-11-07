@@ -86,7 +86,7 @@ public class LongRunningKafkaSessionWindowTest {
     public void setUp() throws Exception {
         producerExecutorService = Executors.newSingleThreadExecutor();
         brokerUri = System.getProperty("brokerUri", "localhost:9092");
-        topic = System.getProperty("topic", String.format("%s-%d", "trades", System.currentTimeMillis()));
+        topic = System.getProperty("topic", String.format("%s-%d", "trades-session", System.currentTimeMillis()));
         offsetReset = System.getProperty("offsetReset", "earliest");
         lagMs = Integer.parseInt(System.getProperty("lagMs", "100"));
         countPerTicker = Integer.parseInt(System.getProperty("countPerTicker", "20"));

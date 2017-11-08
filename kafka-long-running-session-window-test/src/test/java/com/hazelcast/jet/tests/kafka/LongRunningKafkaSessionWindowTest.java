@@ -88,7 +88,7 @@ public class LongRunningKafkaSessionWindowTest {
         brokerUri = System.getProperty("brokerUri", "localhost:9092");
         topic = System.getProperty("topic", String.format("%s-%d", "trades-session", System.currentTimeMillis()));
         offsetReset = System.getProperty("offsetReset", "earliest");
-        lagMs = Integer.parseInt(System.getProperty("lagMs", "100"));
+        lagMs = Integer.parseInt(System.getProperty("lagMs", "50"));
         countPerTicker = Integer.parseInt(System.getProperty("countPerTicker", "20"));
         sessionTimeout = Integer.parseInt(System.getProperty("sessionTimeout", "100"));
         durationInMillis = MINUTES.toMillis(Integer.parseInt(System.getProperty("durationInMinutes", "3")));

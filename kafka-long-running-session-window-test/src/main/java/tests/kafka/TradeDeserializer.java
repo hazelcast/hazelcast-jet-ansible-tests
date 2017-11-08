@@ -35,7 +35,7 @@ public class TradeDeserializer implements Deserializer<Trade>, Serializable {
             try (DataInputStream in = new DataInputStream(new ByteArrayInputStream(bytes))) {
                 String ticker = in.readUTF();
                 long time = in.readLong();
-                double price = in.readDouble();
+                int price = in.readInt();
                 int quantity = in.readInt();
                 return new Trade(time, ticker, quantity, price);
             }

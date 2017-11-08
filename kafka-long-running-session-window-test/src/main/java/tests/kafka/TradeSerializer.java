@@ -35,7 +35,7 @@ public class TradeSerializer implements Serializer<Trade> {
         try {
             out.writeUTF(trade.getTicker());
             out.writeLong(trade.getTime());
-            out.writeDouble(trade.getPrice());
+            out.writeInt(trade.getPrice());
             out.writeInt(trade.getQuantity());
         } catch (IOException e) {
             throw new RuntimeException(e);

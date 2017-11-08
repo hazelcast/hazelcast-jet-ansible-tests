@@ -32,6 +32,11 @@ import com.hazelcast.jet.core.WindowDefinition;
 import com.hazelcast.jet.datamodel.TimestampedEntry;
 import com.hazelcast.jet.server.JetBootstrap;
 import com.hazelcast.util.UuidUtil;
+import java.io.IOException;
+import java.util.Properties;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -46,12 +51,6 @@ import tests.kafka.LongRunningTradeProducer;
 import tests.kafka.Trade;
 import tests.kafka.TradeDeserializer;
 import tests.kafka.VerificationSink;
-
-import java.io.IOException;
-import java.util.Properties;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 import static com.hazelcast.jet.core.Edge.between;
 import static com.hazelcast.jet.core.Edge.from;
@@ -97,7 +96,7 @@ public class LongRunningKafkaTest {
         brokerUri = System.getProperty("brokerUri", "localhost:9092");
         topic = System.getProperty("topic", String.format("%s-%d", "trades-long-running", System.currentTimeMillis()));
         offsetReset = System.getProperty("offsetReset", "earliest");
-        lagMs = Integer.parseInt(System.getProperty("lagMs", "10"));
+        lagMs = Integer.parseInt(System.getProperty("lagMs", "1"));
         windowSize = Integer.parseInt(System.getProperty("windowSize", "20"));
         slideBy = Integer.parseInt(System.getProperty("slideBy", "10"));
         countPerTicker = Integer.parseInt(System.getProperty("countPerTicker", "100"));
@@ -187,7 +186,7 @@ public class LongRunningKafkaTest {
 
         final int countCopy = countPerTicker;
         Vertex sink = dag.newVertex("verification", () -> new VerificationSink(countCopy))
-                          .localParallelism(1);
+                         .localParallelism(1);
 
         dag.edge(from(readVerificationRecords).to(sink));
         return dag;

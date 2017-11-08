@@ -23,9 +23,9 @@ public class Trade implements Serializable {
     private final long time;
     private final String ticker;
     private final int quantity;
-    private final double price; // in cents
+    private final int price; // in cents
 
-    Trade(long time, String ticker, int quantity, double price) {
+    Trade(long time, String ticker, int quantity, int price) {
         this.time = time;
         this.ticker = ticker;
         this.quantity = quantity;
@@ -44,7 +44,7 @@ public class Trade implements Serializable {
         return quantity;
     }
 
-    public double getPrice() {
+    public int getPrice() {
         return price;
     }
 

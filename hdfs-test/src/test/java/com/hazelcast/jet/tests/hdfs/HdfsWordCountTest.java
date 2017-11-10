@@ -24,7 +24,7 @@ import com.hazelcast.jet.Source;
 import com.hazelcast.jet.Sources;
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.core.DAG;
-import com.hazelcast.jet.core.ProcessorSupplier;
+import com.hazelcast.jet.core.ProcessorMetaSupplier;
 import com.hazelcast.jet.core.Vertex;
 import com.hazelcast.jet.core.processor.Processors;
 import com.hazelcast.jet.server.JetBootstrap;
@@ -104,7 +104,7 @@ public class HdfsWordCountTest {
         Pipeline pipeline = Pipeline.create();
 
         Source<Object> source = Sources.fromProcessor("generator", wordGenerator(hdfsUri, inputPath, distinct, total));
-        Sink<Object> noopSink = Sinks.fromProcessor("noopSink", ProcessorSupplier.of(Processors.noopP()));
+        Sink<Object> noopSink = Sinks.fromProcessor("noopSink", ProcessorMetaSupplier.of(Processors.noopP()));
         pipeline.drawFrom(source).drainTo(noopSink);
 
         JobConfig jobConfig = new JobConfig();

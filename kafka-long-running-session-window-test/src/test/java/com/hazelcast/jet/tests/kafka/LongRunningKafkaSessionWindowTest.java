@@ -148,7 +148,7 @@ public class LongRunningKafkaSessionWindowTest {
                         counting()));
 
         Vertex writeResultsToKafka = dag.newVertex("write-results-kafka",
-                writeKafkaP(topic + "-result", kafkaPropertiesForResults(brokerUri, offsetReset),
+                writeKafkaP(kafkaPropertiesForResults(brokerUri, offsetReset), topic + "-result",
                         (DistributedFunction<Session<String, Long>, String>) Session::getKey,
                         (DistributedFunction<Session<String, Long>, Long>) Session::getResult));
 

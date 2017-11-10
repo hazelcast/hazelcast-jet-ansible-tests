@@ -161,8 +161,8 @@ public class LongRunningKafkaTest {
                             timeMs, latencyMs);
                 }));
         Vertex sink = dag.newVertex("write-kafka", writeKafkaP(
-                topic + "-results",
                 kafkaPropertiesForResults(brokerUri, offsetReset),
+                topic + "-results",
                 (String s) -> s.split(",")[1],
                 (String s) -> Long.valueOf(s.split(",")[2])
         ));

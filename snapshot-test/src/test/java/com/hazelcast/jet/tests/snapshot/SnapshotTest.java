@@ -66,7 +66,7 @@ public class SnapshotTest extends LongRunningKafkaTest {
         System.out.println("Executing test job..");
         JobConfig jobConfig = new JobConfig();
         jobConfig.setSnapshotIntervalMillis(5000);
-        jobConfig.setProcessingGuarantee(ProcessingGuarantee.AT_LEAST_ONCE);
+        jobConfig.setProcessingGuarantee(ProcessingGuarantee.EXACTLY_ONCE);
         jobConfig.addClass(Trade.class, TradeDeserializer.class, TradeProducer.class, TradeSerializer.class,
                 VerificationSink.class, LongRunningKafkaTest.class);
         Job testJob = jet.newJob(testDAG(), jobConfig);

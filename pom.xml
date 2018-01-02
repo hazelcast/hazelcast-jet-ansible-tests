@@ -14,6 +14,8 @@
         <module>kafka-long-running-test</module>
         <module>kafka-long-running-session-window-test</module>
         <module>hdfs-test</module>
+        <module>snapshot-test</module>
+        <module>remote-controller-client</module>
     </modules>
 
     <properties>

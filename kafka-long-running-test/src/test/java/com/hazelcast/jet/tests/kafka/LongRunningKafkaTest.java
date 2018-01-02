@@ -74,16 +74,16 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 @RunWith(JUnit4.class)
 public class LongRunningKafkaTest {
 
-    private String brokerUri;
-    private String topic;
-    private String offsetReset;
+    protected JetInstance jet;
+    protected String brokerUri;
+    protected String offsetReset;
+    protected String topic;
+    protected long durationInMillis;
+    protected int countPerTicker;
     private int lagMs;
     private int windowSize;
     private int slideBy;
-    private int countPerTicker;
     private Properties kafkaProps;
-    private JetInstance jet;
-    private long durationInMillis;
     private ExecutorService producerExecutorService;
 
     public static void main(String[] args) {
@@ -140,7 +140,7 @@ public class LongRunningKafkaTest {
         }
     }
 
-    private DAG testDAG() {
+    protected DAG testDAG() {
         WindowDefinition windowDef = slidingWindowDef(windowSize, slideBy);
         AggregateOperation1<Object, LongAccumulator, Long> counting = AggregateOperations.counting();
 
@@ -210,7 +210,7 @@ public class LongRunningKafkaTest {
         return props;
     }
 
-    private static Properties kafkaPropertiesForResults(String brokerUrl, String offsetReset) {
+    protected static Properties kafkaPropertiesForResults(String brokerUrl, String offsetReset) {
         Properties props = new Properties();
         props.setProperty("bootstrap.servers", brokerUrl);
         props.setProperty("group.id", UuidUtil.newUnsecureUuidString());

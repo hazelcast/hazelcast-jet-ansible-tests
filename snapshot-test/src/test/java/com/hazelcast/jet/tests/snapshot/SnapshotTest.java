@@ -92,9 +92,14 @@ public class SnapshotTest extends LongRunningKafkaTest {
     }
 
     private static void checkJobStatus(Job testJob) {
-        JobStatus status = testJob.getJobStatus();
-        if (status == FAILED || status == COMPLETED) {
-            throw new AssertionError("Job is failed, jobStatus: " + status);
+        try {
+            JobStatus status = testJob.getJobStatus();
+            if (status == FAILED || status == COMPLETED) {
+                throw new AssertionError("Job is failed, jobStatus: " + status);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
         }
+
     }
 }

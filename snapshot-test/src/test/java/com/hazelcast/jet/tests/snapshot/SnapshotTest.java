@@ -40,12 +40,13 @@ import java.util.concurrent.ExecutionException;
 
 import static com.hazelcast.jet.core.JobStatus.COMPLETED;
 import static com.hazelcast.jet.core.JobStatus.FAILED;
-import static java.util.concurrent.TimeUnit.MINUTES;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.Assert.assertEquals;
 
 @RunWith(JUnit4.class)
 public class SnapshotTest extends LongRunningKafkaTest {
+
+    private ProcessingGuarantee guarantee;
 
     public static void main(String[] args) {
         JUnitCore.main(SnapshotTest.class.getName());
@@ -58,7 +59,7 @@ public class SnapshotTest extends LongRunningKafkaTest {
             System.setProperty("hazelcast.client.config", isolatedClientConfig);
         }
         super.setUp();
-        durationInMillis = MINUTES.toMillis(Integer.parseInt(System.getProperty("durationInMinutes", "10")));
+        guarantee = ProcessingGuarantee.valueOf(System.getProperty("processingGuarantee", "EXACTLY_ONCE"));
     }
 
     @Test
@@ -66,7 +67,7 @@ public class SnapshotTest extends LongRunningKafkaTest {
         System.out.println("Executing test job..");
         JobConfig jobConfig = new JobConfig();
         jobConfig.setSnapshotIntervalMillis(5000);
-        jobConfig.setProcessingGuarantee(ProcessingGuarantee.EXACTLY_ONCE);
+        jobConfig.setProcessingGuarantee(guarantee);
         jobConfig.addClass(Trade.class, TradeDeserializer.class, TradeProducer.class, TradeSerializer.class,
                 VerificationSink.class, LongRunningKafkaTest.class);
         Job testJob = jet.newJob(testDAG(), jobConfig);

@@ -54,9 +54,9 @@ public final class RemoteControllerClient {
         if (isolatedClientConfig != null) {
             System.setProperty("hazelcast.client.config", isolatedClientConfig);
         }
-        int initialSleep = parseInt(System.getProperty("initialSleepMinutes", "3"));
+        int initialSleep = parseInt(System.getProperty("initialSleepMinutes", "5"));
         int sleepAfterStop = parseInt(System.getProperty("sleepAfterStopMinutes", "1"));
-        int sleepBetweenRestart = parseInt(System.getProperty("sleepBetweenRestartMinutes", "5"));
+        int sleepBetweenRestart = parseInt(System.getProperty("sleepBetweenRestartMinutes", "4"));
         long duration = TimeUnit.MINUTES.toMillis(parseInt(System.getProperty("durationMinutes", "30")));
 
 

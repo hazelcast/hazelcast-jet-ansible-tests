@@ -16,36 +16,75 @@
 
 package com.hazelcast.jet.tests.snapshot;
 
+import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.Job;
+import com.hazelcast.jet.accumulator.LongAccumulator;
+import com.hazelcast.jet.aggregate.AggregateOperation1;
+import com.hazelcast.jet.aggregate.AggregateOperations;
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.config.ProcessingGuarantee;
-import com.hazelcast.jet.core.JobStatus;
-import com.hazelcast.jet.tests.kafka.LongRunningKafkaTest;
+import com.hazelcast.jet.core.DAG;
+import com.hazelcast.jet.core.TimestampKind;
+import com.hazelcast.jet.core.Vertex;
+import com.hazelcast.jet.core.WatermarkPolicies;
+import com.hazelcast.jet.core.WindowDefinition;
+import com.hazelcast.jet.datamodel.TimestampedEntry;
+import com.hazelcast.jet.server.JetBootstrap;
+import com.hazelcast.util.UuidUtil;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.common.serialization.LongDeserializer;
+import org.apache.kafka.common.serialization.LongSerializer;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.JUnitCore;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
-import tests.kafka.Trade;
-import tests.kafka.TradeDeserializer;
-import tests.kafka.TradeProducer;
-import tests.kafka.TradeSerializer;
-import tests.kafka.VerificationSink;
+import tests.snapshot.QueueVerifier;
+import tests.snapshot.SnapshotTradeProducer;
 
 import java.io.IOException;
 import java.util.Collections;
+import java.util.Properties;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
+import static com.hazelcast.jet.core.Edge.between;
 import static com.hazelcast.jet.core.JobStatus.COMPLETED;
-import static com.hazelcast.jet.core.JobStatus.FAILED;
+import static com.hazelcast.jet.core.Partitioner.HASH_CODE;
+import static com.hazelcast.jet.core.WatermarkEmissionPolicy.emitByFrame;
+import static com.hazelcast.jet.core.WindowDefinition.slidingWindowDef;
+import static com.hazelcast.jet.core.processor.KafkaProcessors.streamKafkaP;
+import static com.hazelcast.jet.core.processor.KafkaProcessors.writeKafkaP;
+import static com.hazelcast.jet.core.processor.Processors.accumulateByFrameP;
+import static com.hazelcast.jet.core.processor.Processors.combineToSlidingWindowP;
+import static com.hazelcast.jet.core.processor.Processors.insertWatermarksP;
+import static com.hazelcast.jet.core.processor.Processors.mapP;
+import static com.hazelcast.jet.function.DistributedFunctions.entryKey;
+import static com.hazelcast.jet.function.DistributedFunctions.wholeItem;
+import static java.lang.System.currentTimeMillis;
+import static java.util.concurrent.TimeUnit.MINUTES;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.Assert.assertEquals;
 
 @RunWith(JUnit4.class)
-public class SnapshotTest extends LongRunningKafkaTest {
+public class SnapshotTest {
 
+    private static final int POLL_TIMEOUT = 1000;
+
+    private JetInstance jet;
+    private String brokerUri;
+    private String offsetReset;
+    private String topic;
+    private long durationInMillis;
+    private int countPerTicker;
+    private int snapshotIntervalMs;
+    private int lagMs;
+    private int windowSize;
+    private int slideBy;
+    private ExecutorService producerExecutorService;
     private ProcessingGuarantee guarantee;
 
     public static void main(String[] args) {
@@ -58,33 +97,53 @@ public class SnapshotTest extends LongRunningKafkaTest {
         if (isolatedClientConfig != null) {
             System.setProperty("hazelcast.client.config", isolatedClientConfig);
         }
-        super.setUp();
+        producerExecutorService = Executors.newSingleThreadExecutor();
+        brokerUri = System.getProperty("brokerUri", "localhost:9092");
+        topic = System.getProperty("topic", String.format("%s-%d", "trades-long-running", System.currentTimeMillis()));
+        offsetReset = System.getProperty("offsetReset", "earliest");
+        lagMs = Integer.parseInt(System.getProperty("lagMs", "3000"));
+        snapshotIntervalMs = Integer.parseInt(System.getProperty("snapshotIntervalMs", "1000"));
+        windowSize = Integer.parseInt(System.getProperty("windowSize", "20"));
+        slideBy = Integer.parseInt(System.getProperty("slideBy", "10"));
+        countPerTicker = Integer.parseInt(System.getProperty("countPerTicker", "1000"));
+        durationInMillis = MINUTES.toMillis(Integer.parseInt(System.getProperty("durationInMinutes", "15")));
         guarantee = ProcessingGuarantee.valueOf(System.getProperty("processingGuarantee", "EXACTLY_ONCE"));
+        jet = JetBootstrap.getInstance();
+
+        producerExecutorService.submit(() -> {
+            try (SnapshotTradeProducer tradeProducer = new SnapshotTradeProducer(brokerUri)) {
+                tradeProducer.produce(topic, countPerTicker);
+            }
+        });
     }
 
     @Test
     public void kafkaTest() throws IOException, ExecutionException, InterruptedException {
         System.out.println("Executing test job..");
         JobConfig jobConfig = new JobConfig();
-        jobConfig.setSnapshotIntervalMillis(5000);
+        jobConfig.setSnapshotIntervalMillis(snapshotIntervalMs);
         jobConfig.setProcessingGuarantee(guarantee);
-        jobConfig.addClass(Trade.class, TradeDeserializer.class, TradeProducer.class, TradeSerializer.class,
-                VerificationSink.class, LongRunningKafkaTest.class);
+        //TODO remove these before committing
+        jobConfig.addClass(SnapshotTradeProducer.class, SnapshotTest.class);
         Job testJob = jet.newJob(testDAG(), jobConfig);
 
-        KafkaConsumer<String, Long> consumer = new KafkaConsumer<>(kafkaPropertiesForResults(brokerUri, offsetReset));
+        KafkaConsumer<Long, Long> consumer = new KafkaConsumer<>(kafkaPropertiesForResults(brokerUri, offsetReset));
         consumer.subscribe(Collections.singleton(topic + "-results"));
 
         long begin = System.currentTimeMillis();
+        QueueVerifier queueVerifier = new QueueVerifier(windowSize / slideBy);
+        queueVerifier.start();
         while (System.currentTimeMillis() - begin < durationInMillis) {
-            ConsumerRecords<String, Long> records = consumer.poll(1000);
-            records.iterator().forEachRemaining(r ->
-                    assertEquals("Unexpected count for " + r.key(), countPerTicker, (long) r.value())
+            ConsumerRecords<Long, Long> records = consumer.poll(POLL_TIMEOUT);
+            records.iterator().forEachRemaining(r -> {
+                        assertEquals("Unexpected count for " + r.key(), countPerTicker, (long) r.value());
+                        queueVerifier.offer(r.key());
+                    }
             );
-            checkJobStatus(testJob);
         }
         System.out.println("Cancelling jobs..");
         consumer.close();
+        queueVerifier.close();
 
         testJob.getFuture().cancel(true);
         while (testJob.getJobStatus() != COMPLETED) {
@@ -92,15 +151,71 @@ public class SnapshotTest extends LongRunningKafkaTest {
         }
     }
 
-    private static void checkJobStatus(Job testJob) {
-        try {
-            JobStatus status = testJob.getJobStatus();
-            if (status == FAILED || status == COMPLETED) {
-                throw new AssertionError("Job is failed, jobStatus: " + status);
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+    @After
+    public void tearDown() throws Exception {
+        jet.shutdown();
+        producerExecutorService.shutdown();
+    }
 
+    private DAG testDAG() {
+        WindowDefinition windowDef = slidingWindowDef(windowSize, slideBy);
+        AggregateOperation1<Object, LongAccumulator, Long> counting = AggregateOperations.counting();
+
+        DAG dag = new DAG();
+        Properties properties = kafkaPropertiesForTrades(brokerUri, offsetReset);
+        Vertex readKafka = dag.newVertex("read-kafka", streamKafkaP(properties, (key, value) -> value, topic));
+        Vertex insertWm = dag.newVertex("insert-watermark", insertWatermarksP(
+                (Long t) -> t, WatermarkPolicies.withFixedLag(lagMs), emitByFrame(windowDef))
+        );
+        Vertex accumulateByF = dag.newVertex("accumulate-by-frame", accumulateByFrameP(
+                wholeItem(), (Long t) -> t, TimestampKind.EVENT, windowDef, counting)
+        );
+        Vertex slidingW = dag.newVertex("sliding-window", combineToSlidingWindowP(windowDef, counting));
+        Vertex formatOutput = dag.newVertex("format-output",
+                mapP((TimestampedEntry entry) -> {
+                    long timeMs = currentTimeMillis();
+                    long latencyMs = timeMs - entry.getTimestamp();
+                    return String.format("%d,%s,%s,%d,%d", entry.getTimestamp(), entry.getKey(), entry.getValue(),
+                            timeMs, latencyMs);
+                }));
+        Vertex sink = dag.newVertex("write-kafka", writeKafkaP(
+                kafkaPropertiesForResults(brokerUri, offsetReset),
+                topic + "-results",
+                (String s) -> Long.valueOf(s.split(",")[1]),
+                (String s) -> Long.valueOf(s.split(",")[2])
+        ));
+
+        dag
+                .edge(between(readKafka, insertWm).isolated())
+                .edge(between(insertWm, accumulateByF).partitioned(wholeItem(), HASH_CODE))
+                .edge(between(accumulateByF, slidingW).partitioned(entryKey())
+                                                      .distributed())
+                .edge(between(slidingW, formatOutput).isolated())
+                .edge(between(formatOutput, sink));
+        return dag;
+    }
+
+    private static Properties kafkaPropertiesForTrades(String brokerUrl, String offsetReset) {
+        Properties props = new Properties();
+        props.setProperty("bootstrap.servers", brokerUrl);
+        props.setProperty("group.id", UuidUtil.newUnsecureUuidString());
+        props.setProperty("key.deserializer", LongDeserializer.class.getName());
+        props.setProperty("value.deserializer", LongDeserializer.class.getName());
+        props.setProperty("auto.offset.reset", offsetReset);
+        props.setProperty("max.poll.records", "32768");
+        return props;
+    }
+
+    private static Properties kafkaPropertiesForResults(String brokerUrl, String offsetReset) {
+        Properties props = new Properties();
+        props.setProperty("bootstrap.servers", brokerUrl);
+        props.setProperty("group.id", UuidUtil.newUnsecureUuidString());
+        props.setProperty("key.deserializer", LongDeserializer.class.getName());
+        props.setProperty("value.deserializer", LongDeserializer.class.getName());
+        props.setProperty("key.serializer", LongSerializer.class.getName());
+        props.setProperty("value.serializer", LongSerializer.class.getName());
+        props.setProperty("auto.offset.reset", offsetReset);
+        props.setProperty("max.poll.records", "32768");
+        return props;
     }
 }

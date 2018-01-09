@@ -99,7 +99,7 @@ public class SnapshotTest {
         }
         producerExecutorService = Executors.newSingleThreadExecutor();
         brokerUri = System.getProperty("brokerUri", "localhost:9092");
-        topic = System.getProperty("topic", String.format("%s-%d", "trades-long-running", System.currentTimeMillis()));
+        topic = System.getProperty("topic", String.format("%s-%d", "snapshot", System.currentTimeMillis()));
         offsetReset = System.getProperty("offsetReset", "earliest");
         lagMs = Integer.parseInt(System.getProperty("lagMs", "3000"));
         snapshotIntervalMs = Integer.parseInt(System.getProperty("snapshotIntervalMs", "1000"));

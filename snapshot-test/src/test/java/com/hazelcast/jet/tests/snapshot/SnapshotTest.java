@@ -123,8 +123,6 @@ public class SnapshotTest {
         JobConfig jobConfig = new JobConfig();
         jobConfig.setSnapshotIntervalMillis(snapshotIntervalMs);
         jobConfig.setProcessingGuarantee(guarantee);
-        //TODO remove these before committing
-        jobConfig.addClass(SnapshotTradeProducer.class, SnapshotTest.class);
         Job testJob = jet.newJob(testDAG(), jobConfig);
 
         KafkaConsumer<Long, Long> consumer = new KafkaConsumer<>(kafkaPropertiesForResults(brokerUri, offsetReset));

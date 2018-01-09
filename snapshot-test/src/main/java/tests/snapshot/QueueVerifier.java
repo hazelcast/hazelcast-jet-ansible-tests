@@ -24,7 +24,10 @@ import static com.hazelcast.jet.impl.util.Util.uncheckRun;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
 /**
- * todo add proper javadoc
+ * This class verifies the output windows of the job
+ * using a priority blocking queue.
+ * De-duplicates the windows and in case of a missing one
+ * waits for a fixed amount of time and throws assertion error
  */
 public class QueueVerifier extends Thread implements Closeable {
 
@@ -63,33 +66,28 @@ public class QueueVerifier extends Thread implements Closeable {
         while (running) {
             Long next = queue.peek();
             if (next == null) {
-                //sleep
-                System.out.println("Queue is empty, sleeping");
+                //Queue is empty, sleep
                 sleepSeconds(1);
             } else if (next == key) {
                 //Happy path
-                System.out.println("Polled: " + next);
                 queue.poll();
                 lastCheck = -1;
                 if (--windowCount == 0) {
                     //we have enough windows for this key, increment the key
                     key++;
-                    System.out.println("Incremented key to: " + key);
                     windowCount = totalWindowCount;
                 }
             } else if (next < key) {
+                //we have a duplicate
                 queue.poll();
-                System.out.println("---------> Duplicate: " + next);
             } else if (lastCheck == -1) {
                 //mark last check for timeout
-                System.out.println("marking lastCheck, key: " + key);
                 lastCheck = System.currentTimeMillis();
             } else if ((System.currentTimeMillis() - lastCheck) > TIMEOUT) {
                 //time is up
                 running = false;
             } else {
-                //sleep
-                System.out.println("waiting for timeout ");
+                //sleep for timeout
                 sleepSeconds(1);
             }
         }

@@ -55,8 +55,7 @@ public final class RemoteControllerClient {
             System.setProperty("hazelcast.client.config", isolatedClientConfig);
         }
         int initialSleep = parseInt(System.getProperty("initialSleepMinutes", "5"));
-        int sleepAfterStop = parseInt(System.getProperty("sleepAfterStopMinutes", "1"));
-        int sleepBetweenRestart = parseInt(System.getProperty("sleepBetweenRestartMinutes", "4"));
+        int sleepBetweenRestart = parseInt(System.getProperty("sleepBetweenRestartMinutes", "5"));
         long duration = TimeUnit.MINUTES.toMillis(parseInt(System.getProperty("durationMinutes", "30")));
 
 
@@ -69,7 +68,7 @@ public final class RemoteControllerClient {
         sleepMinutes(initialSleep);
         Iterables.cycle(members).forEach(m -> {
             uncheckRun(() -> stop(m));
-            uncheckRun(() -> sleepMinutes(sleepAfterStop));
+            uncheckRun(() -> sleepMinutes(sleepBetweenRestart));
             uncheckRun(() -> start(m));
             uncheckRun(() -> sleepMinutes(sleepBetweenRestart));
             if (System.currentTimeMillis() - begin > duration) {

@@ -89,6 +89,7 @@ public class QueueVerifier extends Thread implements Closeable {
             } else {
                 //sleep for timeout
                 sleepSeconds(1);
+                System.out.println("Verified: " + key);
             }
         }
     }

@@ -39,6 +39,8 @@ public class QueueVerifier extends Thread implements Closeable {
 
     private final int totalWindowCount;
 
+    private final String name;
+
     private int windowCount;
 
     private long key;
@@ -47,15 +49,16 @@ public class QueueVerifier extends Thread implements Closeable {
 
     private volatile boolean running = true;
 
-    public QueueVerifier(int windowCount) {
+    public QueueVerifier(String name, int windowCount) {
         this.queue = new PriorityBlockingQueue<>(INITIAL_QUEUE_SIZE);
+        this.name = name;
         this.totalWindowCount = windowCount;
         this.windowCount = windowCount;
     }
 
     public void offer(long item) {
         if (!running) {
-            throw new AssertionError("Failed at key: " + key +
+            throw new AssertionError("Verification for " + name + " failed at key: " + key +
                     ", remaining window count: " + windowCount + ", total window count per key: " + totalWindowCount);
         }
         queue.offer(item);
@@ -67,7 +70,8 @@ public class QueueVerifier extends Thread implements Closeable {
             Long next = queue.peek();
             if (next == null) {
                 //Queue is empty, sleep
-                sleepSeconds(1);
+                System.out.println("Name: " + name + ", queue is empty");
+                sleepSeconds(2);
             } else if (next == key) {
                 //Happy path
                 queue.poll();
@@ -80,6 +84,7 @@ public class QueueVerifier extends Thread implements Closeable {
             } else if (next < key) {
                 //we have a duplicate
                 queue.poll();
+                System.out.println("Name: " + name + ", duplicate: " + next);
             } else if (lastCheck == -1) {
                 //mark last check for timeout
                 lastCheck = System.currentTimeMillis();
@@ -89,7 +94,7 @@ public class QueueVerifier extends Thread implements Closeable {
             } else {
                 //sleep for timeout
                 sleepSeconds(1);
-                System.out.println("Verified: " + key);
+                System.out.println("Name: " + name + ", key : " + key);
             }
         }
     }

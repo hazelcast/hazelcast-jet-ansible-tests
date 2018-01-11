@@ -45,12 +45,15 @@ import tests.snapshot.QueueVerifier;
 import tests.snapshot.SnapshotTradeProducer;
 
 import java.io.IOException;
-import java.util.Collections;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+import static com.hazelcast.jet.config.ProcessingGuarantee.AT_LEAST_ONCE;
+import static com.hazelcast.jet.config.ProcessingGuarantee.EXACTLY_ONCE;
 import static com.hazelcast.jet.core.Edge.between;
 import static com.hazelcast.jet.core.JobStatus.COMPLETED;
 import static com.hazelcast.jet.core.Partitioner.HASH_CODE;
@@ -68,6 +71,7 @@ import static java.lang.System.currentTimeMillis;
 import static java.util.concurrent.TimeUnit.MINUTES;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 @RunWith(JUnit4.class)
 public class SnapshotTest {
@@ -85,7 +89,6 @@ public class SnapshotTest {
     private int windowSize;
     private int slideBy;
     private ExecutorService producerExecutorService;
-    private ProcessingGuarantee guarantee;
 
     public static void main(String[] args) {
         JUnitCore.main(SnapshotTest.class.getName());
@@ -106,8 +109,7 @@ public class SnapshotTest {
         windowSize = Integer.parseInt(System.getProperty("windowSize", "20"));
         slideBy = Integer.parseInt(System.getProperty("slideBy", "10"));
         countPerTicker = Integer.parseInt(System.getProperty("countPerTicker", "1000"));
-        durationInMillis = MINUTES.toMillis(Integer.parseInt(System.getProperty("durationInMinutes", "15")));
-        guarantee = ProcessingGuarantee.valueOf(System.getProperty("processingGuarantee", "EXACTLY_ONCE"));
+        durationInMillis = MINUTES.toMillis(Integer.parseInt(System.getProperty("durationInMinutes", "10")));
         jet = JetBootstrap.getInstance();
 
         producerExecutorService.submit(() -> {
@@ -118,33 +120,49 @@ public class SnapshotTest {
     }
 
     @Test
-    public void kafkaTest() throws IOException, ExecutionException, InterruptedException {
-        System.out.println("Executing test job..");
-        JobConfig jobConfig = new JobConfig();
-        jobConfig.setSnapshotIntervalMillis(snapshotIntervalMs);
-        jobConfig.setProcessingGuarantee(guarantee);
-        Job testJob = jet.newJob(testDAG(), jobConfig);
+    public void snapshotTest() throws IOException, ExecutionException, InterruptedException {
+        String atLeastOnceTopic = resultsTopicName(AT_LEAST_ONCE);
+        String exactlyOnceTopic = resultsTopicName(EXACTLY_ONCE);
 
-        KafkaConsumer<Long, Long> consumer = new KafkaConsumer<>(kafkaPropertiesForResults(brokerUri, offsetReset));
-        consumer.subscribe(Collections.singleton(topic + "-results"));
+        Job atLeastOnceJob = submitJob(AT_LEAST_ONCE);
+        Job exactlyOnceJob = submitJob(EXACTLY_ONCE);
+
+        int windowCount = windowSize / slideBy;
+        QueueVerifier atLeastOnceVerifier = new QueueVerifier(AT_LEAST_ONCE.name(), windowCount);
+        QueueVerifier exactlyOnceVerifier = new QueueVerifier(EXACTLY_ONCE.name(), windowCount);
+        atLeastOnceVerifier.start();
+        exactlyOnceVerifier.start();
+
+        KafkaConsumer<Long, Long> consumer = new KafkaConsumer<>(kafkaPropsForResults(brokerUri, offsetReset));
+        List<String> topicList = new ArrayList<>();
+        topicList.add(atLeastOnceTopic);
+        topicList.add(exactlyOnceTopic);
+        consumer.subscribe(topicList);
 
         long begin = System.currentTimeMillis();
-        QueueVerifier queueVerifier = new QueueVerifier(windowSize / slideBy);
-        queueVerifier.start();
         while (System.currentTimeMillis() - begin < durationInMillis) {
             ConsumerRecords<Long, Long> records = consumer.poll(POLL_TIMEOUT);
             records.iterator().forEachRemaining(r -> {
-                        assertEquals("Unexpected count for " + r.key(), countPerTicker, (long) r.value());
-                        queueVerifier.offer(r.key());
+                        if (r.topic().equals(atLeastOnceTopic)) {
+                            assertTrue("AT_LEAST_ONCE -> Unexpected count for " + r.key() + ", count: " +
+                                    r.value(), r.value() >= countPerTicker);
+                            atLeastOnceVerifier.offer(r.key());
+                        } else {
+                            assertEquals("EXACTLY_ONCE -> Unexpected count for " + r.key(),
+                                    countPerTicker, (long) r.value());
+                            exactlyOnceVerifier.offer(r.key());
+                        }
                     }
             );
         }
         System.out.println("Cancelling jobs..");
         consumer.close();
-        queueVerifier.close();
+        atLeastOnceVerifier.close();
+        exactlyOnceVerifier.close();
 
-        testJob.getFuture().cancel(true);
-        while (testJob.getJobStatus() != COMPLETED) {
+        atLeastOnceJob.cancel();
+        exactlyOnceJob.cancel();
+        while (atLeastOnceJob.getJobStatus() != COMPLETED || exactlyOnceJob.getJobStatus() != COMPLETED) {
             SECONDS.sleep(1);
         }
     }
@@ -155,12 +173,12 @@ public class SnapshotTest {
         producerExecutorService.shutdown();
     }
 
-    private DAG testDAG() {
+    private DAG testDAG(String resultTopic) {
         WindowDefinition windowDef = slidingWindowDef(windowSize, slideBy);
         AggregateOperation1<Object, LongAccumulator, Long> counting = AggregateOperations.counting();
 
         DAG dag = new DAG();
-        Properties properties = kafkaPropertiesForTrades(brokerUri, offsetReset);
+        Properties properties = kafkaPropsForTrades(brokerUri, offsetReset);
         Vertex readKafka = dag.newVertex("read-kafka", streamKafkaP(properties, (key, value) -> value, topic));
         Vertex insertWm = dag.newVertex("insert-watermark", insertWatermarksP(
                 (Long t) -> t, WatermarkPolicies.withFixedLag(lagMs), emitByFrame(windowDef))
@@ -176,9 +194,8 @@ public class SnapshotTest {
                     return String.format("%d,%s,%s,%d,%d", entry.getTimestamp(), entry.getKey(), entry.getValue(),
                             timeMs, latencyMs);
                 }));
-        Vertex sink = dag.newVertex("write-kafka", writeKafkaP(
-                kafkaPropertiesForResults(brokerUri, offsetReset),
-                topic + "-results",
+        Vertex sink = dag.newVertex("write-kafka", writeKafkaP(kafkaPropsForResults(brokerUri, offsetReset),
+                resultTopic,
                 (String s) -> Long.valueOf(s.split(",")[1]),
                 (String s) -> Long.valueOf(s.split(",")[2])
         ));
@@ -193,7 +210,20 @@ public class SnapshotTest {
         return dag;
     }
 
-    private static Properties kafkaPropertiesForTrades(String brokerUrl, String offsetReset) {
+    private String resultsTopicName(ProcessingGuarantee guarantee) {
+        return topic + "-results-" + guarantee.name();
+    }
+
+    private Job submitJob(ProcessingGuarantee guarantee) {
+        System.out.println(String.format("Executing %s test job..", guarantee.name()));
+        JobConfig jobConfig = new JobConfig();
+        jobConfig.setSnapshotIntervalMillis(snapshotIntervalMs);
+        jobConfig.setProcessingGuarantee(guarantee);
+        String resultTopic = resultsTopicName(guarantee);
+        return jet.newJob(testDAG(resultTopic), jobConfig);
+    }
+
+    private static Properties kafkaPropsForTrades(String brokerUrl, String offsetReset) {
         Properties props = new Properties();
         props.setProperty("bootstrap.servers", brokerUrl);
         props.setProperty("group.id", UuidUtil.newUnsecureUuidString());
@@ -204,7 +234,7 @@ public class SnapshotTest {
         return props;
     }
 
-    private static Properties kafkaPropertiesForResults(String brokerUrl, String offsetReset) {
+    private static Properties kafkaPropsForResults(String brokerUrl, String offsetReset) {
         Properties props = new Properties();
         props.setProperty("bootstrap.servers", brokerUrl);
         props.setProperty("group.id", UuidUtil.newUnsecureUuidString());

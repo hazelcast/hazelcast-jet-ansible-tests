@@ -27,16 +27,11 @@ import com.hazelcast.jet.core.DAG;
 import com.hazelcast.jet.core.JobStatus;
 import com.hazelcast.jet.core.TimestampKind;
 import com.hazelcast.jet.core.Vertex;
-import com.hazelcast.jet.core.WatermarkPolicies;
+import com.hazelcast.jet.core.WatermarkGenerationParams;
 import com.hazelcast.jet.core.WindowDefinition;
 import com.hazelcast.jet.datamodel.TimestampedEntry;
 import com.hazelcast.jet.server.JetBootstrap;
 import com.hazelcast.util.UuidUtil;
-import java.io.IOException;
-import java.util.Properties;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -52,6 +47,12 @@ import tests.kafka.Trade;
 import tests.kafka.TradeDeserializer;
 import tests.kafka.VerificationSink;
 
+import java.io.IOException;
+import java.util.Properties;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
 import static com.hazelcast.jet.core.Edge.between;
 import static com.hazelcast.jet.core.Edge.from;
 import static com.hazelcast.jet.core.JobStatus.COMPLETED;
@@ -59,12 +60,14 @@ import static com.hazelcast.jet.core.JobStatus.FAILED;
 import static com.hazelcast.jet.core.JobStatus.RESTARTING;
 import static com.hazelcast.jet.core.Partitioner.HASH_CODE;
 import static com.hazelcast.jet.core.WatermarkEmissionPolicy.emitByFrame;
+import static com.hazelcast.jet.core.WatermarkGenerationParams.noWatermarks;
+import static com.hazelcast.jet.core.WatermarkGenerationParams.wmGenParams;
+import static com.hazelcast.jet.core.WatermarkPolicies.withFixedLag;
 import static com.hazelcast.jet.core.WindowDefinition.slidingWindowDef;
 import static com.hazelcast.jet.core.processor.KafkaProcessors.streamKafkaP;
 import static com.hazelcast.jet.core.processor.KafkaProcessors.writeKafkaP;
 import static com.hazelcast.jet.core.processor.Processors.accumulateByFrameP;
 import static com.hazelcast.jet.core.processor.Processors.combineToSlidingWindowP;
-import static com.hazelcast.jet.core.processor.Processors.insertWatermarksP;
 import static com.hazelcast.jet.core.processor.Processors.mapP;
 import static com.hazelcast.jet.function.DistributedFunctions.entryKey;
 import static java.lang.System.currentTimeMillis;
@@ -125,7 +128,7 @@ public class LongRunningKafkaTest {
         long begin = System.currentTimeMillis();
         while (System.currentTimeMillis() - begin < durationInMillis) {
             MINUTES.sleep(1);
-            JobStatus status = verificationJob.getJobStatus();
+            JobStatus status = verificationJob.getStatus();
             if (status == RESTARTING || status == FAILED || status == COMPLETED) {
                 throw new AssertionError("Job is failed, jobStatus: " + status);
             }
@@ -134,8 +137,8 @@ public class LongRunningKafkaTest {
 
         testJob.getFuture().cancel(true);
         verificationJob.getFuture().cancel(true);
-        while (testJob.getJobStatus() != COMPLETED ||
-                verificationJob.getJobStatus() != COMPLETED) {
+        while (testJob.getStatus() != COMPLETED ||
+                verificationJob.getStatus() != COMPLETED) {
             SECONDS.sleep(1);
         }
     }
@@ -145,10 +148,10 @@ public class LongRunningKafkaTest {
         AggregateOperation1<Object, LongAccumulator, Long> counting = AggregateOperations.counting();
 
         DAG dag = new DAG();
-        Vertex readKafka = dag.newVertex("read-kafka", streamKafkaP(kafkaProps, (key, value) -> value, topic));
-        Vertex insertWm = dag.newVertex("insert-watermark", insertWatermarksP(
-                Trade::getTime, WatermarkPolicies.withFixedLag(lagMs), emitByFrame(windowDef))
-        );
+        WatermarkGenerationParams<Trade> wmGenParams = wmGenParams(Trade::getTime, withFixedLag(lagMs),
+                emitByFrame(windowDef), 10_000);
+        Vertex readKafka = dag.newVertex("read-kafka", streamKafkaP(kafkaProps, (o, value) -> (Trade) value,
+                wmGenParams, topic));
         Vertex accumulateByF = dag.newVertex("accumulate-by-frame", accumulateByFrameP(
                 Trade::getTicker, Trade::getTime, TimestampKind.EVENT, windowDef, counting)
         );
@@ -168,8 +171,7 @@ public class LongRunningKafkaTest {
         ));
 
         dag
-                .edge(between(readKafka, insertWm).isolated())
-                .edge(between(insertWm, accumulateByF).partitioned(Trade::getTicker, HASH_CODE))
+                .edge(between(readKafka, accumulateByF).partitioned(Trade::getTicker, HASH_CODE))
                 .edge(between(accumulateByF, slidingW).partitioned(entryKey())
                                                       .distributed())
                 .edge(between(slidingW, formatOutput).isolated())
@@ -181,7 +183,7 @@ public class LongRunningKafkaTest {
         DAG dag = new DAG();
 
         Vertex readVerificationRecords = dag.newVertex("read-verification-kafka", streamKafkaP(
-                kafkaPropertiesForResults(brokerUri, offsetReset), topic + "-results")
+                kafkaPropertiesForResults(brokerUri, offsetReset), noWatermarks(), topic + "-results")
         ).localParallelism(1);
 
         final int countCopy = countPerTicker;

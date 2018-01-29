@@ -26,7 +26,7 @@ import com.hazelcast.jet.config.ProcessingGuarantee;
 import com.hazelcast.jet.core.DAG;
 import com.hazelcast.jet.core.TimestampKind;
 import com.hazelcast.jet.core.Vertex;
-import com.hazelcast.jet.core.WatermarkPolicies;
+import com.hazelcast.jet.core.WatermarkGenerationParams;
 import com.hazelcast.jet.core.WindowDefinition;
 import com.hazelcast.jet.datamodel.TimestampedEntry;
 import com.hazelcast.jet.server.JetBootstrap;
@@ -58,12 +58,13 @@ import static com.hazelcast.jet.core.Edge.between;
 import static com.hazelcast.jet.core.JobStatus.COMPLETED;
 import static com.hazelcast.jet.core.Partitioner.HASH_CODE;
 import static com.hazelcast.jet.core.WatermarkEmissionPolicy.emitByFrame;
+import static com.hazelcast.jet.core.WatermarkGenerationParams.wmGenParams;
+import static com.hazelcast.jet.core.WatermarkPolicies.withFixedLag;
 import static com.hazelcast.jet.core.WindowDefinition.slidingWindowDef;
 import static com.hazelcast.jet.core.processor.KafkaProcessors.streamKafkaP;
 import static com.hazelcast.jet.core.processor.KafkaProcessors.writeKafkaP;
 import static com.hazelcast.jet.core.processor.Processors.accumulateByFrameP;
 import static com.hazelcast.jet.core.processor.Processors.combineToSlidingWindowP;
-import static com.hazelcast.jet.core.processor.Processors.insertWatermarksP;
 import static com.hazelcast.jet.core.processor.Processors.mapP;
 import static com.hazelcast.jet.function.DistributedFunctions.entryKey;
 import static com.hazelcast.jet.function.DistributedFunctions.wholeItem;
@@ -162,7 +163,7 @@ public class SnapshotTest {
 
         atLeastOnceJob.cancel();
         exactlyOnceJob.cancel();
-        while (atLeastOnceJob.getJobStatus() != COMPLETED || exactlyOnceJob.getJobStatus() != COMPLETED) {
+        while (atLeastOnceJob.getStatus() != COMPLETED || exactlyOnceJob.getStatus() != COMPLETED) {
             SECONDS.sleep(1);
         }
     }
@@ -179,10 +180,10 @@ public class SnapshotTest {
 
         DAG dag = new DAG();
         Properties properties = kafkaPropsForTrades(brokerUri, offsetReset);
-        Vertex readKafka = dag.newVertex("read-kafka", streamKafkaP(properties, (key, value) -> value, topic));
-        Vertex insertWm = dag.newVertex("insert-watermark", insertWatermarksP(
-                (Long t) -> t, WatermarkPolicies.withFixedLag(lagMs), emitByFrame(windowDef))
-        );
+        WatermarkGenerationParams<Long> wmGenParams = wmGenParams((Long t) -> t, withFixedLag(lagMs),
+                emitByFrame(windowDef), 10_000);
+        Vertex readKafka = dag.newVertex("read-kafka", streamKafkaP(properties, (key, value) -> (long) value,
+                wmGenParams, topic));
         Vertex accumulateByF = dag.newVertex("accumulate-by-frame", accumulateByFrameP(
                 wholeItem(), (Long t) -> t, TimestampKind.EVENT, windowDef, counting)
         );
@@ -201,8 +202,7 @@ public class SnapshotTest {
         ));
 
         dag
-                .edge(between(readKafka, insertWm).isolated())
-                .edge(between(insertWm, accumulateByF).partitioned(wholeItem(), HASH_CODE))
+                .edge(between(readKafka, accumulateByF).partitioned(wholeItem(), HASH_CODE))
                 .edge(between(accumulateByF, slidingW).partitioned(entryKey())
                                                       .distributed())
                 .edge(between(slidingW, formatOutput).isolated())

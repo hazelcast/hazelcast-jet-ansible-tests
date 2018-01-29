@@ -23,7 +23,7 @@ import com.hazelcast.jet.config.ProcessingGuarantee;
 import com.hazelcast.jet.core.DAG;
 import com.hazelcast.jet.core.JobStatus;
 import com.hazelcast.jet.core.Vertex;
-import com.hazelcast.jet.core.WatermarkPolicies;
+import com.hazelcast.jet.core.WatermarkGenerationParams;
 import com.hazelcast.jet.datamodel.Session;
 import com.hazelcast.jet.function.DistributedFunction;
 import com.hazelcast.jet.server.JetBootstrap;
@@ -57,10 +57,12 @@ import static com.hazelcast.jet.core.JobStatus.FAILED;
 import static com.hazelcast.jet.core.JobStatus.RESTARTING;
 import static com.hazelcast.jet.core.Partitioner.HASH_CODE;
 import static com.hazelcast.jet.core.WatermarkEmissionPolicy.emitByMinStep;
+import static com.hazelcast.jet.core.WatermarkGenerationParams.noWatermarks;
+import static com.hazelcast.jet.core.WatermarkGenerationParams.wmGenParams;
+import static com.hazelcast.jet.core.WatermarkPolicies.withFixedLag;
 import static com.hazelcast.jet.core.processor.KafkaProcessors.streamKafkaP;
 import static com.hazelcast.jet.core.processor.KafkaProcessors.writeKafkaP;
 import static com.hazelcast.jet.core.processor.Processors.aggregateToSessionWindowP;
-import static com.hazelcast.jet.core.processor.Processors.insertWatermarksP;
 import static java.util.concurrent.TimeUnit.MINUTES;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
@@ -117,7 +119,7 @@ public class LongRunningKafkaSessionWindowTest {
         long begin = System.currentTimeMillis();
         while (System.currentTimeMillis() - begin < durationInMillis) {
             MINUTES.sleep(1);
-            JobStatus status = verificationJob.getJobStatus();
+            JobStatus status = verificationJob.getStatus();
             if (status == RESTARTING || status == FAILED || status == COMPLETED) {
                 throw new AssertionError("Job is failed, jobStatus: " + status);
             }
@@ -127,20 +129,18 @@ public class LongRunningKafkaSessionWindowTest {
         testJob.getFuture().cancel(true);
         verificationJob.getFuture().cancel(true);
 
-        while (testJob.getJobStatus() != COMPLETED ||
-                verificationJob.getJobStatus() != COMPLETED) {
+        while (testJob.getStatus() != COMPLETED ||
+                verificationJob.getStatus() != COMPLETED) {
             SECONDS.sleep(1);
         }
     }
 
     private DAG testDAG() {
         DAG dag = new DAG();
-
-        Vertex readKafka = dag.newVertex("read-kafka", streamKafkaP(kafkaProps, (key, value) -> value, topic));
-
-        Vertex insertWm = dag.newVertex("insert-watermark",
-                insertWatermarksP(Trade::getTime, WatermarkPolicies.withFixedLag(lagMs),
-                        emitByMinStep(lagMs)));
+        WatermarkGenerationParams<Trade> wmGenParams = wmGenParams(Trade::getTime, withFixedLag(lagMs),
+                emitByMinStep(lagMs), 10_000);
+        Vertex readKafka = dag.newVertex("read-kafka", streamKafkaP(kafkaProps, (key, value) -> (Trade) value,
+                wmGenParams, topic));
 
         Vertex aggregateSessionWindow = dag.newVertex("session-window",
                 aggregateToSessionWindowP(sessionTimeout, Trade::getTime,
@@ -153,8 +153,7 @@ public class LongRunningKafkaSessionWindowTest {
                         (DistributedFunction<Session<String, Long>, Long>) Session::getResult));
 
         dag
-                .edge(between(readKafka, insertWm).isolated())
-                .edge(between(insertWm, aggregateSessionWindow)
+                .edge(between(readKafka, aggregateSessionWindow)
                         .partitioned(Trade::getTicker, HASH_CODE)
                         .distributed()
                 )
@@ -168,7 +167,7 @@ public class LongRunningKafkaSessionWindowTest {
         DAG dag = new DAG();
 
         Vertex readVerificationRecords = dag.newVertex("read-verification-kafka",
-                streamKafkaP(kafkaPropertiesForResults(brokerUri, offsetReset), topic + "-result"));
+                streamKafkaP(kafkaPropertiesForResults(brokerUri, offsetReset), noWatermarks(), topic + "-result"));
 
         long countCopy = countPerTicker;
         Vertex verifyRecords = dag.newVertex("verification", () -> new VerificationSink(countCopy));

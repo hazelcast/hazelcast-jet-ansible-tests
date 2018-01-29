@@ -16,6 +16,7 @@
         <module>hdfs-test</module>
         <module>snapshot-test</module>
         <module>remote-controller-client</module>
+        <module>event-journal-test</module>
     </modules>
 
     <properties>

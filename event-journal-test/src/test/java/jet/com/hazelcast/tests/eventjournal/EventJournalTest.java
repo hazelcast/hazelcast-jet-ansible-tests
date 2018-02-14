@@ -188,6 +188,7 @@ public class EventJournalTest implements Serializable {
         ClientConfig clientConfig = new ClientConfig();
         GroupConfig groupConfig = clientConfig.getGroupConfig();
         groupConfig.setName(gc.getName()).setPassword(gc.getPassword());
+        clientConfig.setNetworkConfig(instance.getClientConfig().getNetworkConfig());
         ClientUserCodeDeploymentConfig userCodeDeploymentConfig = clientConfig.getUserCodeDeploymentConfig();
         userCodeDeploymentConfig.setEnabled(true);
         userCodeDeploymentConfig.addClass(EventJournalTest.class);

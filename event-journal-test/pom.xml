@@ -17,6 +17,14 @@
         <guava.version>19.0</guava.version>
     </properties>
 
+    <dependencies>
+        <dependency>
+            <groupId>com.hazelcast.jet.tests</groupId>
+            <artifactId>snapshot-test</artifactId>
+            <version>0.6-SNAPSHOT</version>
+        </dependency>
+    </dependencies>
+
     <build>
         <plugins>
             <plugin>
@@ -25,7 +33,7 @@
                 <configuration>
                     <archive>
                         <manifest>
-                            <mainClass>com.hazelcast.jet.tests.eventjournal.EventJournalTest</mainClass>
+                            <mainClass>jet.com.hazelcast.tests.eventjournal.EventJournalTest</mainClass>
                         </manifest>
                     </archive>
                 </configuration>

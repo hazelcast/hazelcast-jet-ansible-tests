@@ -16,8 +16,6 @@
 
 package tests.snapshot;
 
-import java.io.Closeable;
-import java.io.IOException;
 import java.util.concurrent.PriorityBlockingQueue;
 
 import static com.hazelcast.jet.impl.util.Util.uncheckRun;
@@ -29,7 +27,7 @@ import static java.util.concurrent.TimeUnit.SECONDS;
  * De-duplicates the windows and in case of a missing one
  * waits for a fixed amount of time and throws assertion error
  */
-public class QueueVerifier extends Thread implements Closeable {
+public class QueueVerifier extends Thread {
 
     private static final long TIMEOUT = 300_000;
 
@@ -62,6 +60,11 @@ public class QueueVerifier extends Thread implements Closeable {
                     ", remaining window count: " + windowCount + ", total window count per key: " + totalWindowCount);
         }
         queue.offer(item);
+    }
+
+    public QueueVerifier startVerification() {
+        super.start();
+        return this;
     }
 
     @Override
@@ -99,9 +102,9 @@ public class QueueVerifier extends Thread implements Closeable {
         }
     }
 
-    @Override
-    public void close() throws IOException {
+    public void close() throws Exception {
         running = false;
+        join();
     }
 
     private static void sleepSeconds(int seconds) {

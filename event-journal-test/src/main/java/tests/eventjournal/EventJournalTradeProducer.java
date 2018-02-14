@@ -18,22 +18,25 @@ package tests.eventjournal;
 
 import com.hazelcast.core.IMap;
 
-public class EventJournalTradeProducer implements AutoCloseable {
+public class EventJournalTradeProducer extends Thread {
 
     private static final int SLEEPY_MILLIS = 10;
-
+    private final int countPerTicker;
+    private final IMap<Long, Long> map;
     private volatile boolean running = true;
 
-    public EventJournalTradeProducer() {
+    public EventJournalTradeProducer(int countPerTicker, IMap<Long, Long> map) {
+        this.countPerTicker = countPerTicker;
+        this.map = map;
+    }
+
+    public void close() throws InterruptedException {
+        running = false;
+        join();
     }
 
     @Override
-    public void close() {
-        running = false;
-    }
-
-
-    public void produce(IMap<Long, Long> map, int countPerTicker) {
+    public void run() {
         for (long i = 0; running; i++) {
             try {
                 Thread.sleep(SLEEPY_MILLIS);
@@ -41,7 +44,11 @@ public class EventJournalTradeProducer implements AutoCloseable {
                 e.printStackTrace();
             }
             for (int j = 0; j < countPerTicker; j++) {
-                map.set(i, i);
+                try {
+                    map.set(i, i);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
             }
         }
     }

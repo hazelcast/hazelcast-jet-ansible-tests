@@ -23,19 +23,15 @@ import com.hazelcast.ringbuffer.ReadResultSet;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.ExecutionException;
+import java.util.function.Consumer;
 
-/**
- * todo add proper javadoc
- */
+
 public class EventJournalConsumer<K, V> {
 
-    private static final int POLL_COUNT = 10;
+    private static final int POLL_COUNT = 20;
 
     private final ClientMapProxy<K, V> proxy;
-
     private final int partitionCount;
-
     private final long[] offsets;
 
     public EventJournalConsumer(ClientMapProxy<K, V> proxy, int partitionCount) {
@@ -44,23 +40,23 @@ public class EventJournalConsumer<K, V> {
         offsets = new long[partitionCount];
     }
 
-    public List<EventJournalMapEvent<K, V>> poll() throws ExecutionException, InterruptedException {
-        List<EventJournalMapEvent<K, V>> resultList = new ArrayList<>();
-        List<ICompletableFuture<ReadResultSet<Object>>> futureList = new ArrayList<>();
+    public boolean drain(Consumer<EventJournalMapEvent<K, V>> consumer) throws Exception {
+        boolean isEmpty = true;
+        List<ICompletableFuture<ReadResultSet<EventJournalMapEvent<K, V>>>> futureList = new ArrayList<>();
         for (int i = 0; i < partitionCount; i++) {
-            ICompletableFuture<ReadResultSet<Object>> f = proxy.readFromEventJournal(
+            ICompletableFuture<ReadResultSet<EventJournalMapEvent<K, V>>> f = proxy.readFromEventJournal(
                     offsets[i], 0, POLL_COUNT, i, null, null);
             futureList.add(f);
         }
         for (int i = 0; i < partitionCount; i++) {
-            ICompletableFuture<ReadResultSet<Object>> future = futureList.get(i);
-            ReadResultSet<Object> resultSet = future.get();
-            for (Object o : resultSet) {
-                resultList.add((EventJournalMapEvent<K, V>) o);
-            }
+            ICompletableFuture<ReadResultSet<EventJournalMapEvent<K, V>>> future = futureList.get(i);
+            ReadResultSet<EventJournalMapEvent<K, V>> resultSet = future.get();
+            resultSet.forEach(consumer);
             offsets[i] = offsets[i] + resultSet.readCount();
+            isEmpty = isEmpty & resultSet.readCount() == 0;
         }
-        return resultList;
+        return isEmpty;
     }
+
 
 }

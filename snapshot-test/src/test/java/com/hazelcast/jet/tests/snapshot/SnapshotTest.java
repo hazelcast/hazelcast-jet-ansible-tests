@@ -44,11 +44,9 @@ import org.junit.runners.JUnit4;
 import tests.snapshot.QueueVerifier;
 import tests.snapshot.SnapshotTradeProducer;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -121,7 +119,7 @@ public class SnapshotTest {
     }
 
     @Test
-    public void snapshotTest() throws IOException, ExecutionException, InterruptedException {
+    public void snapshotTest() throws Exception {
         String atLeastOnceTopic = resultsTopicName(AT_LEAST_ONCE);
         String exactlyOnceTopic = resultsTopicName(EXACTLY_ONCE);
 

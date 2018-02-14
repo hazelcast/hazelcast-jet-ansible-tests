@@ -16,6 +16,8 @@
 
 package com.hazelcast.jet.tests.snapshot;
 
+import com.hazelcast.core.MembershipAdapter;
+import com.hazelcast.core.MembershipEvent;
 import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.accumulator.LongAccumulator;
@@ -218,7 +220,17 @@ public class SnapshotTest {
         jobConfig.setSnapshotIntervalMillis(snapshotIntervalMs);
         jobConfig.setProcessingGuarantee(guarantee);
         String resultTopic = resultsTopicName(guarantee);
-        return jet.newJob(testDAG(resultTopic), jobConfig);
+        return addMembershipListenerForRestart(jet.newJob(testDAG(resultTopic), jobConfig));
+    }
+
+    private Job addMembershipListenerForRestart(Job job) {
+        jet.getHazelcastInstance().getCluster().addMembershipListener(new MembershipAdapter() {
+            @Override
+            public void memberAdded(MembershipEvent membershipEvent) {
+                job.restart();
+            }
+        });
+        return job;
     }
 
     private static Properties kafkaPropsForTrades(String brokerUrl, String offsetReset) {

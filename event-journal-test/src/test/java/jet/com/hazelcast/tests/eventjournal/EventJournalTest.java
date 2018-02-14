@@ -92,7 +92,7 @@ public class EventJournalTest implements Serializable {
     }
 
     @Before
-    public void setUp() throws Exception {
+    public void setUp() {
         String isolatedClientConfig = System.getProperty("isolatedClientConfig");
         if (isolatedClientConfig != null) {
             System.setProperty("hazelcast.client.config", isolatedClientConfig);
@@ -118,10 +118,7 @@ public class EventJournalTest implements Serializable {
 
     @Test
     public void eventJournalTest() throws Exception {
-        JobConfig jobConfig = new JobConfig().addClass(EventJournalTest.class)
-                                             .addClass(EventJournalTradeProducer.class)
-                                             .addClass(QueueVerifier.class)
-                                             .addClass(EventJournalConsumer.class);
+        JobConfig jobConfig = new JobConfig();
         jobConfig.setSnapshotIntervalMillis(snapshotIntervalMs);
         jobConfig.setProcessingGuarantee(ProcessingGuarantee.EXACTLY_ONCE);
         Job job = jet.newJob(testDAG(), jobConfig);
@@ -183,7 +180,7 @@ public class EventJournalTest implements Serializable {
         return dag;
     }
 
-    private void deployResources() throws InterruptedException {
+    private void deployResources() {
         HazelcastClientInstanceImpl instance = (HazelcastClientInstanceImpl) jet.getHazelcastInstance();
         GroupConfig gc = instance.getClientConfig().getGroupConfig();
 

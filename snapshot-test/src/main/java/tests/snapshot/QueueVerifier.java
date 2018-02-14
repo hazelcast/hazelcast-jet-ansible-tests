@@ -96,7 +96,7 @@ public class QueueVerifier extends Thread {
                 running = false;
             } else {
                 //sleep for timeout
-                sleepSeconds(1);
+                sleepSeconds(2);
                 System.out.println("Name: " + name + ", key : " + key);
             }
         }

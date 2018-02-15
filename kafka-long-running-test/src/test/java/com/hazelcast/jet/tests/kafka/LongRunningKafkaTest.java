@@ -94,7 +94,7 @@ public class LongRunningKafkaTest {
     }
 
     @Before
-    public void setUp() throws Exception {
+    public void setUp() {
         producerExecutorService = Executors.newSingleThreadExecutor();
         brokerUri = System.getProperty("brokerUri", "localhost:9092");
         topic = System.getProperty("topic", String.format("%s-%d", "trades-long-running", System.currentTimeMillis()));
@@ -115,7 +115,7 @@ public class LongRunningKafkaTest {
     }
 
     @Test
-    public void kafkaTest() throws IOException, ExecutionException, InterruptedException {
+    public void kafkaTest() throws InterruptedException {
         System.out.println("Executing test job..");
         JobConfig jobConfig = new JobConfig();
         jobConfig.setSnapshotIntervalMillis(5000);
@@ -135,8 +135,8 @@ public class LongRunningKafkaTest {
         }
         System.out.println("Cancelling jobs..");
 
-        testJob.getFuture().cancel(true);
-        verificationJob.getFuture().cancel(true);
+        testJob.cancel();
+        verificationJob.cancel();
         while (testJob.getStatus() != COMPLETED ||
                 verificationJob.getStatus() != COMPLETED) {
             SECONDS.sleep(1);

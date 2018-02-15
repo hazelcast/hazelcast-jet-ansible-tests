@@ -105,7 +105,7 @@ public class LongRunningKafkaSessionWindowTest {
     }
 
     @Test
-    public void kafkaTest() throws IOException, ExecutionException, InterruptedException {
+    public void kafkaTest() throws InterruptedException {
         System.out.println("Executing job..");
         JobConfig jobConfig = new JobConfig();
         jobConfig.setSnapshotIntervalMillis(5000);
@@ -126,8 +126,8 @@ public class LongRunningKafkaSessionWindowTest {
         }
         System.out.println("Cancelling jobs..");
 
-        testJob.getFuture().cancel(true);
-        verificationJob.getFuture().cancel(true);
+        testJob.cancel();
+        verificationJob.cancel();
 
         while (testJob.getStatus() != COMPLETED ||
                 verificationJob.getStatus() != COMPLETED) {

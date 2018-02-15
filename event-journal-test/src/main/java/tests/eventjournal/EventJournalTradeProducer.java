@@ -20,7 +20,7 @@ import com.hazelcast.core.IMap;
 
 public class EventJournalTradeProducer extends Thread {
 
-    private static final int SLEEPY_MILLIS = 10;
+    private static final int SLEEPY_MILLIS = 1;
     private final int countPerTicker;
     private final IMap<Long, Long> map;
     private volatile boolean running = true;

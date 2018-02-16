@@ -43,9 +43,7 @@ import tests.kafka.TradeDeserializer;
 import tests.kafka.TradeProducer;
 import tests.kafka.VerificationSink;
 
-import java.io.IOException;
 import java.util.Properties;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 

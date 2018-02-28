@@ -26,13 +26,17 @@ import com.hazelcast.jet.aggregate.AggregateOperations;
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.config.ProcessingGuarantee;
 import com.hazelcast.jet.core.DAG;
-import com.hazelcast.jet.core.TimestampKind;
 import com.hazelcast.jet.core.Vertex;
 import com.hazelcast.jet.core.WatermarkGenerationParams;
-import com.hazelcast.jet.core.WindowDefinition;
 import com.hazelcast.jet.datamodel.TimestampedEntry;
+import com.hazelcast.jet.pipeline.SlidingWindowDef;
 import com.hazelcast.jet.server.JetBootstrap;
 import com.hazelcast.util.UuidUtil;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Properties;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.serialization.LongDeserializer;
@@ -46,21 +50,15 @@ import org.junit.runners.JUnit4;
 import tests.snapshot.QueueVerifier;
 import tests.snapshot.SnapshotTradeProducer;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Properties;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-
 import static com.hazelcast.jet.config.ProcessingGuarantee.AT_LEAST_ONCE;
 import static com.hazelcast.jet.config.ProcessingGuarantee.EXACTLY_ONCE;
 import static com.hazelcast.jet.core.Edge.between;
 import static com.hazelcast.jet.core.JobStatus.COMPLETED;
 import static com.hazelcast.jet.core.Partitioner.HASH_CODE;
+import static com.hazelcast.jet.core.TimestampKind.EVENT;
 import static com.hazelcast.jet.core.WatermarkEmissionPolicy.emitByFrame;
 import static com.hazelcast.jet.core.WatermarkGenerationParams.wmGenParams;
-import static com.hazelcast.jet.core.WatermarkPolicies.withFixedLag;
-import static com.hazelcast.jet.core.WindowDefinition.slidingWindowDef;
+import static com.hazelcast.jet.core.WatermarkPolicies.limitingLag;
 import static com.hazelcast.jet.core.processor.KafkaProcessors.streamKafkaP;
 import static com.hazelcast.jet.core.processor.KafkaProcessors.writeKafkaP;
 import static com.hazelcast.jet.core.processor.Processors.accumulateByFrameP;
@@ -68,7 +66,9 @@ import static com.hazelcast.jet.core.processor.Processors.combineToSlidingWindow
 import static com.hazelcast.jet.core.processor.Processors.mapP;
 import static com.hazelcast.jet.function.DistributedFunctions.entryKey;
 import static com.hazelcast.jet.function.DistributedFunctions.wholeItem;
+import static com.hazelcast.jet.pipeline.WindowDefinition.sliding;
 import static java.lang.System.currentTimeMillis;
+import static java.util.Collections.singletonList;
 import static java.util.concurrent.TimeUnit.MINUTES;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.Assert.assertEquals;
@@ -96,7 +96,7 @@ public class SnapshotTest {
     }
 
     @Before
-    public void setUp() throws Exception {
+    public void setUp() {
         String isolatedClientConfig = System.getProperty("isolatedClientConfig");
         if (isolatedClientConfig != null) {
             System.setProperty("hazelcast.client.config", isolatedClientConfig);
@@ -169,25 +169,27 @@ public class SnapshotTest {
     }
 
     @After
-    public void tearDown() throws Exception {
+    public void tearDown() {
         jet.shutdown();
         producerExecutorService.shutdown();
     }
 
     private DAG testDAG(String resultTopic) {
-        WindowDefinition windowDef = slidingWindowDef(windowSize, slideBy);
+        SlidingWindowDef windowDef = sliding(windowSize, slideBy);
         AggregateOperation1<Object, LongAccumulator, Long> counting = AggregateOperations.counting();
 
         DAG dag = new DAG();
         Properties properties = kafkaPropsForTrades(brokerUri, offsetReset);
-        WatermarkGenerationParams<Long> wmGenParams = wmGenParams((Long t) -> t, withFixedLag(lagMs),
-                emitByFrame(windowDef), 10_000);
-        Vertex readKafka = dag.newVertex("read-kafka", streamKafkaP(properties, (key, value) -> (long) value,
-                wmGenParams, topic));
-        Vertex accumulateByF = dag.newVertex("accumulate-by-frame", accumulateByFrameP(
-                wholeItem(), (Long t) -> t, TimestampKind.EVENT, windowDef, counting)
+        WatermarkGenerationParams<Long> wmGenParams = wmGenParams((Long t) -> t, limitingLag(lagMs),
+                emitByFrame(windowDef.toSlidingWindowPolicy()), 10_000);
+        Vertex readKafka = dag.newVertex("read-kafka", streamKafkaP(properties,
+                consumerRecord -> (long) consumerRecord.value(), wmGenParams, topic));
+
+        Vertex accumulateByF = dag.newVertex("accumulate-by-frame", accumulateByFrameP(singletonList(wholeItem()),
+                singletonList((Long t) -> t), EVENT, windowDef.toSlidingWindowPolicy(), counting)
         );
-        Vertex slidingW = dag.newVertex("sliding-window", combineToSlidingWindowP(windowDef, counting));
+        Vertex slidingW = dag.newVertex("sliding-window",
+                combineToSlidingWindowP(windowDef.toSlidingWindowPolicy(), counting, TimestampedEntry::new));
         Vertex formatOutput = dag.newVertex("format-output",
                 mapP((TimestampedEntry entry) -> {
                     long timeMs = currentTimeMillis();

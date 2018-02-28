@@ -24,10 +24,14 @@ import com.hazelcast.jet.core.DAG;
 import com.hazelcast.jet.core.JobStatus;
 import com.hazelcast.jet.core.Vertex;
 import com.hazelcast.jet.core.WatermarkGenerationParams;
-import com.hazelcast.jet.datamodel.Session;
+import com.hazelcast.jet.datamodel.WindowResult;
 import com.hazelcast.jet.function.DistributedFunction;
+import com.hazelcast.jet.function.DistributedToLongFunction;
 import com.hazelcast.jet.server.JetBootstrap;
 import com.hazelcast.util.UuidUtil;
+import java.util.Properties;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -43,10 +47,6 @@ import tests.kafka.TradeDeserializer;
 import tests.kafka.TradeProducer;
 import tests.kafka.VerificationSink;
 
-import java.util.Properties;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-
 import static com.hazelcast.jet.aggregate.AggregateOperations.counting;
 import static com.hazelcast.jet.core.Edge.between;
 import static com.hazelcast.jet.core.Edge.from;
@@ -57,10 +57,11 @@ import static com.hazelcast.jet.core.Partitioner.HASH_CODE;
 import static com.hazelcast.jet.core.WatermarkEmissionPolicy.emitByMinStep;
 import static com.hazelcast.jet.core.WatermarkGenerationParams.noWatermarks;
 import static com.hazelcast.jet.core.WatermarkGenerationParams.wmGenParams;
-import static com.hazelcast.jet.core.WatermarkPolicies.withFixedLag;
+import static com.hazelcast.jet.core.WatermarkPolicies.limitingLag;
 import static com.hazelcast.jet.core.processor.KafkaProcessors.streamKafkaP;
 import static com.hazelcast.jet.core.processor.KafkaProcessors.writeKafkaP;
 import static com.hazelcast.jet.core.processor.Processors.aggregateToSessionWindowP;
+import static java.util.Collections.singletonList;
 import static java.util.concurrent.TimeUnit.MINUTES;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
@@ -83,7 +84,7 @@ public class LongRunningKafkaSessionWindowTest {
     }
 
     @Before
-    public void setUp() throws Exception {
+    public void setUp() {
         producerExecutorService = Executors.newSingleThreadExecutor();
         brokerUri = System.getProperty("brokerUri", "localhost:9092");
         topic = System.getProperty("topic", String.format("%s-%d", "trades-session", System.currentTimeMillis()));
@@ -135,20 +136,22 @@ public class LongRunningKafkaSessionWindowTest {
 
     private DAG testDAG() {
         DAG dag = new DAG();
-        WatermarkGenerationParams<Trade> wmGenParams = wmGenParams(Trade::getTime, withFixedLag(lagMs),
+        WatermarkGenerationParams<Trade> wmGenParams = wmGenParams(Trade::getTime, limitingLag(lagMs),
                 emitByMinStep(lagMs), 10_000);
-        Vertex readKafka = dag.newVertex("read-kafka", streamKafkaP(kafkaProps, (key, value) -> (Trade) value,
-                wmGenParams, topic));
+        Vertex readKafka = dag.newVertex("read-kafka", streamKafkaP(kafkaProps,
+                consumerRecord -> (Trade) consumerRecord.value(), wmGenParams, topic));
 
+        DistributedFunction<Trade, String> keyFn = Trade::getTicker;
+        DistributedToLongFunction<Trade> timestampFn = Trade::getTime;
         Vertex aggregateSessionWindow = dag.newVertex("session-window",
-                aggregateToSessionWindowP(sessionTimeout, Trade::getTime,
-                        Trade::getTicker,
-                        counting()));
+                aggregateToSessionWindowP(sessionTimeout, singletonList(timestampFn),
+                        singletonList(keyFn),
+                        counting(), WindowResult::new));
 
         Vertex writeResultsToKafka = dag.newVertex("write-results-kafka",
                 writeKafkaP(kafkaPropertiesForResults(brokerUri, offsetReset), topic + "-result",
-                        (DistributedFunction<Session<String, Long>, String>) Session::getKey,
-                        (DistributedFunction<Session<String, Long>, Long>) Session::getResult));
+                        (DistributedFunction<WindowResult<String, Long>, String>) WindowResult::getKey,
+                        (DistributedFunction<WindowResult<String, Long>, Long>) WindowResult::getStart));
 
         dag
                 .edge(between(readKafka, aggregateSessionWindow)
@@ -176,7 +179,7 @@ public class LongRunningKafkaSessionWindowTest {
     }
 
     @After
-    public void tearDown() throws Exception {
+    public void tearDown() {
         jet.shutdown();
         producerExecutorService.shutdown();
     }

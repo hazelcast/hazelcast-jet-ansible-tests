@@ -17,16 +17,15 @@
 package com.hazelcast.jet.tests.hdfs;
 
 import com.hazelcast.jet.JetInstance;
-import com.hazelcast.jet.Pipeline;
-import com.hazelcast.jet.Sink;
-import com.hazelcast.jet.Sinks;
-import com.hazelcast.jet.Source;
-import com.hazelcast.jet.Sources;
+import com.hazelcast.jet.Util;
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.core.DAG;
 import com.hazelcast.jet.core.ProcessorMetaSupplier;
 import com.hazelcast.jet.core.Vertex;
-import com.hazelcast.jet.core.processor.Processors;
+import com.hazelcast.jet.pipeline.BatchSource;
+import com.hazelcast.jet.pipeline.Pipeline;
+import com.hazelcast.jet.pipeline.Sink;
+import com.hazelcast.jet.pipeline.Sinks;
 import com.hazelcast.jet.server.JetBootstrap;
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -58,13 +57,17 @@ import static com.hazelcast.jet.core.Edge.between;
 import static com.hazelcast.jet.core.Partitioner.HASH_CODE;
 import static com.hazelcast.jet.core.processor.HdfsProcessors.readHdfsP;
 import static com.hazelcast.jet.core.processor.HdfsProcessors.writeHdfsP;
+import static com.hazelcast.jet.core.processor.Processors.accumulateByKeyP;
 import static com.hazelcast.jet.core.processor.Processors.combineByKeyP;
 import static com.hazelcast.jet.core.processor.Processors.flatMapP;
+import static com.hazelcast.jet.core.processor.Processors.noopP;
 import static com.hazelcast.jet.function.DistributedFunctions.entryKey;
 import static com.hazelcast.jet.function.DistributedFunctions.entryValue;
 import static com.hazelcast.jet.function.DistributedFunctions.wholeItem;
+import static com.hazelcast.jet.pipeline.Sources.batchFromProcessor;
 import static java.lang.Integer.parseInt;
 import static java.lang.Long.parseLong;
+import static java.util.Collections.singletonList;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.MINUTES;
 import static org.junit.Assert.assertEquals;
@@ -85,7 +88,7 @@ public class HdfsWordCountTest {
     private long durationInMillis;
     private Throwable error;
 
-    public static void main(String[] args) throws Exception {
+    public static void main(String[] args) {
         JUnitCore.main(HdfsWordCountTest.class.getName());
     }
 
@@ -103,8 +106,10 @@ public class HdfsWordCountTest {
 
         Pipeline pipeline = Pipeline.create();
 
-        Source<Object> source = Sources.fromProcessor("generator", wordGenerator(hdfsUri, inputPath, distinct, total));
-        Sink<Object> noopSink = Sinks.fromProcessor("noopSink", ProcessorMetaSupplier.of(Processors.noopP()));
+        BatchSource<Object> source = batchFromProcessor("generator",
+                wordGenerator(hdfsUri, inputPath, distinct, total)
+        );
+        Sink<Object> noopSink = Sinks.fromProcessor("noopSink", ProcessorMetaSupplier.of(noopP()));
         pipeline.drawFrom(source).drainTo(noopSink);
 
         JobConfig jobConfig = new JobConfig();
@@ -116,7 +121,7 @@ public class HdfsWordCountTest {
     }
 
     @After
-    public void tearDown() throws Exception {
+    public void tearDown() {
         jet.shutdown();
     }
 
@@ -166,10 +171,10 @@ public class HdfsWordCountTest {
         );
 
         // word -> (word, count)
-        Vertex accumulate = dag.newVertex("accumulate", Processors.accumulateByKeyP(wholeItem(), counting()));
+        Vertex accumulate = dag.newVertex("accumulate", accumulateByKeyP(singletonList(wholeItem()), counting()));
 
         // (word, count) -> (word, count)
-        Vertex combine = dag.newVertex("combine", combineByKeyP(counting()));
+        Vertex combine = dag.newVertex("combine", combineByKeyP(counting(), Util::entry));
         Vertex consumer = dag.newVertex("writer", writeHdfsP(conf, entryKey(), entryValue())).localParallelism(1);
 
         dag.edge(between(producer, tokenizer))

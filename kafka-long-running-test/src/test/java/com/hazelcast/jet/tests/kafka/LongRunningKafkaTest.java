@@ -25,13 +25,17 @@ import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.config.ProcessingGuarantee;
 import com.hazelcast.jet.core.DAG;
 import com.hazelcast.jet.core.JobStatus;
-import com.hazelcast.jet.core.TimestampKind;
 import com.hazelcast.jet.core.Vertex;
 import com.hazelcast.jet.core.WatermarkGenerationParams;
-import com.hazelcast.jet.core.WindowDefinition;
 import com.hazelcast.jet.datamodel.TimestampedEntry;
+import com.hazelcast.jet.function.DistributedFunction;
+import com.hazelcast.jet.function.DistributedToLongFunction;
+import com.hazelcast.jet.pipeline.SlidingWindowDef;
 import com.hazelcast.jet.server.JetBootstrap;
 import com.hazelcast.util.UuidUtil;
+import java.util.Properties;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -47,28 +51,26 @@ import tests.kafka.Trade;
 import tests.kafka.TradeDeserializer;
 import tests.kafka.VerificationSink;
 
-import java.util.Properties;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-
 import static com.hazelcast.jet.core.Edge.between;
 import static com.hazelcast.jet.core.Edge.from;
 import static com.hazelcast.jet.core.JobStatus.COMPLETED;
 import static com.hazelcast.jet.core.JobStatus.FAILED;
 import static com.hazelcast.jet.core.JobStatus.RESTARTING;
 import static com.hazelcast.jet.core.Partitioner.HASH_CODE;
+import static com.hazelcast.jet.core.TimestampKind.EVENT;
 import static com.hazelcast.jet.core.WatermarkEmissionPolicy.emitByFrame;
 import static com.hazelcast.jet.core.WatermarkGenerationParams.noWatermarks;
 import static com.hazelcast.jet.core.WatermarkGenerationParams.wmGenParams;
-import static com.hazelcast.jet.core.WatermarkPolicies.withFixedLag;
-import static com.hazelcast.jet.core.WindowDefinition.slidingWindowDef;
+import static com.hazelcast.jet.core.WatermarkPolicies.limitingLag;
 import static com.hazelcast.jet.core.processor.KafkaProcessors.streamKafkaP;
 import static com.hazelcast.jet.core.processor.KafkaProcessors.writeKafkaP;
 import static com.hazelcast.jet.core.processor.Processors.accumulateByFrameP;
 import static com.hazelcast.jet.core.processor.Processors.combineToSlidingWindowP;
 import static com.hazelcast.jet.core.processor.Processors.mapP;
 import static com.hazelcast.jet.function.DistributedFunctions.entryKey;
+import static com.hazelcast.jet.pipeline.WindowDefinition.sliding;
 import static java.lang.System.currentTimeMillis;
+import static java.util.Collections.singletonList;
 import static java.util.concurrent.TimeUnit.MINUTES;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
@@ -142,18 +144,23 @@ public class LongRunningKafkaTest {
     }
 
     private DAG testDAG() {
-        WindowDefinition windowDef = slidingWindowDef(windowSize, slideBy);
+        SlidingWindowDef windowDef = sliding(windowSize, slideBy);
         AggregateOperation1<Object, LongAccumulator, Long> counting = AggregateOperations.counting();
 
         DAG dag = new DAG();
-        WatermarkGenerationParams<Trade> wmGenParams = wmGenParams(Trade::getTime, withFixedLag(lagMs),
-                emitByFrame(windowDef), 10_000);
-        Vertex readKafka = dag.newVertex("read-kafka", streamKafkaP(kafkaProps, (o, value) -> (Trade) value,
-                wmGenParams, topic));
+        WatermarkGenerationParams<Trade> wmGenParams = wmGenParams(Trade::getTime, limitingLag(lagMs),
+                emitByFrame(windowDef.toSlidingWindowPolicy()), 10_000);
+        Vertex readKafka = dag.newVertex("read-kafka", streamKafkaP(kafkaProps,
+                consumerRecord -> (Trade) consumerRecord.value(), wmGenParams, topic));
+
+        DistributedFunction<Trade, String> keyFn = Trade::getTicker;
+        DistributedToLongFunction<Trade> timestampFn = Trade::getTime;
         Vertex accumulateByF = dag.newVertex("accumulate-by-frame", accumulateByFrameP(
-                Trade::getTicker, Trade::getTime, TimestampKind.EVENT, windowDef, counting)
+                singletonList(keyFn), singletonList(timestampFn), EVENT, windowDef.toSlidingWindowPolicy(), counting)
         );
-        Vertex slidingW = dag.newVertex("sliding-window", combineToSlidingWindowP(windowDef, counting));
+        Vertex slidingW = dag.newVertex("sliding-window",
+                combineToSlidingWindowP(windowDef.toSlidingWindowPolicy(), counting, TimestampedEntry::new)
+        );
         Vertex formatOutput = dag.newVertex("format-output",
                 mapP((TimestampedEntry entry) -> {
                     long timeMs = currentTimeMillis();
@@ -194,7 +201,7 @@ public class LongRunningKafkaTest {
 
 
     @After
-    public void tearDown() throws Exception {
+    public void tearDown() {
         jet.shutdown();
         producerExecutorService.shutdown();
     }

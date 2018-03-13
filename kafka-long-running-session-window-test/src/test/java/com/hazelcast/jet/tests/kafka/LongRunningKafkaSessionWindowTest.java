@@ -24,6 +24,7 @@ import com.hazelcast.jet.core.JobStatus;
 import com.hazelcast.jet.kafka.KafkaSinks;
 import com.hazelcast.jet.kafka.KafkaSources;
 import com.hazelcast.jet.pipeline.Pipeline;
+import com.hazelcast.jet.pipeline.Sink;
 import com.hazelcast.jet.pipeline.Sinks;
 import com.hazelcast.jet.server.JetBootstrap;
 import com.hazelcast.util.UuidUtil;
@@ -40,7 +41,6 @@ import org.junit.runners.JUnit4;
 import tests.kafka.Trade;
 import tests.kafka.TradeDeserializer;
 import tests.kafka.TradeProducer;
-import tests.kafka.VerificationSink;
 
 import java.util.Map;
 import java.util.Properties;
@@ -51,10 +51,10 @@ import static com.hazelcast.jet.aggregate.AggregateOperations.counting;
 import static com.hazelcast.jet.core.JobStatus.COMPLETED;
 import static com.hazelcast.jet.core.JobStatus.FAILED;
 import static com.hazelcast.jet.core.JobStatus.RESTARTING;
-import static com.hazelcast.jet.core.ProcessorMetaSupplier.preferLocalParallelismOne;
 import static com.hazelcast.jet.pipeline.WindowDefinition.session;
 import static java.util.concurrent.TimeUnit.MINUTES;
 import static java.util.concurrent.TimeUnit.SECONDS;
+import static org.junit.Assert.assertEquals;
 
 @RunWith(JUnit4.class)
 public class LongRunningKafkaSessionWindowTest {
@@ -145,11 +145,8 @@ public class LongRunningKafkaSessionWindowTest {
         Pipeline pipeline = Pipeline.create();
 
         Properties properties = kafkaPropertiesForResults(brokerUri, offsetReset);
-        final int countCopy = countPerTicker;
-        pipeline.drawFrom(KafkaSources.kafka(properties, topic + "-results"))
-                .drainTo(Sinks.fromProcessor("verification",
-                        preferLocalParallelismOne(() -> new VerificationSink(countCopy))));
-
+        pipeline.drawFrom(KafkaSources.<String, Long>kafka(properties, topic + "-results"))
+                .drainTo(buildVerificationSink());
 
         return pipeline;
     }
@@ -158,6 +155,14 @@ public class LongRunningKafkaSessionWindowTest {
     public void tearDown() {
         jet.shutdown();
         producerExecutorService.shutdown();
+    }
+
+    private Sink<Map.Entry<String, Long>> buildVerificationSink() {
+        final int expectedCount = countPerTicker;
+        return Sinks.<Object, Map.Entry<String, Long>>builder(jet -> null)
+                .onReceiveFn((ignored, entry) ->
+                        assertEquals("Unexpected count for " + entry.getKey(), expectedCount, (long) entry.getValue()))
+                .build();
     }
 
     private static Properties kafkaPropertiesForTrades(String brokerUrl, String offsetReset) {

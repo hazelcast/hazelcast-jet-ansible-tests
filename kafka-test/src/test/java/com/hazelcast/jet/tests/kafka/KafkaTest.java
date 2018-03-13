@@ -37,7 +37,6 @@ import java.io.IOException;
 import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
@@ -53,14 +52,11 @@ import static org.junit.Assert.assertTrue;
 @RunWith(JUnit4.class)
 public class KafkaTest {
 
-    private String brokerUri;
     private String topic;
-    private String offsetReset;
     private int lagMs;
     private int windowSize;
     private int slideBy;
     private String outputList;
-    private int tickerCount;
     private int countPerTicker;
     private Properties kafkaProps;
     private JetInstance jet;
@@ -71,14 +67,14 @@ public class KafkaTest {
 
     @Before
     public void setUp() {
-        brokerUri = System.getProperty("brokerUri", "localhost:9092");
+        String brokerUri = System.getProperty("brokerUri", "localhost:9092");
         topic = System.getProperty("topic", String.format("%s-%d", "trades", System.currentTimeMillis()));
-        offsetReset = System.getProperty("offsetReset", "earliest");
+        String offsetReset = System.getProperty("offsetReset", "earliest");
         lagMs = Integer.parseInt(System.getProperty("lagMs", "10"));
         windowSize = Integer.parseInt(System.getProperty("windowSize", "50"));
         slideBy = Integer.parseInt(System.getProperty("slideBy", "10"));
         outputList = System.getProperty("outputList", "jet-output-" + System.currentTimeMillis());
-        tickerCount = Integer.parseInt(System.getProperty("tickerCount", "500"));
+        int tickerCount = Integer.parseInt(System.getProperty("tickerCount", "500"));
         countPerTicker = Integer.parseInt(System.getProperty("countPerTicker", "7"));
         kafkaProps = getKafkaProperties(brokerUri, offsetReset);
         jet = JetBootstrap.getInstance();
@@ -132,16 +128,14 @@ public class KafkaTest {
         Pipeline pipeline = Pipeline.create();
 
         pipeline.drawFrom(KafkaSources.<String, Trade>kafka(kafkaProps, topic))
-                .map(Map.Entry::getValue)
+                .map(Entry::getValue)
                 .addTimestamps(Trade::getTime, lagMs)
                 .window(sliding(windowSize, slideBy))
                 .groupingKey(Trade::getTicker)
-                .aggregate(counting())
-                .map(e -> {
+                .aggregate(counting(), (winStart, timestamp, key, value) -> {
                     long timeMs = currentTimeMillis();
-                    long latencyMs = timeMs - e.getTimestamp();
-                    return String.format("%d,%s,%s,%d,%d", e.getTimestamp(), e.getKey(), e.getValue(),
-                            timeMs, latencyMs);
+                    long latencyMs = timeMs - timestamp;
+                    return String.format("%d,%s,%s,%d,%d", timestamp, key, value, timeMs, latencyMs);
                 })
                 .drainTo(Sinks.list(outputList));
 

@@ -17,27 +17,11 @@
 package com.hazelcast.jet.tests.kafka;
 
 import com.hazelcast.jet.JetInstance;
-import com.hazelcast.jet.accumulator.LongAccumulator;
-import com.hazelcast.jet.aggregate.AggregateOperation1;
-import com.hazelcast.jet.aggregate.AggregateOperations;
-import com.hazelcast.jet.core.DAG;
-import com.hazelcast.jet.core.TimestampKind;
-import com.hazelcast.jet.core.Vertex;
-import com.hazelcast.jet.core.WatermarkGenerationParams;
-import com.hazelcast.jet.datamodel.TimestampedEntry;
-import com.hazelcast.jet.function.DistributedFunction;
-import com.hazelcast.jet.function.DistributedToLongFunction;
-import com.hazelcast.jet.pipeline.SlidingWindowDef;
-import com.hazelcast.jet.pipeline.WindowDefinition;
+import com.hazelcast.jet.kafka.KafkaSources;
+import com.hazelcast.jet.pipeline.Pipeline;
+import com.hazelcast.jet.pipeline.Sinks;
 import com.hazelcast.jet.server.JetBootstrap;
 import com.hazelcast.util.UuidUtil;
-import java.util.AbstractMap.SimpleImmutableEntry;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Map.Entry;
-import java.util.Properties;
-import java.util.concurrent.Future;
-import java.util.stream.Collectors;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.junit.After;
 import org.junit.Before;
@@ -49,33 +33,30 @@ import tests.kafka.Trade;
 import tests.kafka.TradeDeserializer;
 import tests.kafka.TradeProducer;
 
-import static com.hazelcast.jet.core.Edge.between;
-import static com.hazelcast.jet.core.Partitioner.HASH_CODE;
-import static com.hazelcast.jet.core.WatermarkEmissionPolicy.emitByFrame;
-import static com.hazelcast.jet.core.WatermarkGenerationParams.wmGenParams;
-import static com.hazelcast.jet.core.WatermarkPolicies.limitingLag;
-import static com.hazelcast.jet.core.processor.KafkaProcessors.streamKafkaP;
-import static com.hazelcast.jet.core.processor.Processors.accumulateByFrameP;
-import static com.hazelcast.jet.core.processor.Processors.combineToSlidingWindowP;
-import static com.hazelcast.jet.core.processor.Processors.mapP;
-import static com.hazelcast.jet.core.processor.SinkProcessors.writeListP;
-import static com.hazelcast.jet.function.DistributedFunctions.entryKey;
+import java.io.IOException;
+import java.util.AbstractMap.SimpleImmutableEntry;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Map.Entry;
+import java.util.Properties;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
+import java.util.stream.Collectors;
+
+import static com.hazelcast.jet.aggregate.AggregateOperations.counting;
+import static com.hazelcast.jet.pipeline.WindowDefinition.sliding;
 import static java.lang.System.currentTimeMillis;
-import static java.util.Collections.singletonList;
 import static java.util.concurrent.TimeUnit.MINUTES;
 import static org.junit.Assert.assertTrue;
 
 @RunWith(JUnit4.class)
 public class KafkaTest {
 
-    private String brokerUri;
     private String topic;
-    private String offsetReset;
     private int lagMs;
     private int windowSize;
     private int slideBy;
     private String outputList;
-    private int tickerCount;
     private int countPerTicker;
     private Properties kafkaProps;
     private JetInstance jet;
@@ -86,14 +67,14 @@ public class KafkaTest {
 
     @Before
     public void setUp() {
-        brokerUri = System.getProperty("brokerUri", "localhost:9092");
+        String brokerUri = System.getProperty("brokerUri", "localhost:9092");
         topic = System.getProperty("topic", String.format("%s-%d", "trades", System.currentTimeMillis()));
-        offsetReset = System.getProperty("offsetReset", "earliest");
+        String offsetReset = System.getProperty("offsetReset", "earliest");
         lagMs = Integer.parseInt(System.getProperty("lagMs", "10"));
         windowSize = Integer.parseInt(System.getProperty("windowSize", "50"));
         slideBy = Integer.parseInt(System.getProperty("slideBy", "10"));
         outputList = System.getProperty("outputList", "jet-output-" + System.currentTimeMillis());
-        tickerCount = Integer.parseInt(System.getProperty("tickerCount", "500"));
+        int tickerCount = Integer.parseInt(System.getProperty("tickerCount", "500"));
         countPerTicker = Integer.parseInt(System.getProperty("countPerTicker", "7"));
         kafkaProps = getKafkaProperties(brokerUri, offsetReset);
         jet = JetBootstrap.getInstance();
@@ -104,44 +85,9 @@ public class KafkaTest {
     }
 
     @Test
-    public void kafkaTest() throws InterruptedException {
-        SlidingWindowDef windowDef = WindowDefinition.sliding(windowSize, slideBy);
-        AggregateOperation1<Object, LongAccumulator, Long> counting = AggregateOperations.counting();
-
-        DAG dag = new DAG();
-        WatermarkGenerationParams<Trade> wmGenParams = wmGenParams(Trade::getTime, limitingLag(lagMs),
-                emitByFrame(windowDef.toSlidingWindowPolicy()), 10_000);
-        Vertex readKafka = dag.newVertex("read-kafka", streamKafkaP(kafkaProps,
-                consumerRecord -> (Trade) consumerRecord.value(), wmGenParams, topic));
-
-        DistributedFunction<Trade, String> keyFn = Trade::getTicker;
-        DistributedToLongFunction<Trade> timestampFn = Trade::getTime;
-        Vertex accumulateByF = dag.newVertex("accumulate-by-frame",
-                accumulateByFrameP(singletonList(keyFn), singletonList(timestampFn), TimestampKind.EVENT,
-                        windowDef.toSlidingWindowPolicy(), counting));
-        Vertex slidingW = dag.newVertex("sliding-window",
-                combineToSlidingWindowP(windowDef.toSlidingWindowPolicy(), counting, TimestampedEntry::new)
-        );
-        Vertex formatOutput = dag.newVertex("format-output",
-                mapP((TimestampedEntry entry) -> {
-                    long timeMs = currentTimeMillis();
-                    long latencyMs = timeMs - entry.getTimestamp();
-                    return String.format("%d,%s,%s,%d,%d", entry.getTimestamp(), entry.getKey(), entry.getValue(),
-                            timeMs, latencyMs);
-                })
-        );
-        Vertex listSink = dag.newVertex("write-list", writeListP(outputList));
-
-        dag
-                .edge(between(readKafka, accumulateByF).partitioned(Trade::getTicker, HASH_CODE))
-                .edge(between(accumulateByF, slidingW).partitioned(entryKey())
-                                                      .distributed())
-                .edge(between(slidingW, formatOutput).isolated())
-                .edge(between(formatOutput, listSink));
-
-
+    public void kafkaTest() throws IOException, ExecutionException, InterruptedException {
         System.out.println("Executing job..");
-        Future<Void> execute = jet.newJob(dag).getFuture();
+        Future<Void> execute = jet.newJob(pipeline()).getFuture();
 
         try {
             Thread.sleep(MINUTES.toMillis(1));
@@ -176,6 +122,25 @@ public class KafkaTest {
     @After
     public void tearDown() {
         jet.shutdown();
+    }
+
+    private Pipeline pipeline() {
+        Pipeline pipeline = Pipeline.create();
+
+        pipeline.drawFrom(KafkaSources.<String, Trade>kafka(kafkaProps, topic))
+                .map(Entry::getValue)
+                .addTimestamps(Trade::getTime, lagMs)
+                .window(sliding(windowSize, slideBy))
+                .groupingKey(Trade::getTicker)
+                .aggregate(counting(), (winStart, timestamp, key, value) -> {
+                    long timeMs = currentTimeMillis();
+                    long latencyMs = timeMs - timestamp;
+                    return String.format("%d,%s,%s,%d,%d", timestamp, key, value, timeMs, latencyMs);
+                })
+                .drainTo(Sinks.list(outputList));
+
+
+        return pipeline;
     }
 
     private static Properties getKafkaProperties(String brokerUrl, String offsetReset) {

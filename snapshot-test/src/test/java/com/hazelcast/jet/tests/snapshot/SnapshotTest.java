@@ -20,23 +20,13 @@ import com.hazelcast.core.MembershipAdapter;
 import com.hazelcast.core.MembershipEvent;
 import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.Job;
-import com.hazelcast.jet.accumulator.LongAccumulator;
-import com.hazelcast.jet.aggregate.AggregateOperation1;
-import com.hazelcast.jet.aggregate.AggregateOperations;
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.config.ProcessingGuarantee;
-import com.hazelcast.jet.core.DAG;
-import com.hazelcast.jet.core.Vertex;
-import com.hazelcast.jet.core.WatermarkGenerationParams;
-import com.hazelcast.jet.datamodel.TimestampedEntry;
-import com.hazelcast.jet.pipeline.SlidingWindowDef;
+import com.hazelcast.jet.kafka.KafkaSinks;
+import com.hazelcast.jet.kafka.KafkaSources;
+import com.hazelcast.jet.pipeline.Pipeline;
 import com.hazelcast.jet.server.JetBootstrap;
 import com.hazelcast.util.UuidUtil;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Properties;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.serialization.LongDeserializer;
@@ -50,25 +40,19 @@ import org.junit.runners.JUnit4;
 import tests.snapshot.QueueVerifier;
 import tests.snapshot.SnapshotTradeProducer;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+import static com.hazelcast.jet.aggregate.AggregateOperations.counting;
 import static com.hazelcast.jet.config.ProcessingGuarantee.AT_LEAST_ONCE;
 import static com.hazelcast.jet.config.ProcessingGuarantee.EXACTLY_ONCE;
-import static com.hazelcast.jet.core.Edge.between;
 import static com.hazelcast.jet.core.JobStatus.COMPLETED;
-import static com.hazelcast.jet.core.Partitioner.HASH_CODE;
-import static com.hazelcast.jet.core.TimestampKind.EVENT;
-import static com.hazelcast.jet.core.WatermarkEmissionPolicy.emitByFrame;
-import static com.hazelcast.jet.core.WatermarkGenerationParams.wmGenParams;
-import static com.hazelcast.jet.core.WatermarkPolicies.limitingLag;
-import static com.hazelcast.jet.core.processor.KafkaProcessors.streamKafkaP;
-import static com.hazelcast.jet.core.processor.KafkaProcessors.writeKafkaP;
-import static com.hazelcast.jet.core.processor.Processors.accumulateByFrameP;
-import static com.hazelcast.jet.core.processor.Processors.combineToSlidingWindowP;
-import static com.hazelcast.jet.core.processor.Processors.mapP;
-import static com.hazelcast.jet.function.DistributedFunctions.entryKey;
 import static com.hazelcast.jet.function.DistributedFunctions.wholeItem;
 import static com.hazelcast.jet.pipeline.WindowDefinition.sliding;
-import static java.lang.System.currentTimeMillis;
-import static java.util.Collections.singletonList;
 import static java.util.concurrent.TimeUnit.MINUTES;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.Assert.assertEquals;
@@ -174,42 +158,20 @@ public class SnapshotTest {
         producerExecutorService.shutdown();
     }
 
-    private DAG testDAG(String resultTopic) {
-        SlidingWindowDef windowDef = sliding(windowSize, slideBy);
-        AggregateOperation1<Object, LongAccumulator, Long> counting = AggregateOperations.counting();
+    private Pipeline pipeline(String resultTopic) {
+        Pipeline pipeline = Pipeline.create();
 
-        DAG dag = new DAG();
-        Properties properties = kafkaPropsForTrades(brokerUri, offsetReset);
-        WatermarkGenerationParams<Long> wmGenParams = wmGenParams((Long t) -> t, limitingLag(lagMs),
-                emitByFrame(windowDef.toSlidingWindowPolicy()), 10_000);
-        Vertex readKafka = dag.newVertex("read-kafka", streamKafkaP(properties,
-                consumerRecord -> (long) consumerRecord.value(), wmGenParams, topic));
+        Properties propsForTrades = kafkaPropsForTrades(brokerUri, offsetReset);
+        Properties propsForResult = kafkaPropsForResults(brokerUri, offsetReset);
 
-        Vertex accumulateByF = dag.newVertex("accumulate-by-frame", accumulateByFrameP(singletonList(wholeItem()),
-                singletonList((Long t) -> t), EVENT, windowDef.toSlidingWindowPolicy(), counting)
-        );
-        Vertex slidingW = dag.newVertex("sliding-window",
-                combineToSlidingWindowP(windowDef.toSlidingWindowPolicy(), counting, TimestampedEntry::new));
-        Vertex formatOutput = dag.newVertex("format-output",
-                mapP((TimestampedEntry entry) -> {
-                    long timeMs = currentTimeMillis();
-                    long latencyMs = timeMs - entry.getTimestamp();
-                    return String.format("%d,%s,%s,%d,%d", entry.getTimestamp(), entry.getKey(), entry.getValue(),
-                            timeMs, latencyMs);
-                }));
-        Vertex sink = dag.newVertex("write-kafka", writeKafkaP(kafkaPropsForResults(brokerUri, offsetReset),
-                resultTopic,
-                (String s) -> Long.valueOf(s.split(",")[1]),
-                (String s) -> Long.valueOf(s.split(",")[2])
-        ));
-
-        dag
-                .edge(between(readKafka, accumulateByF).partitioned(wholeItem(), HASH_CODE))
-                .edge(between(accumulateByF, slidingW).partitioned(entryKey())
-                                                      .distributed())
-                .edge(between(slidingW, formatOutput).isolated())
-                .edge(between(formatOutput, sink));
-        return dag;
+        pipeline.drawFrom(KafkaSources.<Long, Long>kafka(propsForTrades, topic))
+                .map(Map.Entry::getValue)
+                .addTimestamps(t -> t, lagMs)
+                .window(sliding(windowSize, slideBy))
+                .groupingKey(wholeItem())
+                .aggregate(counting())
+                .drainTo(KafkaSinks.kafka(propsForResult, resultTopic));
+        return pipeline;
     }
 
     private String resultsTopicName(ProcessingGuarantee guarantee) {
@@ -222,7 +184,8 @@ public class SnapshotTest {
         jobConfig.setSnapshotIntervalMillis(snapshotIntervalMs);
         jobConfig.setProcessingGuarantee(guarantee);
         String resultTopic = resultsTopicName(guarantee);
-        return addMembershipListenerForRestart(jet.newJob(testDAG(resultTopic), jobConfig));
+        Job job = jet.newJob(pipeline(resultTopic), jobConfig);
+        return addMembershipListenerForRestart(job);
     }
 
     private Job addMembershipListenerForRestart(Job job) {

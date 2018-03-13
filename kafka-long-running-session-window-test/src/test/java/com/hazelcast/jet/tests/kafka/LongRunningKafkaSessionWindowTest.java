@@ -125,6 +125,12 @@ public class LongRunningKafkaSessionWindowTest {
         }
     }
 
+    @After
+    public void tearDown() {
+        jet.shutdown();
+        producerExecutorService.shutdown();
+    }
+
     private Pipeline pipeline() {
         Pipeline pipeline = Pipeline.create();
 
@@ -149,12 +155,6 @@ public class LongRunningKafkaSessionWindowTest {
                 .drainTo(buildVerificationSink());
 
         return pipeline;
-    }
-
-    @After
-    public void tearDown() {
-        jet.shutdown();
-        producerExecutorService.shutdown();
     }
 
     private Sink<Map.Entry<String, Long>> buildVerificationSink() {

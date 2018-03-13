@@ -28,22 +28,13 @@ import com.hazelcast.core.MembershipEvent;
 import com.hazelcast.jet.Jet;
 import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.Job;
-import com.hazelcast.jet.accumulator.LongAccumulator;
-import com.hazelcast.jet.aggregate.AggregateOperation1;
 import com.hazelcast.jet.aggregate.AggregateOperations;
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.config.ProcessingGuarantee;
-import com.hazelcast.jet.core.DAG;
-import com.hazelcast.jet.core.TimestampKind;
-import com.hazelcast.jet.core.Vertex;
-import com.hazelcast.jet.core.WatermarkGenerationParams;
-import com.hazelcast.jet.core.processor.SinkProcessors;
-import com.hazelcast.jet.datamodel.TimestampedEntry;
-import com.hazelcast.jet.pipeline.SlidingWindowDef;
+import com.hazelcast.jet.pipeline.Pipeline;
+import com.hazelcast.jet.pipeline.Sinks;
+import com.hazelcast.jet.pipeline.Sources;
 import com.hazelcast.jet.server.JetBootstrap;
-import com.hazelcast.map.journal.EventJournalMapEvent;
-import java.io.Serializable;
-import java.util.Collections;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -54,18 +45,10 @@ import tests.eventjournal.EventJournalConsumer;
 import tests.eventjournal.EventJournalTradeProducer;
 import tests.snapshot.QueueVerifier;
 
-import static com.hazelcast.core.EntryEventType.ADDED;
-import static com.hazelcast.core.EntryEventType.UPDATED;
-import static com.hazelcast.jet.core.Edge.between;
+import java.io.Serializable;
+import java.util.Map;
+
 import static com.hazelcast.jet.core.JobStatus.COMPLETED;
-import static com.hazelcast.jet.core.Partitioner.HASH_CODE;
-import static com.hazelcast.jet.core.WatermarkEmissionPolicy.emitByFrame;
-import static com.hazelcast.jet.core.WatermarkGenerationParams.wmGenParams;
-import static com.hazelcast.jet.core.WatermarkPolicies.limitingLag;
-import static com.hazelcast.jet.core.processor.Processors.accumulateByFrameP;
-import static com.hazelcast.jet.core.processor.Processors.combineToSlidingWindowP;
-import static com.hazelcast.jet.core.processor.SourceProcessors.streamMapP;
-import static com.hazelcast.jet.function.DistributedFunctions.entryKey;
 import static com.hazelcast.jet.function.DistributedFunctions.wholeItem;
 import static com.hazelcast.jet.pipeline.JournalInitialPosition.START_FROM_OLDEST;
 import static com.hazelcast.jet.pipeline.WindowDefinition.sliding;
@@ -122,7 +105,7 @@ public class EventJournalTest implements Serializable {
         JobConfig jobConfig = new JobConfig();
         jobConfig.setSnapshotIntervalMillis(snapshotIntervalMs);
         jobConfig.setProcessingGuarantee(ProcessingGuarantee.EXACTLY_ONCE);
-        Job job = jet.newJob(testDAG(), jobConfig);
+        Job job = jet.newJob(pipeline(), jobConfig);
         tradeProducer.start();
 
         addMembershipListenerForRestart(job);
@@ -158,29 +141,17 @@ public class EventJournalTest implements Serializable {
         jet.shutdown();
     }
 
-    private DAG testDAG() {
-        SlidingWindowDef windowDef = sliding(windowSize, slideBy);
-        AggregateOperation1<Object, LongAccumulator, Long> counting = AggregateOperations.counting();
-        DAG dag = new DAG();
-        WatermarkGenerationParams<Long> wmGenParams = wmGenParams((Long t) -> t, limitingLag(lagMs),
-                emitByFrame(windowDef.toSlidingWindowPolicy()), 10_000);
+    private Pipeline pipeline() {
+        Pipeline pipeline = Pipeline.create();
 
-        Vertex journal = dag.newVertex("journal", streamMapP(mapName, e -> e.getType() == ADDED || e.getType() == UPDATED,
-                EventJournalMapEvent<Long, Long>::getNewValue, START_FROM_OLDEST, wmGenParams));
-        Vertex accumulateByF = dag.newVertex("accumulate-by-frame", accumulateByFrameP(
-                Collections.singletonList(wholeItem()), Collections.singletonList((Long t) -> t), TimestampKind.EVENT,
-                windowDef.toSlidingWindowPolicy(), counting)
-        );
-        Vertex slidingW = dag.newVertex("sliding-window",
-                combineToSlidingWindowP(windowDef.toSlidingWindowPolicy(), counting, TimestampedEntry::new));
-        Vertex writeMap = dag.newVertex("writeMap", SinkProcessors.writeMapP(resultsMapName));
-
-        dag
-                .edge(between(journal, accumulateByF).partitioned(wholeItem(), HASH_CODE))
-                .edge(between(accumulateByF, slidingW).partitioned(entryKey())
-                                                      .distributed())
-                .edge(between(slidingW, writeMap));
-        return dag;
+        pipeline.drawFrom(Sources.<Long, Long>mapJournal(mapName, START_FROM_OLDEST))
+                .map(Map.Entry::getValue)
+                .addTimestamps(t -> t, lagMs)
+                .window(sliding(windowSize, slideBy))
+                .groupingKey(wholeItem())
+                .aggregate(AggregateOperations.counting())
+                .drainTo(Sinks.map(resultsMapName));
+        return pipeline;
     }
 
     private void deployResources() {

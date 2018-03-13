@@ -18,24 +18,15 @@ package com.hazelcast.jet.tests.kafka;
 
 import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.Job;
-import com.hazelcast.jet.accumulator.LongAccumulator;
-import com.hazelcast.jet.aggregate.AggregateOperation1;
-import com.hazelcast.jet.aggregate.AggregateOperations;
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.config.ProcessingGuarantee;
-import com.hazelcast.jet.core.DAG;
 import com.hazelcast.jet.core.JobStatus;
-import com.hazelcast.jet.core.Vertex;
-import com.hazelcast.jet.core.WatermarkGenerationParams;
-import com.hazelcast.jet.datamodel.TimestampedEntry;
-import com.hazelcast.jet.function.DistributedFunction;
-import com.hazelcast.jet.function.DistributedToLongFunction;
-import com.hazelcast.jet.pipeline.SlidingWindowDef;
+import com.hazelcast.jet.kafka.KafkaSinks;
+import com.hazelcast.jet.kafka.KafkaSources;
+import com.hazelcast.jet.pipeline.Pipeline;
+import com.hazelcast.jet.pipeline.Sinks;
 import com.hazelcast.jet.server.JetBootstrap;
 import com.hazelcast.util.UuidUtil;
-import java.util.Properties;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -51,26 +42,17 @@ import tests.kafka.Trade;
 import tests.kafka.TradeDeserializer;
 import tests.kafka.VerificationSink;
 
-import static com.hazelcast.jet.core.Edge.between;
-import static com.hazelcast.jet.core.Edge.from;
+import java.util.Map;
+import java.util.Properties;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+import static com.hazelcast.jet.aggregate.AggregateOperations.counting;
 import static com.hazelcast.jet.core.JobStatus.COMPLETED;
 import static com.hazelcast.jet.core.JobStatus.FAILED;
 import static com.hazelcast.jet.core.JobStatus.RESTARTING;
-import static com.hazelcast.jet.core.Partitioner.HASH_CODE;
-import static com.hazelcast.jet.core.TimestampKind.EVENT;
-import static com.hazelcast.jet.core.WatermarkEmissionPolicy.emitByFrame;
-import static com.hazelcast.jet.core.WatermarkGenerationParams.noWatermarks;
-import static com.hazelcast.jet.core.WatermarkGenerationParams.wmGenParams;
-import static com.hazelcast.jet.core.WatermarkPolicies.limitingLag;
-import static com.hazelcast.jet.core.processor.KafkaProcessors.streamKafkaP;
-import static com.hazelcast.jet.core.processor.KafkaProcessors.writeKafkaP;
-import static com.hazelcast.jet.core.processor.Processors.accumulateByFrameP;
-import static com.hazelcast.jet.core.processor.Processors.combineToSlidingWindowP;
-import static com.hazelcast.jet.core.processor.Processors.mapP;
-import static com.hazelcast.jet.function.DistributedFunctions.entryKey;
+import static com.hazelcast.jet.core.ProcessorMetaSupplier.preferLocalParallelismOne;
 import static com.hazelcast.jet.pipeline.WindowDefinition.sliding;
-import static java.lang.System.currentTimeMillis;
-import static java.util.Collections.singletonList;
 import static java.util.concurrent.TimeUnit.MINUTES;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
@@ -120,10 +102,10 @@ public class LongRunningKafkaTest {
         JobConfig jobConfig = new JobConfig();
         jobConfig.setSnapshotIntervalMillis(5000);
         jobConfig.setProcessingGuarantee(ProcessingGuarantee.AT_LEAST_ONCE);
-        Job testJob = jet.newJob(testDAG(), jobConfig);
+        Job testJob = jet.newJob(pipeline(), jobConfig);
 
         System.out.println("Executing verification job..");
-        Job verificationJob = jet.newJob(verificationDAG());
+        Job verificationJob = jet.newJob(verificationPipeline());
 
         long begin = System.currentTimeMillis();
         while (System.currentTimeMillis() - begin < durationInMillis) {
@@ -143,62 +125,34 @@ public class LongRunningKafkaTest {
         }
     }
 
-    private DAG testDAG() {
-        SlidingWindowDef windowDef = sliding(windowSize, slideBy);
-        AggregateOperation1<Object, LongAccumulator, Long> counting = AggregateOperations.counting();
+    private Pipeline pipeline() {
+        Pipeline pipeline = Pipeline.create();
 
-        DAG dag = new DAG();
-        WatermarkGenerationParams<Trade> wmGenParams = wmGenParams(Trade::getTime, limitingLag(lagMs),
-                emitByFrame(windowDef.toSlidingWindowPolicy()), 10_000);
-        Vertex readKafka = dag.newVertex("read-kafka", streamKafkaP(kafkaProps,
-                consumerRecord -> (Trade) consumerRecord.value(), wmGenParams, topic));
+        Properties propsForResult = kafkaPropertiesForResults(brokerUri, offsetReset);
 
-        DistributedFunction<Trade, String> keyFn = Trade::getTicker;
-        DistributedToLongFunction<Trade> timestampFn = Trade::getTime;
-        Vertex accumulateByF = dag.newVertex("accumulate-by-frame", accumulateByFrameP(
-                singletonList(keyFn), singletonList(timestampFn), EVENT, windowDef.toSlidingWindowPolicy(), counting)
-        );
-        Vertex slidingW = dag.newVertex("sliding-window",
-                combineToSlidingWindowP(windowDef.toSlidingWindowPolicy(), counting, TimestampedEntry::new)
-        );
-        Vertex formatOutput = dag.newVertex("format-output",
-                mapP((TimestampedEntry entry) -> {
-                    long timeMs = currentTimeMillis();
-                    long latencyMs = timeMs - entry.getTimestamp();
-                    return String.format("%d,%s,%s,%d,%d", entry.getTimestamp(), entry.getKey(), entry.getValue(),
-                            timeMs, latencyMs);
-                }));
-        Vertex sink = dag.newVertex("write-kafka", writeKafkaP(
-                kafkaPropertiesForResults(brokerUri, offsetReset),
-                topic + "-results",
-                (String s) -> s.split(",")[1],
-                (String s) -> Long.valueOf(s.split(",")[2])
-        ));
+        pipeline.drawFrom(KafkaSources.<String, Trade>kafka(kafkaProps, topic))
+                .map(Map.Entry::getValue)
+                .addTimestamps(Trade::getTime, lagMs)
+                .window(sliding(windowSize, slideBy))
+                .groupingKey(Trade::getTicker)
+                .aggregate(counting())
+                .drainTo(KafkaSinks.kafka(propsForResult, topic + "-results"));
 
-        dag
-                .edge(between(readKafka, accumulateByF).partitioned(Trade::getTicker, HASH_CODE))
-                .edge(between(accumulateByF, slidingW).partitioned(entryKey())
-                                                      .distributed())
-                .edge(between(slidingW, formatOutput).isolated())
-                .edge(between(formatOutput, sink));
-        return dag;
+        return pipeline;
     }
 
-    private DAG verificationDAG() {
-        DAG dag = new DAG();
+    private Pipeline verificationPipeline() {
+        Pipeline pipeline = Pipeline.create();
 
-        Vertex readVerificationRecords = dag.newVertex("read-verification-kafka", streamKafkaP(
-                kafkaPropertiesForResults(brokerUri, offsetReset), noWatermarks(), topic + "-results")
-        ).localParallelism(1);
-
+        Properties properties = kafkaPropertiesForResults(brokerUri, offsetReset);
         final int countCopy = countPerTicker;
-        Vertex sink = dag.newVertex("verification", () -> new VerificationSink(countCopy))
-                         .localParallelism(1);
+        pipeline.drawFrom(KafkaSources.kafka(properties, topic + "-results"))
+                .drainTo(Sinks.fromProcessor("verification",
+                        preferLocalParallelismOne(() -> new VerificationSink(countCopy))));
 
-        dag.edge(from(readVerificationRecords).to(sink));
-        return dag;
+
+        return pipeline;
     }
-
 
     @After
     public void tearDown() {

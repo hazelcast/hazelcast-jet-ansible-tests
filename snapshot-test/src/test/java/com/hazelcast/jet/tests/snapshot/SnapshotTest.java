@@ -109,7 +109,7 @@ public class SnapshotTest {
         String atLeastOnceTopic = resultsTopicName(AT_LEAST_ONCE);
         String exactlyOnceTopic = resultsTopicName(EXACTLY_ONCE);
 
-        Job atLeastOnceJob = submitJob(AT_LEAST_ONCE);
+//        Job atLeastOnceJob = submitJob(AT_LEAST_ONCE);
         Job exactlyOnceJob = submitJob(EXACTLY_ONCE);
 
         int windowCount = windowSize / slideBy;
@@ -145,9 +145,11 @@ public class SnapshotTest {
         atLeastOnceVerifier.close();
         exactlyOnceVerifier.close();
 
-        atLeastOnceJob.cancel();
+//        atLeastOnceJob.cancel();
         exactlyOnceJob.cancel();
-        while (atLeastOnceJob.getStatus() != COMPLETED || exactlyOnceJob.getStatus() != COMPLETED) {
+        while (
+//                atLeastOnceJob.getStatus() != COMPLETED ||
+                        exactlyOnceJob.getStatus() != COMPLETED) {
             SECONDS.sleep(1);
         }
     }

@@ -18,11 +18,8 @@ package tests.eventjournal;
 
 import com.hazelcast.core.IMap;
 
-import java.util.concurrent.locks.LockSupport;
-
 public class EventJournalTradeProducer extends Thread {
 
-    private static final long PARK_NANOS = 1_000;
     private final int countPerTicker;
     private final IMap<Long, Long> map;
     private volatile boolean running = true;
@@ -40,7 +37,6 @@ public class EventJournalTradeProducer extends Thread {
     @Override
     public void run() {
         for (long i = 0; running; i++) {
-            LockSupport.parkNanos(PARK_NANOS);
             for (int j = 0; j < countPerTicker; j++) {
                 try {
                     map.set(i, i);

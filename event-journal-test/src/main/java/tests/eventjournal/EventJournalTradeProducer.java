@@ -18,9 +18,11 @@ package tests.eventjournal;
 
 import com.hazelcast.core.IMap;
 
+import java.util.concurrent.locks.LockSupport;
+
 public class EventJournalTradeProducer extends Thread {
 
-    private static final int SLEEPY_MILLIS = 1;
+    private static final long PARK_NANOS = 25_000;
     private final int countPerTicker;
     private final IMap<Long, Long> map;
     private volatile boolean running = true;
@@ -38,11 +40,7 @@ public class EventJournalTradeProducer extends Thread {
     @Override
     public void run() {
         for (long i = 0; running; i++) {
-            try {
-                Thread.sleep(SLEEPY_MILLIS);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
+            LockSupport.parkNanos(PARK_NANOS);
             for (int j = 0; j < countPerTicker; j++) {
                 try {
                     map.set(i, i);

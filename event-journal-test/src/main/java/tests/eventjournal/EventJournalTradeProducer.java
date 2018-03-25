@@ -22,7 +22,7 @@ import java.util.concurrent.locks.LockSupport;
 
 public class EventJournalTradeProducer extends Thread {
 
-    private static final long PARK_NANOS = 25_000;
+    private static final long PARK_NANOS = 1_000;
     private final int countPerTicker;
     private final IMap<Long, Long> map;
     private volatile boolean running = true;

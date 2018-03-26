@@ -20,6 +20,8 @@ import com.hazelcast.core.IMap;
 
 public class EventJournalTradeProducer extends Thread {
 
+    private static final long LOG_PER_TIMESTAMP = 100_000;
+
     private final int countPerTicker;
     private final IMap<Long, Long> map;
     private volatile boolean running = true;
@@ -36,6 +38,7 @@ public class EventJournalTradeProducer extends Thread {
 
     @Override
     public void run() {
+        long begin = System.currentTimeMillis();
         for (long i = 0; running; i++) {
             for (int j = 0; j < countPerTicker; j++) {
                 try {
@@ -43,6 +46,11 @@ public class EventJournalTradeProducer extends Thread {
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
+            }
+            if (i % LOG_PER_TIMESTAMP == 0) {
+                long elapsed = System.currentTimeMillis() - begin;
+                System.out.println("Total time elapsed: " + elapsed + ", timestamp: " + i);
+                System.out.println(i / countPerTicker / elapsed);
             }
         }
     }

@@ -20,7 +20,7 @@ import com.hazelcast.core.IMap;
 
 public class EventJournalTradeProducer extends Thread {
 
-    private static final long LOG_PER_TIMESTAMP = 100_000;
+    private static final long LOG_PER_TIMESTAMP = 1_000;
 
     private final int countPerTicker;
     private final IMap<Long, Long> map;

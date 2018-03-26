@@ -28,6 +28,7 @@ import com.hazelcast.jet.pipeline.Sink;
 import com.hazelcast.jet.pipeline.Sinks;
 import com.hazelcast.jet.server.JetBootstrap;
 import com.hazelcast.util.UuidUtil;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -136,8 +137,7 @@ public class LongRunningKafkaTest {
 
         Properties propsForResult = kafkaPropertiesForResults(brokerUri, offsetReset);
 
-        pipeline.drawFrom(KafkaSources.<String, Trade>kafka(kafkaProps, topic))
-                .map(Map.Entry::getValue)
+        pipeline.drawFrom(KafkaSources.kafka(kafkaProps, ConsumerRecord<String, Trade>::value, topic))
                 .addTimestamps(Trade::getTime, lagMs)
                 .window(sliding(windowSize, slideBy))
                 .groupingKey(Trade::getTicker)

@@ -27,6 +27,7 @@ import com.hazelcast.jet.kafka.KafkaSources;
 import com.hazelcast.jet.pipeline.Pipeline;
 import com.hazelcast.jet.server.JetBootstrap;
 import com.hazelcast.util.UuidUtil;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.serialization.LongDeserializer;
@@ -42,7 +43,6 @@ import tests.snapshot.SnapshotTradeProducer;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -131,9 +131,9 @@ public class SnapshotTest {
 //                                    r.value(), r.value() >= countPerTicker);
 //                            atLeastOnceVerifier.offer(r.key());
 //                        } else {
-                            assertEquals("EXACTLY_ONCE -> Unexpected count for " + r.key(),
-                                    countPerTicker, (long) r.value());
-                            exactlyOnceVerifier.offer(r.key());
+                        assertEquals("EXACTLY_ONCE -> Unexpected count for " + r.key(),
+                                countPerTicker, (long) r.value());
+                        exactlyOnceVerifier.offer(r.key());
 //                        }
                     }
             );
@@ -147,7 +147,7 @@ public class SnapshotTest {
         exactlyOnceJob.cancel();
         while (
 //                atLeastOnceJob.getStatus() != COMPLETED ||
-                        exactlyOnceJob.getStatus() != COMPLETED) {
+                exactlyOnceJob.getStatus() != COMPLETED) {
             SECONDS.sleep(1);
         }
     }
@@ -164,8 +164,7 @@ public class SnapshotTest {
         Properties propsForTrades = kafkaPropsForTrades(brokerUri, offsetReset);
         Properties propsForResult = kafkaPropsForResults(brokerUri, offsetReset);
 
-        pipeline.drawFrom(KafkaSources.<Long, Long>kafka(propsForTrades, topic))
-                .map(Map.Entry::getValue)
+        pipeline.drawFrom(KafkaSources.kafka(propsForTrades, ConsumerRecord<Long, Long>::value, topic))
                 .addTimestamps(t -> t, lagMs)
                 .window(sliding(windowSize, slideBy))
                 .groupingKey(wholeItem())

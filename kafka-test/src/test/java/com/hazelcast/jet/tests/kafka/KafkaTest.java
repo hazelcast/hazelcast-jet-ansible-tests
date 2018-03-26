@@ -22,6 +22,7 @@ import com.hazelcast.jet.pipeline.Pipeline;
 import com.hazelcast.jet.pipeline.Sinks;
 import com.hazelcast.jet.server.JetBootstrap;
 import com.hazelcast.util.UuidUtil;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.junit.After;
 import org.junit.Before;
@@ -127,8 +128,7 @@ public class KafkaTest {
     private Pipeline pipeline() {
         Pipeline pipeline = Pipeline.create();
 
-        pipeline.drawFrom(KafkaSources.<String, Trade>kafka(kafkaProps, topic))
-                .map(Entry::getValue)
+        pipeline.drawFrom(KafkaSources.kafka(kafkaProps, ConsumerRecord<String, Trade>::value, topic))
                 .addTimestamps(Trade::getTime, lagMs)
                 .window(sliding(windowSize, slideBy))
                 .groupingKey(Trade::getTicker)

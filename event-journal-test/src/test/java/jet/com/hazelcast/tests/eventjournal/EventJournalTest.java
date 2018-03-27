@@ -84,12 +84,12 @@ public class EventJournalTest implements Serializable {
         }
         mapName = System.getProperty("map", String.format("%s-%d", "event-journal", System.currentTimeMillis()));
         resultsMapName = mapName + "-results";
-        lagMs = Integer.parseInt(System.getProperty("lagMs", "2000"));
-        snapshotIntervalMs = Integer.parseInt(System.getProperty("snapshotIntervalMs", "500"));
+        lagMs = Integer.parseInt(System.getProperty("lagMs", "800"));
+        snapshotIntervalMs = Integer.parseInt(System.getProperty("snapshotIntervalMs", "5000"));
         windowSize = Integer.parseInt(System.getProperty("windowSize", "20"));
         slideBy = Integer.parseInt(System.getProperty("slideBy", "10"));
         countPerTicker = Integer.parseInt(System.getProperty("countPerTicker", "100"));
-        durationInMillis = MINUTES.toMillis(Integer.parseInt(System.getProperty("durationInMinutes", "15")));
+        durationInMillis = MINUTES.toMillis(Integer.parseInt(System.getProperty("durationInMinutes", "30")));
         jet = JetBootstrap.getInstance();
         tradeProducer = new EventJournalTradeProducer(countPerTicker, jet.getMap(mapName));
         partitionCount = jet.getHazelcastInstance().getPartitionService().getPartitions().size();

@@ -18,6 +18,8 @@ package tests.eventjournal;
 
 import com.hazelcast.core.IMap;
 
+import java.util.concurrent.TimeUnit;
+
 public class EventJournalTradeProducer extends Thread {
 
     private static final long LOG_PER_TIMESTAMP = 1_000;
@@ -49,8 +51,9 @@ public class EventJournalTradeProducer extends Thread {
             }
             if (i % LOG_PER_TIMESTAMP == 0) {
                 long elapsed = System.currentTimeMillis() - begin;
-                System.out.println("Total time elapsed: " + elapsed + ", timestamp: " + i);
-                System.out.println(i / countPerTicker / elapsed);
+                long elapsedSeconds = TimeUnit.MILLISECONDS.toSeconds(elapsed);
+                System.out.println("Total time elapsed: " + elapsedSeconds + ", timestamp: " + i);
+                System.out.println(i / elapsedSeconds);
             }
         }
     }

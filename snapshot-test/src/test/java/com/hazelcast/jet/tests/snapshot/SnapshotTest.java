@@ -48,6 +48,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import static com.hazelcast.jet.aggregate.AggregateOperations.counting;
+import static com.hazelcast.jet.config.ProcessingGuarantee.AT_LEAST_ONCE;
 import static com.hazelcast.jet.config.ProcessingGuarantee.EXACTLY_ONCE;
 import static com.hazelcast.jet.core.JobStatus.COMPLETED;
 import static com.hazelcast.jet.function.DistributedFunctions.wholeItem;
@@ -55,6 +56,7 @@ import static com.hazelcast.jet.pipeline.WindowDefinition.sliding;
 import static java.util.concurrent.TimeUnit.MINUTES;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 @RunWith(JUnit4.class)
 public class SnapshotTest {
@@ -104,21 +106,21 @@ public class SnapshotTest {
 
     @Test
     public void snapshotTest() throws Exception {
-//        String atLeastOnceTopic = resultsTopicName(AT_LEAST_ONCE);
+        String atLeastOnceTopic = resultsTopicName(AT_LEAST_ONCE);
         String exactlyOnceTopic = resultsTopicName(EXACTLY_ONCE);
 
-//        Job atLeastOnceJob = submitJob(AT_LEAST_ONCE);
+        Job atLeastOnceJob = submitJob(AT_LEAST_ONCE);
         Job exactlyOnceJob = submitJob(EXACTLY_ONCE);
 
         int windowCount = windowSize / slideBy;
-//        QueueVerifier atLeastOnceVerifier = new QueueVerifier(AT_LEAST_ONCE.name(), windowCount);
+        QueueVerifier atLeastOnceVerifier = new QueueVerifier(AT_LEAST_ONCE.name(), windowCount);
         QueueVerifier exactlyOnceVerifier = new QueueVerifier(EXACTLY_ONCE.name(), windowCount);
-//        atLeastOnceVerifier.start();
+        atLeastOnceVerifier.start();
         exactlyOnceVerifier.start();
 
         KafkaConsumer<Long, Long> consumer = new KafkaConsumer<>(kafkaPropsForResults(brokerUri, offsetReset));
         List<String> topicList = new ArrayList<>();
-//        topicList.add(atLeastOnceTopic);
+        topicList.add(atLeastOnceTopic);
         topicList.add(exactlyOnceTopic);
         consumer.subscribe(topicList);
 
@@ -126,28 +128,26 @@ public class SnapshotTest {
         while (System.currentTimeMillis() - begin < durationInMillis) {
             ConsumerRecords<Long, Long> records = consumer.poll(POLL_TIMEOUT);
             records.iterator().forEachRemaining(r -> {
-//                        if (r.topic().equals(atLeastOnceTopic)) {
-//                            assertTrue("AT_LEAST_ONCE -> Unexpected count for " + r.key() + ", count: " +
-//                                    r.value(), r.value() >= countPerTicker);
-//                            atLeastOnceVerifier.offer(r.key());
-//                        } else {
-                        assertEquals("EXACTLY_ONCE -> Unexpected count for " + r.key(),
-                                countPerTicker, (long) r.value());
-                        exactlyOnceVerifier.offer(r.key());
-//                        }
+                        if (r.topic().equals(atLeastOnceTopic)) {
+                            assertTrue("AT_LEAST_ONCE -> Unexpected count for " + r.key() + ", count: " +
+                                    r.value(), r.value() >= countPerTicker);
+                            atLeastOnceVerifier.offer(r.key());
+                        } else {
+                            assertEquals("EXACTLY_ONCE -> Unexpected count for " + r.key(),
+                                    countPerTicker, (long) r.value());
+                            exactlyOnceVerifier.offer(r.key());
+                        }
                     }
             );
         }
         System.out.println("Cancelling jobs..");
         consumer.close();
-//        atLeastOnceVerifier.close();
+        atLeastOnceVerifier.close();
         exactlyOnceVerifier.close();
 
-//        atLeastOnceJob.cancel();
+        atLeastOnceJob.cancel();
         exactlyOnceJob.cancel();
-        while (
-//                atLeastOnceJob.getStatus() != COMPLETED ||
-                exactlyOnceJob.getStatus() != COMPLETED) {
+        while (atLeastOnceJob.getStatus() != COMPLETED || exactlyOnceJob.getStatus() != COMPLETED) {
             SECONDS.sleep(1);
         }
     }

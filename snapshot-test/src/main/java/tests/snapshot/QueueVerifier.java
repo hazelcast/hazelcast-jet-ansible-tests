@@ -29,7 +29,9 @@ import static java.util.concurrent.TimeUnit.SECONDS;
  */
 public class QueueVerifier extends Thread {
 
-    private static final long TIMEOUT = 300_000;
+    private static final long TIMEOUT = 120_000;
+
+    private static final int WAIT_SLEEP = 5;
 
     private static final int INITIAL_QUEUE_SIZE = 10_000;
 
@@ -74,7 +76,7 @@ public class QueueVerifier extends Thread {
             if (next == null) {
                 //Queue is empty, sleep
                 System.out.println("Name: " + name + ", queue is empty");
-                sleepSeconds(2);
+                sleepSeconds(WAIT_SLEEP);
             } else if (next == key) {
                 //Happy path
                 queue.poll();
@@ -87,7 +89,6 @@ public class QueueVerifier extends Thread {
             } else if (next < key) {
                 //we have a duplicate
                 queue.poll();
-                System.out.println("Name: " + name + ", duplicate: " + next);
             } else if (lastCheck == -1) {
                 //mark last check for timeout
                 lastCheck = System.currentTimeMillis();
@@ -96,7 +97,7 @@ public class QueueVerifier extends Thread {
                 running = false;
             } else {
                 //sleep for timeout
-                sleepSeconds(2);
+                sleepSeconds(WAIT_SLEEP);
                 System.out.println("Name: " + name + ", key : " + key);
             }
         }

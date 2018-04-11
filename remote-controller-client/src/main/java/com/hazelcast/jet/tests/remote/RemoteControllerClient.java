@@ -46,14 +46,16 @@ public final class RemoteControllerClient {
 
     private static final int DEFAULT_PORT = 9701;
 
+    private static int logCounter;
+
     private RemoteControllerClient() {
     }
 
     public static void main(String[] args) throws Exception {
-        String isolatedClientConfig = System.getProperty("isolatedClientConfig");
-        if (isolatedClientConfig != null) {
-            System.setProperty("hazelcast.client.config", isolatedClientConfig);
-        }
+//
+        String jetHome = System.getProperty("jetHome");
+        System.setProperty("hazelcast.client.config", jetHome + "/config/hazelcast-client-isolated.xml");
+        String logDir = jetHome + "/logs";
         int initialSleep = parseInt(System.getProperty("initialSleepMinutes", "5"));
         int sleepBetweenRestart = parseInt(System.getProperty("sleepBetweenRestartMinutes", "5"));
         long duration = TimeUnit.MINUTES.toMillis(parseInt(System.getProperty("durationMinutes", "30")));
@@ -67,7 +69,7 @@ public final class RemoteControllerClient {
         long begin = System.currentTimeMillis();
         sleepMinutes(initialSleep);
         Iterables.cycle(members).forEach(m -> {
-            uncheckRun(() -> stop(m));
+            uncheckRun(() -> stop(m, logDir));
             uncheckRun(() -> sleepMinutes(sleepBetweenRestart));
             uncheckRun(() -> start(m));
             uncheckRun(() -> sleepMinutes(sleepBetweenRestart));
@@ -78,8 +80,14 @@ public final class RemoteControllerClient {
         });
     }
 
-    private static void stop(Member member) throws Exception {
+    private static void stop(Member member, String logDir) throws Exception {
         call(member.getAddress().getHost(), "sudo initctl stop hazelcast-jet-isolated");
+        call(member.getAddress().getHost(), "mv " + logDir + "/hazelcast-jet.log " +
+                logDir + "/hazelcast-jet-" + logCounter + ".log");
+        call(member.getAddress().getHost(), "mv " + logDir + "/hazelcast-jet.gc.log " +
+                logDir + "/hazelcast-jet.gc-" + logCounter + ".log");
+        logCounter++;
+
     }
 
     private static void start(Member member) throws Exception {

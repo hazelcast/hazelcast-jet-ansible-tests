@@ -16,25 +16,23 @@
 
 package jet.com.hazelcast.tests.eventjournal;
 
-import com.hazelcast.client.config.ClientConfig;
-import com.hazelcast.client.config.ClientUserCodeDeploymentConfig;
-import com.hazelcast.client.impl.HazelcastClientInstanceImpl;
 import com.hazelcast.client.proxy.ClientMapProxy;
 import com.hazelcast.config.Config;
 import com.hazelcast.config.EventJournalConfig;
-import com.hazelcast.config.GroupConfig;
+import com.hazelcast.core.EntryEventType;
 import com.hazelcast.core.MembershipAdapter;
 import com.hazelcast.core.MembershipEvent;
-import com.hazelcast.jet.Jet;
 import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.aggregate.AggregateOperations;
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.config.ProcessingGuarantee;
+import com.hazelcast.jet.core.JobStatus;
 import com.hazelcast.jet.pipeline.Pipeline;
 import com.hazelcast.jet.pipeline.Sinks;
 import com.hazelcast.jet.pipeline.Sources;
 import com.hazelcast.jet.server.JetBootstrap;
+import com.hazelcast.map.journal.EventJournalMapEvent;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -46,16 +44,20 @@ import tests.eventjournal.EventJournalTradeProducer;
 import tests.snapshot.QueueVerifier;
 
 import java.io.Serializable;
+import java.util.Objects;
 
-import static com.hazelcast.jet.Util.mapEventNewValue;
-import static com.hazelcast.jet.Util.mapPutEvents;
 import static com.hazelcast.jet.core.JobStatus.COMPLETED;
+import static com.hazelcast.jet.core.JobStatus.FAILED;
+import static com.hazelcast.jet.function.DistributedFunctions.alwaysFalse;
 import static com.hazelcast.jet.function.DistributedFunctions.wholeItem;
+import static com.hazelcast.jet.impl.util.Util.uncheckRun;
 import static com.hazelcast.jet.pipeline.JournalInitialPosition.START_FROM_OLDEST;
 import static com.hazelcast.jet.pipeline.WindowDefinition.sliding;
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.MINUTES;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
 
 @RunWith(JUnit4.class)
 public class EventJournalTest implements Serializable {
@@ -78,26 +80,30 @@ public class EventJournalTest implements Serializable {
 
     @Before
     public void setUp() {
+        System.setProperty("hazelcast.logging.type", "log4j");
         String isolatedClientConfig = System.getProperty("isolatedClientConfig");
         if (isolatedClientConfig != null) {
             System.setProperty("hazelcast.client.config", isolatedClientConfig);
         }
         mapName = System.getProperty("map", String.format("%s-%d", "event-journal", System.currentTimeMillis()));
         resultsMapName = mapName + "-results";
-        lagMs = Integer.parseInt(System.getProperty("lagMs", "800"));
+        lagMs = Integer.parseInt(System.getProperty("lagMs", "1500"));
+        int timestampPerSecond = Integer.parseInt(System.getProperty("timestampPerSecond", "50"));
         snapshotIntervalMs = Integer.parseInt(System.getProperty("snapshotIntervalMs", "5000"));
         windowSize = Integer.parseInt(System.getProperty("windowSize", "20"));
         slideBy = Integer.parseInt(System.getProperty("slideBy", "10"));
         countPerTicker = Integer.parseInt(System.getProperty("countPerTicker", "100"));
         durationInMillis = MINUTES.toMillis(Integer.parseInt(System.getProperty("durationInMinutes", "30")));
         jet = JetBootstrap.getInstance();
-        tradeProducer = new EventJournalTradeProducer(countPerTicker, jet.getMap(mapName));
+        tradeProducer = new EventJournalTradeProducer(countPerTicker, jet.getMap(mapName), timestampPerSecond);
         partitionCount = jet.getHazelcastInstance().getPartitionService().getPartitions().size();
         Config config = jet.getHazelcastInstance().getConfig();
-        EventJournalConfig eventJournalConfig = new EventJournalConfig()
-                .setMapName(mapName + "*").setEnabled(true).setCapacity(partitionCount * 200_000);
-        config.addEventJournalConfig(eventJournalConfig);
-        deployResources();
+        config.addEventJournalConfig(
+                new EventJournalConfig().setMapName(mapName).setCapacity(500_000)
+        );
+        config.addEventJournalConfig(
+                new EventJournalConfig().setMapName(resultsMapName).setCapacity(10_000)
+        );
 
     }
 
@@ -127,51 +133,40 @@ public class EventJournalTest implements Serializable {
             if (isEmpty) {
                 SECONDS.sleep(1);
             }
+            assertNotEquals(getJobStatus(job), FAILED);
         }
         System.out.println("Cancelling jobs..");
         queueVerifier.close();
         job.cancel();
-        while (job.getStatus() != COMPLETED) {
+        JobStatus status = getJobStatus(job);
+        while (status != COMPLETED && status != FAILED) {
             SECONDS.sleep(1);
+            status = getJobStatus(job);
         }
     }
 
     @After
     public void teardown() throws Exception {
-        tradeProducer.close();
-        jet.shutdown();
+        if (tradeProducer != null) {
+            tradeProducer.close();
+        }
+        if (jet != null) {
+            jet.shutdown();
+        }
     }
 
     private Pipeline pipeline() {
         Pipeline pipeline = Pipeline.create();
 
-        pipeline.drawFrom(Sources.<Long, Long, Long>mapJournal(mapName,
-                mapPutEvents(), mapEventNewValue(), START_FROM_OLDEST))
+        pipeline.drawFrom(Sources.<Long, Long, Long>mapJournal(mapName, e -> e.getType() == EntryEventType.ADDED,
+                EventJournalMapEvent::getNewValue, START_FROM_OLDEST))
                 .addTimestamps(t -> t, lagMs)
+                .peek(alwaysFalse(), Objects::toString)
                 .window(sliding(windowSize, slideBy))
                 .groupingKey(wholeItem())
                 .aggregate(AggregateOperations.counting())
                 .drainTo(Sinks.map(resultsMapName));
         return pipeline;
-    }
-
-    private void deployResources() {
-        HazelcastClientInstanceImpl instance = (HazelcastClientInstanceImpl) jet.getHazelcastInstance();
-        GroupConfig gc = instance.getClientConfig().getGroupConfig();
-
-
-        ClientConfig clientConfig = new ClientConfig();
-        GroupConfig groupConfig = clientConfig.getGroupConfig();
-        groupConfig.setName(gc.getName()).setPassword(gc.getPassword());
-        clientConfig.setNetworkConfig(instance.getClientConfig().getNetworkConfig());
-        ClientUserCodeDeploymentConfig userCodeDeploymentConfig = clientConfig.getUserCodeDeploymentConfig();
-        userCodeDeploymentConfig.setEnabled(true);
-        userCodeDeploymentConfig.addClass(EventJournalTest.class);
-        userCodeDeploymentConfig.addClass(EventJournalTradeProducer.class);
-        userCodeDeploymentConfig.addClass(EventJournalConsumer.class);
-        userCodeDeploymentConfig.addClass(QueueVerifier.class);
-        JetInstance client = Jet.newJetClient(clientConfig);
-        client.shutdown();
     }
 
     private void addMembershipListenerForRestart(Job job) {
@@ -181,6 +176,15 @@ public class EventJournalTest implements Serializable {
                 job.restart();
             }
         });
+    }
+
+    private static JobStatus getJobStatus(Job job) {
+        try {
+            return job.getStatus();
+        } catch (Exception e) {
+            uncheckRun(() -> MILLISECONDS.sleep(250));
+            return getJobStatus(job);
+        }
     }
 
 }

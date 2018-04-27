@@ -159,7 +159,7 @@ public class LongRunningKafkaSessionWindowTest {
 
     private Sink<Map.Entry<String, Long>> buildVerificationSink() {
         final int expectedCount = countPerTicker;
-        return Sinks.<Object, Map.Entry<String, Long>>builder(jet -> null)
+        return Sinks.<Object, Map.Entry<String, Long>>builder(ignored -> ignored)
                 .onReceiveFn((ignored, entry) ->
                         assertEquals("Unexpected count for " + entry.getKey(), expectedCount, (long) entry.getValue()))
                 .build();

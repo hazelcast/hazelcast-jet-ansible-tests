@@ -20,8 +20,6 @@ import com.hazelcast.client.proxy.ClientMapProxy;
 import com.hazelcast.config.Config;
 import com.hazelcast.config.EventJournalConfig;
 import com.hazelcast.core.EntryEventType;
-import com.hazelcast.core.MembershipAdapter;
-import com.hazelcast.core.MembershipEvent;
 import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.aggregate.AggregateOperations;
@@ -115,8 +113,6 @@ public class EventJournalTest implements Serializable {
         Job job = jet.newJob(pipeline(), jobConfig);
         tradeProducer.start();
 
-        addMembershipListenerForRestart(job);
-
         int windowCount = windowSize / slideBy;
         QueueVerifier queueVerifier = new QueueVerifier(resultsMapName, windowCount).startVerification();
 
@@ -167,15 +163,6 @@ public class EventJournalTest implements Serializable {
                 .aggregate(AggregateOperations.counting())
                 .drainTo(Sinks.map(resultsMapName));
         return pipeline;
-    }
-
-    private void addMembershipListenerForRestart(Job job) {
-        jet.getHazelcastInstance().getCluster().addMembershipListener(new MembershipAdapter() {
-            @Override
-            public void memberAdded(MembershipEvent membershipEvent) {
-                job.restart();
-            }
-        });
     }
 
     private static JobStatus getJobStatus(Job job) {

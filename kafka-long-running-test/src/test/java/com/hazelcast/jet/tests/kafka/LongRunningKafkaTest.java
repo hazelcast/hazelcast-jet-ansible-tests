@@ -50,8 +50,8 @@ import java.util.concurrent.Executors;
 
 import static com.hazelcast.jet.aggregate.AggregateOperations.counting;
 import static com.hazelcast.jet.core.JobStatus.COMPLETED;
-import static com.hazelcast.jet.core.JobStatus.FAILED;
-import static com.hazelcast.jet.core.JobStatus.RESTARTING;
+import static com.hazelcast.jet.core.JobStatus.RUNNING;
+import static com.hazelcast.jet.core.JobStatus.STARTING;
 import static com.hazelcast.jet.pipeline.WindowDefinition.sliding;
 import static java.util.concurrent.TimeUnit.MINUTES;
 import static java.util.concurrent.TimeUnit.SECONDS;
@@ -112,7 +112,7 @@ public class LongRunningKafkaTest {
         while (System.currentTimeMillis() - begin < durationInMillis) {
             MINUTES.sleep(1);
             JobStatus status = verificationJob.getStatus();
-            if (status == RESTARTING || status == FAILED || status == COMPLETED) {
+            if (status != STARTING && status != RUNNING) {
                 throw new AssertionError("Job is failed, jobStatus: " + status);
             }
         }
@@ -159,8 +159,8 @@ public class LongRunningKafkaTest {
 
     private Sink<Map.Entry<String, Long>> buildVerificationSink() {
         final int expectedCount = countPerTicker;
-        return Sinks.<Object, Map.Entry<String, Long>>builder(ignored -> ignored)
-                .onReceiveFn((ignored, entry) ->
+        return Sinks.builder("verification-sink", ignored -> ignored)
+                .<Map.Entry<String, Long>>receiveFn((ignored, entry) ->
                         assertEquals("Unexpected count for " + entry.getKey(), expectedCount, (long) entry.getValue()))
                 .build();
     }

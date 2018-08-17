@@ -56,6 +56,7 @@ public final class WordGenerator extends AbstractProcessor {
         this.path = path;
         this.distinct = distinct;
         this.total = total;
+        setCooperative(false);
     }
 
     @Override
@@ -76,11 +77,6 @@ public final class WordGenerator extends AbstractProcessor {
         } catch (IOException e) {
             throw ExceptionUtil.rethrow(e);
         }
-    }
-
-    @Override
-    public boolean isCooperative() {
-        return false;
     }
 
     private void writeToFile(OutputStreamWriter stream, long distinctWords, long numWords) throws IOException {

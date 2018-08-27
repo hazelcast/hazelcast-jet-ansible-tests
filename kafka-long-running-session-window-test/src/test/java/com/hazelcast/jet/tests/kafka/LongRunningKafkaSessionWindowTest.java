@@ -25,7 +25,7 @@ import com.hazelcast.jet.kafka.KafkaSinks;
 import com.hazelcast.jet.kafka.KafkaSources;
 import com.hazelcast.jet.pipeline.Pipeline;
 import com.hazelcast.jet.pipeline.Sink;
-import com.hazelcast.jet.pipeline.Sinks;
+import com.hazelcast.jet.pipeline.SinkBuilder;
 import com.hazelcast.jet.server.JetBootstrap;
 import com.hazelcast.util.UuidUtil;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -159,7 +159,7 @@ public class LongRunningKafkaSessionWindowTest {
 
     private Sink<Map.Entry<String, Long>> buildVerificationSink() {
         final int expectedCount = countPerTicker;
-        return Sinks.builder("verification-sink", ignored -> ignored)
+        return SinkBuilder.sinkBuilder("verification-sink", ignored -> ignored)
                 .<Map.Entry<String, Long>>receiveFn((ignored, entry) ->
                         assertEquals("Unexpected count for " + entry.getKey(), expectedCount, (long) entry.getValue()))
                 .build();

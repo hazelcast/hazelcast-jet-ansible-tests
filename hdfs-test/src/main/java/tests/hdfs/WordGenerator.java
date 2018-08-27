@@ -56,7 +56,11 @@ public final class WordGenerator extends AbstractProcessor {
         this.path = path;
         this.distinct = distinct;
         this.total = total;
-        setCooperative(false);
+    }
+
+    @Override
+    public boolean isCooperative() {
+        return false;
     }
 
     @Override

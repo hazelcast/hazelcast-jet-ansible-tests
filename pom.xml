@@ -17,7 +17,7 @@
         <module>snapshot-test</module>
         <module>remote-controller-client</module>
         <module>event-journal-test</module>
-        <module>rolling-aggregate</module>
+        <module>rolling-aggregate-test</module>
     </modules>
 
     <properties>

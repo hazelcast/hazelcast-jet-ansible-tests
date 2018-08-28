@@ -71,7 +71,7 @@ public class RollingAggregateTest {
         if (isolatedClientConfig != null) {
             System.setProperty("hazelcast.client.config", isolatedClientConfig);
         }
-        durationInMillis = MINUTES.toMillis(Integer.parseInt(System.getProperty("durationInMinutes", "5")));
+        durationInMillis = MINUTES.toMillis(Integer.parseInt(System.getProperty("durationInMinutes", "30")));
         snapshotIntervalMs = Integer.parseInt(System.getProperty("snapshotIntervalMs", "5000"));
         jet = JetBootstrap.getInstance();
         Config config = jet.getHazelcastInstance().getConfig();

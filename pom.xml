@@ -18,6 +18,9 @@
         <module>remote-controller-client</module>
         <module>event-journal-test</module>
         <module>rolling-aggregate-test</module>
+        <module>job-management-test</module>
+        <module>jms-test</module>
+        <module>jdbc-test</module>
     </modules>
 
     <properties>

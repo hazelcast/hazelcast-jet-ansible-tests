@@ -17,7 +17,6 @@
 package com.hazelcast.jet.tests.jdbc;
 
 import com.hazelcast.core.IQueue;
-import com.hazelcast.jet.Jet;
 import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.Util;
@@ -55,8 +54,9 @@ import static org.junit.Assert.assertNotEquals;
 @RunWith(JUnit4.class)
 public class JdbcTest {
 
+    private static final String DB_AND_USER = "/soak-test?user=root&password=soak-test";
     private static final String QUEUE_NAME = "queue";
-    private static final int PERSON_COUNT = 10_000;
+    private static final int PERSON_COUNT = 50_000;
 
 
     private JetInstance jet;
@@ -69,12 +69,8 @@ public class JdbcTest {
 
     @Before
     public void setup() throws SQLException {
-        Jet.newJetInstance();
-        Jet.newJetInstance();
-
-        connectionUrl = System.getProperty("connectionUrl",
-                "jdbc:mysql://localhost/soak-test?user=root&password=soak-test");
-        durationInMillis = MINUTES.toMillis(Integer.parseInt(System.getProperty("durationInMinutes", "1")));
+        connectionUrl = System.getProperty("connectionUrl", "jdbc:mysql://localhost") + DB_AND_USER;
+        durationInMillis = MINUTES.toMillis(Integer.parseInt(System.getProperty("durationInMinutes", "30")));
         jet = JetBootstrap.getInstance();
 
         createAndFillTable();
@@ -130,6 +126,8 @@ public class JdbcTest {
 
         assertTableCount(jobCounter * PERSON_COUNT);
 
+        streamJob.cancel();
+
     }
 
     private void assertTableCount(long expectedTableCount) throws SQLException, InterruptedException {
@@ -172,7 +170,7 @@ public class JdbcTest {
         private final IQueue<String> queue;
         private final int total;
 
-        private long counter ;
+        private long counter;
 
         QueueSource(Context context) {
             queue = context.jetInstance().getHazelcastInstance().getQueue(QUEUE_NAME);

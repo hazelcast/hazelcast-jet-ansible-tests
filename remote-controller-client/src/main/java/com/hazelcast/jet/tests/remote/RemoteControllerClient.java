@@ -60,6 +60,7 @@ public final class RemoteControllerClient {
         int initialSleep = parseInt(System.getProperty("initialSleepMinutes", "5"));
         int sleepBetweenRestart = parseInt(System.getProperty("sleepBetweenRestartMinutes", "5"));
         int durationInMinutes = parseInt(System.getProperty("durationInMinutes", "30")) - VERIFICATION_DURATION_GAP;
+        System.out.println("RemoteController will run for " + durationInMinutes);
 
         long duration = MINUTES.toMillis(durationInMinutes);
 

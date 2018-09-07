@@ -85,7 +85,7 @@ public class JdbcTest {
 
     @Test
     public void test() throws Exception {
-        JobConfig jobConfig = new JobConfig().addClass(JdbcTest.class);
+        JobConfig jobConfig = new JobConfig();
 
         Sink<String> sink = SinkBuilder
                 .sinkBuilder("queueSink", c -> c.jetInstance().getHazelcastInstance().getQueue(QUEUE_NAME))

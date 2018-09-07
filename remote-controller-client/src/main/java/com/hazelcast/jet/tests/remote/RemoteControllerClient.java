@@ -29,10 +29,10 @@ import org.apache.thrift.transport.TSocket;
 import org.apache.thrift.transport.TTransport;
 
 import java.util.Set;
-import java.util.concurrent.TimeUnit;
 
 import static com.hazelcast.jet.impl.util.Util.uncheckRun;
 import static java.lang.Integer.parseInt;
+import static java.util.concurrent.TimeUnit.MINUTES;
 
 /**
  * This class is used to connect to the HazelcastRemoteController
@@ -45,6 +45,7 @@ import static java.lang.Integer.parseInt;
 public final class RemoteControllerClient {
 
     private static final int DEFAULT_PORT = 9701;
+    private static final int VERIFICATION_DURATION_GAP = 15;
 
     private static int logCounter;
 
@@ -58,8 +59,9 @@ public final class RemoteControllerClient {
         String logDir = jetHome + "/logs";
         int initialSleep = parseInt(System.getProperty("initialSleepMinutes", "5"));
         int sleepBetweenRestart = parseInt(System.getProperty("sleepBetweenRestartMinutes", "5"));
-        long duration = TimeUnit.MINUTES.toMillis(parseInt(System.getProperty("durationMinutes", "30")));
+        int durationInMinutes = parseInt(System.getProperty("durationInMinutes", "30")) - VERIFICATION_DURATION_GAP;
 
+        long duration = MINUTES.toMillis(durationInMinutes);
 
         JetInstance jet = JetBootstrap.getInstance();
         HazelcastInstance instance = jet.getHazelcastInstance();
@@ -105,6 +107,6 @@ public final class RemoteControllerClient {
     }
 
     private static void sleepMinutes(int minutes) throws InterruptedException {
-        TimeUnit.MINUTES.sleep(minutes);
+        MINUTES.sleep(minutes);
     }
 }

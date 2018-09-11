@@ -163,11 +163,11 @@ public class SnapshotTest {
         Properties propsForResult = kafkaPropsForResults(brokerUri, offsetReset);
 
         pipeline.drawFrom(KafkaSources.kafka(propsForTrades, ConsumerRecord<Long, Long>::value, topic))
-                .addTimestamps(t -> t, lagMs)
+                .addTimestamps(t -> t, lagMs).setName("Read from Kafka(" + topic + ")")
                 .window(sliding(windowSize, slideBy))
                 .groupingKey(wholeItem())
-                .aggregate(counting())
-                .drainTo(KafkaSinks.kafka(propsForResult, resultTopic));
+                .aggregate(counting()).setName("Aggregate(count)")
+                .drainTo(KafkaSinks.kafka(propsForResult, resultTopic)).setName("Write to Kafka(" + resultTopic + ")");
         return pipeline;
     }
 
@@ -178,6 +178,7 @@ public class SnapshotTest {
     private Job submitJob(ProcessingGuarantee guarantee) {
         System.out.println(String.format("Executing %s test job..", guarantee.name()));
         JobConfig jobConfig = new JobConfig();
+        jobConfig.setName("SnapshotTest(" + guarantee.name() + ")");
         jobConfig.setSnapshotIntervalMillis(snapshotIntervalMs);
         jobConfig.setProcessingGuarantee(guarantee);
         String resultTopic = resultsTopicName(guarantee);

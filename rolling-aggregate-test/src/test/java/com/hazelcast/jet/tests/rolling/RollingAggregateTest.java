@@ -96,10 +96,12 @@ public class RollingAggregateTest {
         Pipeline p = Pipeline.create();
 
         p.drawFrom(Sources.<Long, Long, Long>mapJournal(SOURCE, mapPutEvents(), mapEventNewValue(), START_FROM_OLDEST))
-         .rollingAggregate(maxBy(comparing(val -> val)))
-         .drainTo(fromProcessor("sink", VerificationProcessor.supplier()));
+         .setName("Stream from map(" + SOURCE + ")")
+         .rollingAggregate(maxBy(comparing(val -> val))).setName("RollingAggregate(max)")
+         .drainTo(fromProcessor("VerificationSink", VerificationProcessor.supplier()));
 
         JobConfig jobConfig = new JobConfig()
+                .setName("RollingAggregateTest")
                 .addClass(RollingAggregateTest.class)
                 .addClass(VerificationProcessor.class)
                 .setSnapshotIntervalMillis(snapshotIntervalMs)

@@ -93,21 +93,21 @@ public class EventJournalTest implements Serializable {
         countPerTicker = Integer.parseInt(System.getProperty("countPerTicker", "100"));
         durationInMillis = MINUTES.toMillis(Integer.parseInt(System.getProperty("durationInMinutes", "30")));
         jet = JetBootstrap.getInstance();
-        tradeProducer = new EventJournalTradeProducer(countPerTicker, jet.getMap(mapName), timestampPerSecond);
         partitionCount = jet.getHazelcastInstance().getPartitionService().getPartitions().size();
         Config config = jet.getHazelcastInstance().getConfig();
         config.addEventJournalConfig(
-                new EventJournalConfig().setMapName(mapName).setCapacity(500_000)
+                new EventJournalConfig().setMapName(mapName).setCapacity(1_000_000)
         );
         config.addEventJournalConfig(
-                new EventJournalConfig().setMapName(resultsMapName).setCapacity(10_000)
+                new EventJournalConfig().setMapName(resultsMapName).setCapacity(20_000)
         );
-
+        tradeProducer = new EventJournalTradeProducer(countPerTicker, jet.getMap(mapName), timestampPerSecond);
     }
 
     @Test
     public void eventJournalTest() throws Exception {
         JobConfig jobConfig = new JobConfig();
+        jobConfig.setName("EventJournalTest");
         jobConfig.setSnapshotIntervalMillis(snapshotIntervalMs);
         jobConfig.setProcessingGuarantee(ProcessingGuarantee.EXACTLY_ONCE);
         Job job = jet.newJob(pipeline(), jobConfig);
@@ -156,12 +156,12 @@ public class EventJournalTest implements Serializable {
 
         pipeline.drawFrom(Sources.<Long, Long, Long>mapJournal(mapName, e -> e.getType() == EntryEventType.ADDED,
                 EventJournalMapEvent::getNewValue, START_FROM_OLDEST))
-                .addTimestamps(t -> t, lagMs)
-                .peek(alwaysFalse(), Objects::toString)
+                .addTimestamps(t -> t, lagMs).setName("Read from map(" + mapName + ")")
+                .peek(alwaysFalse(), Objects::toString).setName("Peek")
                 .window(sliding(windowSize, slideBy))
                 .groupingKey(wholeItem())
-                .aggregate(AggregateOperations.counting())
-                .drainTo(Sinks.map(resultsMapName));
+                .aggregate(AggregateOperations.counting()).setName("Aggregate(count)")
+                .drainTo(Sinks.map(resultsMapName)).setName("Write to map(" + resultsMapName + ")");
         return pipeline;
     }
 

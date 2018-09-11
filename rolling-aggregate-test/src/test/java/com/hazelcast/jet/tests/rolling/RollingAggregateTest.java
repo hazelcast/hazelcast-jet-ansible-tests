@@ -73,12 +73,12 @@ public class RollingAggregateTest {
         durationInMillis = MINUTES.toMillis(Integer.parseInt(System.getProperty("durationInMinutes", "30")));
         snapshotIntervalMs = Integer.parseInt(System.getProperty("snapshotIntervalMs", "5000"));
         jet = JetBootstrap.getInstance();
-        producer = new Producer(jet.getMap(SOURCE));
-        producer.start();
         Config config = jet.getHazelcastInstance().getConfig();
         config.addEventJournalConfig(
                 new EventJournalConfig().setMapName(SOURCE).setCapacity(500_000)
         );
+        producer = new Producer(jet.getMap(SOURCE));
+        producer.start();
     }
 
     @After

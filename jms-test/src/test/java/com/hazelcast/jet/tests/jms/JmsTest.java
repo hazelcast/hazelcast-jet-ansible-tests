@@ -104,7 +104,7 @@ public class JmsTest {
         while (System.currentTimeMillis() - begin < durationInMillis) {
             assertNotEquals(FAILED, job1.getStatus());
             assertNotEquals(FAILED, job2.getStatus());
-            SECONDS.sleep(1);
+            SECONDS.sleep(30);
         }
 
         long expectedTotalCount = producer.stop();

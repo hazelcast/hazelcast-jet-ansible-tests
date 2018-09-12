@@ -76,7 +76,7 @@ public class HdfsWordCountTest {
     private long total;
     private int threadCount;
     private long durationInMillis;
-    private Throwable error;
+    private volatile Throwable error;
 
     public static void main(String[] args) {
         JUnitCore.main(HdfsWordCountTest.class.getName());
@@ -91,7 +91,7 @@ public class HdfsWordCountTest {
         outputPath = System.getProperty("hdfs_output_path", "hdfs-output-") + timestamp;
         distinct = parseLong(System.getProperty("hdfs_distinct", "1000000"));
         total = parseLong(System.getProperty("hdfs_total", "10000000"));
-        threadCount = parseInt(System.getProperty("hdfs_thread_count", "4"));
+        threadCount = parseInt(System.getProperty("hdfs_thread_count", "2"));
         durationInMillis = MINUTES.toMillis(parseLong(System.getProperty("hdfs_duration_minutes", "30")));
 
         Pipeline pipeline = Pipeline.create();

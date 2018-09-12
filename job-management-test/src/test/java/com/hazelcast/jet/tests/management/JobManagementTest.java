@@ -37,6 +37,8 @@ import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import tests.management.VerificationProcessor;
 
+import java.util.concurrent.locks.LockSupport;
+
 import static com.hazelcast.jet.Util.mapEventNewValue;
 import static com.hazelcast.jet.Util.mapPutEvents;
 import static com.hazelcast.jet.core.JobStatus.COMPLETED;
@@ -44,7 +46,6 @@ import static com.hazelcast.jet.core.JobStatus.FAILED;
 import static com.hazelcast.jet.core.JobStatus.RUNNING;
 import static com.hazelcast.jet.core.JobStatus.SUSPENDED;
 import static com.hazelcast.jet.pipeline.JournalInitialPosition.START_FROM_OLDEST;
-import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.MINUTES;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.Assert.assertNotEquals;
@@ -69,12 +70,12 @@ public class JobManagementTest {
         durationInMillis = MINUTES.toMillis(Integer.parseInt(System.getProperty("durationInMinutes", "30")));
         snapshotIntervalMs = Integer.parseInt(System.getProperty("snapshotIntervalMs", "5000"));
         jet = JetBootstrap.getInstance();
-        producer = new Producer(jet.getMap(SOURCE));
-        producer.start();
         Config config = jet.getHazelcastInstance().getConfig();
         config.addEventJournalConfig(
                 new EventJournalConfig().setMapName(SOURCE).setCapacity(500_000)
         );
+        producer = new Producer(jet.getMap(SOURCE));
+        producer.start();
     }
 
     @After
@@ -137,7 +138,7 @@ public class JobManagementTest {
             if (currentStatus.equals(expectedStatus)) {
                 return;
             }
-            MILLISECONDS.sleep(500);
+            sleepSeconds(1);
         }
     }
 
@@ -164,6 +165,7 @@ public class JobManagementTest {
                 if (counter % 10000 == 0) {
                     map.clear();
                 }
+                LockSupport.parkNanos(100_000);
             }
         }
 

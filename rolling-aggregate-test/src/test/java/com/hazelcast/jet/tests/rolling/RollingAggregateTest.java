@@ -34,6 +34,8 @@ import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import tests.rolling.VerificationProcessor;
 
+import java.util.concurrent.locks.LockSupport;
+
 import static com.hazelcast.jet.Util.mapEventNewValue;
 import static com.hazelcast.jet.Util.mapPutEvents;
 import static com.hazelcast.jet.aggregate.AggregateOperations.maxBy;
@@ -41,10 +43,8 @@ import static com.hazelcast.jet.config.ProcessingGuarantee.EXACTLY_ONCE;
 import static com.hazelcast.jet.core.JobStatus.COMPLETED;
 import static com.hazelcast.jet.core.JobStatus.FAILED;
 import static com.hazelcast.jet.function.DistributedComparator.comparing;
-import static com.hazelcast.jet.impl.util.Util.uncheckRun;
 import static com.hazelcast.jet.pipeline.JournalInitialPosition.START_FROM_OLDEST;
 import static com.hazelcast.jet.pipeline.Sinks.fromProcessor;
-import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.MINUTES;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.Assert.assertNotEquals;
@@ -112,7 +112,7 @@ public class RollingAggregateTest {
         long begin = System.currentTimeMillis();
         while (System.currentTimeMillis() - begin < durationInMillis) {
             assertNotEquals(getJobStatus(job), FAILED);
-            SECONDS.sleep(5);
+            SECONDS.sleep(30);
         }
 
         job.cancel();
@@ -126,9 +126,8 @@ public class RollingAggregateTest {
     private static JobStatus getJobStatus(Job job) {
         try {
             return job.getStatus();
-        } catch (Exception e) {
-            uncheckRun(() -> MILLISECONDS.sleep(250));
-            return getJobStatus(job);
+        } catch (Exception ignored) {
+            return null;
         }
     }
 
@@ -151,6 +150,7 @@ public class RollingAggregateTest {
                 if (counter % 10000 == 0) {
                     map.clear();
                 }
+                LockSupport.parkNanos(100_000);
             }
         }
 

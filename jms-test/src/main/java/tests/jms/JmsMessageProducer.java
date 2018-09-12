@@ -28,7 +28,7 @@ import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
 public class JmsMessageProducer {
 
-    private static final int SLEEP_MILLIS = 20;
+    private static final int SLEEP_MILLIS = 40;
 
     private final Thread producerThread;
     private final String brokerURL;

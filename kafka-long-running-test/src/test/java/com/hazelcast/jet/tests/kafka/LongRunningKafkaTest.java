@@ -101,12 +101,14 @@ public class LongRunningKafkaTest {
     public void kafkaTest() throws InterruptedException {
         System.out.println("Executing test job..");
         JobConfig jobConfig = new JobConfig();
+        jobConfig.setName("Kafka WordCount Test");
         jobConfig.setSnapshotIntervalMillis(5000);
         jobConfig.setProcessingGuarantee(ProcessingGuarantee.AT_LEAST_ONCE);
         Job testJob = jet.newJob(pipeline(), jobConfig);
 
         System.out.println("Executing verification job..");
-        Job verificationJob = jet.newJob(verificationPipeline());
+        JobConfig verificationJobConfig = new JobConfig().setName("Kafka WordCount Test Verification");
+        Job verificationJob = jet.newJob(verificationPipeline(), verificationJobConfig);
 
         long begin = System.currentTimeMillis();
         while (System.currentTimeMillis() - begin < durationInMillis) {

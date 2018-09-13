@@ -76,7 +76,6 @@ public class JmsTest {
 
     @Test
     public void test() throws Exception {
-        JobConfig jobConfig = new JobConfig().addClass(JmsTest.class);
         String localBrokerUrl = brokerURL;
 
         Pipeline p1 = Pipeline.create();
@@ -87,11 +86,11 @@ public class JmsTest {
         p2.drawFrom(Sources.jmsQueue(() -> new ActiveMQConnectionFactory(localBrokerUrl), MIDDLE_QUEUE))
           .drainTo(Sinks.jmsQueue(() -> new ActiveMQConnectionFactory(localBrokerUrl), SINK_QUEUE));
 
-        Job job1 = jet.newJob(p1, jobConfig);
+        Job job1 = jet.newJob(p1, new JobConfig().setName("JMS Test source to middle queue"));
         waitForJobStatus(job1, RUNNING);
         System.out.println("job1 started");
 
-        Job job2 = jet.newJob(p2, jobConfig);
+        Job job2 = jet.newJob(p2, new JobConfig().setName("JMS Test middle to sink queue"));
         waitForJobStatus(job2, RUNNING);
         System.out.println("job2 started");
 

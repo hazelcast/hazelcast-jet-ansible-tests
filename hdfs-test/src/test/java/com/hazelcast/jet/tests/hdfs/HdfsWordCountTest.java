@@ -139,8 +139,7 @@ public class HdfsWordCountTest {
 
     private void executeJob(int threadIndex) {
         JobConfig jobConfig = new JobConfig();
-        jobConfig.addClass(HdfsWordCountTest.class);
-
+        jobConfig.setName("Hdfs WordCount Test [" + threadIndex + "]");
         jet.newJob(pipeline(threadIndex), jobConfig).join();
     }
 

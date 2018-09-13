@@ -85,8 +85,6 @@ public class JdbcTest {
 
     @Test
     public void test() throws Exception {
-        JobConfig jobConfig = new JobConfig();
-
         Sink<String> sink = SinkBuilder
                 .sinkBuilder("queueSink", c -> c.jetInstance().getHazelcastInstance().getQueue(QUEUE_NAME))
                 .<String>receiveFn(IQueue::offer)
@@ -114,12 +112,12 @@ public class JdbcTest {
                 resultSet -> resultSet.getString(2)))
           .drainTo(sink);
 
-        Job streamJob = jet.newJob(p1, jobConfig);
+        Job streamJob = jet.newJob(p1, new JobConfig().setName("JDBC Test stream queue to table"));
 
         int jobCounter = 0;
         long begin = System.currentTimeMillis();
         while (System.currentTimeMillis() - begin < durationInMillis) {
-            jet.newJob(p2, jobConfig).join();
+            jet.newJob(p2, new JobConfig().setName("JDBC Test read table to queue [" + jobCounter + "]")).join();
             assertNotEquals(FAILED, streamJob.getStatus());
             jobCounter++;
         }

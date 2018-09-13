@@ -18,6 +18,7 @@ package com.hazelcast.jet.tests.kafka;
 
 import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.Job;
+import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.core.JobStatus;
 import com.hazelcast.jet.kafka.KafkaSources;
 import com.hazelcast.jet.pipeline.Pipeline;
@@ -90,7 +91,7 @@ public class KafkaTest {
     @Test
     public void kafkaTest() throws InterruptedException {
         System.out.println("Executing job..");
-        Job job = jet.newJob(pipeline());
+        Job job = jet.newJob(pipeline(), new JobConfig().setName("Kafka Short Word Count Test"));
 
         Thread.sleep(MINUTES.toMillis(1));
         System.out.println("Cancelling job...");

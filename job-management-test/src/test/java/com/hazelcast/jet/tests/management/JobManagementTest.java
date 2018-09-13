@@ -97,8 +97,7 @@ public class JobManagementTest {
          .drainTo(Sinks.fromProcessor("sink", VerificationProcessor.supplier()));
 
         JobConfig jobConfig = new JobConfig()
-                .addClass(JobManagementTest.class)
-                .addClass(VerificationProcessor.class)
+                .setName("JobManagementTest")
                 .setProcessingGuarantee(ProcessingGuarantee.EXACTLY_ONCE)
                 .setSnapshotIntervalMillis(snapshotIntervalMs)
                 .setAutoScaling(false);

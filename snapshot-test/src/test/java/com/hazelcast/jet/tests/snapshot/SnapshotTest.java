@@ -156,17 +156,18 @@ public class SnapshotTest {
         producerExecutorService.shutdown();
     }
 
-    private Pipeline pipeline(String resultTopic) {
+    private Pipeline pipeline(ProcessingGuarantee guarantee) {
+        String resultTopic = resultsTopicName(guarantee);
         Pipeline pipeline = Pipeline.create();
 
         Properties propsForTrades = kafkaPropsForTrades(brokerUri, offsetReset);
         Properties propsForResult = kafkaPropsForResults(brokerUri, offsetReset);
 
         pipeline.drawFrom(KafkaSources.kafka(propsForTrades, ConsumerRecord<Long, Long>::value, topic))
-                .addTimestamps(t -> t, lagMs).setName("Read from Kafka(" + topic + ")")
+                .addTimestamps(t -> t, lagMs).setName("Read from Kafka(" + topic + "-" + guarantee + ")")
                 .window(sliding(windowSize, slideBy))
                 .groupingKey(wholeItem())
-                .aggregate(counting()).setName("Aggregate(count)")
+                .aggregate(counting()).setName("Aggregate(count)-" + guarantee)
                 .drainTo(KafkaSinks.kafka(propsForResult, resultTopic)).setName("Write to Kafka(" + resultTopic + ")");
         return pipeline;
     }
@@ -181,8 +182,8 @@ public class SnapshotTest {
         jobConfig.setName("SnapshotTest(" + guarantee.name() + ")");
         jobConfig.setSnapshotIntervalMillis(snapshotIntervalMs);
         jobConfig.setProcessingGuarantee(guarantee);
-        String resultTopic = resultsTopicName(guarantee);
-        return jet.newJob(pipeline(resultTopic), jobConfig);
+
+        return jet.newJob(pipeline(guarantee), jobConfig);
     }
 
     private static Properties kafkaPropsForTrades(String brokerUrl, String offsetReset) {

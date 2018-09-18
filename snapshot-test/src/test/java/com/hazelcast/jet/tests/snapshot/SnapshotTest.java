@@ -24,6 +24,8 @@ import com.hazelcast.jet.kafka.KafkaSinks;
 import com.hazelcast.jet.kafka.KafkaSources;
 import com.hazelcast.jet.pipeline.Pipeline;
 import com.hazelcast.jet.server.JetBootstrap;
+import com.hazelcast.logging.ILogger;
+import com.hazelcast.logging.LoggingService;
 import com.hazelcast.util.UuidUtil;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -71,7 +73,9 @@ public class SnapshotTest {
     private int lagMs;
     private int windowSize;
     private int slideBy;
+    private int jobCount;
     private ExecutorService producerExecutorService;
+    private ILogger logger;
 
     public static void main(String[] args) {
         JUnitCore.main(SnapshotTest.class.getName());
@@ -85,15 +89,17 @@ public class SnapshotTest {
         }
         producerExecutorService = Executors.newSingleThreadExecutor();
         brokerUri = System.getProperty("brokerUri", "localhost:9092");
-        topic = System.getProperty("topic", String.format("%s-%d", "snapshot", System.currentTimeMillis()));
+        topic = System.getProperty("topic", "snapshot");
         offsetReset = System.getProperty("offsetReset", "earliest");
         lagMs = Integer.parseInt(System.getProperty("lagMs", "3000"));
         snapshotIntervalMs = Integer.parseInt(System.getProperty("snapshotIntervalMs", "1000"));
         windowSize = Integer.parseInt(System.getProperty("windowSize", "20"));
         slideBy = Integer.parseInt(System.getProperty("slideBy", "10"));
+        jobCount = Integer.parseInt(System.getProperty("jobCount", "2"));
         countPerTicker = Integer.parseInt(System.getProperty("countPerTicker", "1000"));
-        durationInMillis = MINUTES.toMillis(Integer.parseInt(System.getProperty("durationInMinutes", "10")));
+        durationInMillis = MINUTES.toMillis(Integer.parseInt(System.getProperty("durationInMinutes", "5")));
         jet = JetBootstrap.getInstance();
+        logger = jet.getHazelcastInstance().getLoggingService().getLogger(SnapshotTest.class);
 
         producerExecutorService.submit(() -> {
             try (SnapshotTradeProducer tradeProducer = new SnapshotTradeProducer(brokerUri)) {
@@ -104,49 +110,57 @@ public class SnapshotTest {
 
     @Test
     public void snapshotTest() throws Exception {
-        String atLeastOnceTopic = resultsTopicName(AT_LEAST_ONCE);
-        String exactlyOnceTopic = resultsTopicName(EXACTLY_ONCE);
-
-        Job atLeastOnceJob = submitJob(AT_LEAST_ONCE);
-        Job exactlyOnceJob = submitJob(EXACTLY_ONCE);
+        logger.info("SnapshotTest jobCount: " + jobCount);
+        Job[] atLeastOnceJob = submitJobs(AT_LEAST_ONCE);
+        Job[] exactlyOnceJob = submitJobs(EXACTLY_ONCE);
 
         int windowCount = windowSize / slideBy;
-        QueueVerifier atLeastOnceVerifier = new QueueVerifier(AT_LEAST_ONCE.name(), windowCount);
-        QueueVerifier exactlyOnceVerifier = new QueueVerifier(EXACTLY_ONCE.name(), windowCount);
+        LoggingService loggingService = jet.getHazelcastInstance().getLoggingService();
+        QueueVerifier atLeastOnceVerifier = new QueueVerifier(loggingService,
+                "Verifier[" + AT_LEAST_ONCE + "]", windowCount * jobCount);
+        QueueVerifier exactlyOnceVerifier = new QueueVerifier(loggingService,
+                "Verifier[" + EXACTLY_ONCE + "]", windowCount * jobCount);
         atLeastOnceVerifier.start();
         exactlyOnceVerifier.start();
 
         KafkaConsumer<Long, Long> consumer = new KafkaConsumer<>(kafkaPropsForResults(brokerUri, offsetReset));
         List<String> topicList = new ArrayList<>();
-        topicList.add(atLeastOnceTopic);
-        topicList.add(exactlyOnceTopic);
+        for (int i = 0; i < jobCount; i++) {
+            topicList.add(resultsTopicName(AT_LEAST_ONCE, i));
+            topicList.add(resultsTopicName(EXACTLY_ONCE, i));
+        }
         consumer.subscribe(topicList);
 
-        long begin = System.currentTimeMillis();
-        while (System.currentTimeMillis() - begin < durationInMillis) {
-            ConsumerRecords<Long, Long> records = consumer.poll(POLL_TIMEOUT);
-            records.iterator().forEachRemaining(r -> {
-                        if (r.topic().equals(atLeastOnceTopic)) {
-                            assertTrue("AT_LEAST_ONCE -> Unexpected count for " + r.key() + ", count: " +
-                                    r.value(), r.value() >= countPerTicker);
-                            atLeastOnceVerifier.offer(r.key());
-                        } else {
-                            assertEquals("EXACTLY_ONCE -> Unexpected count for " + r.key(),
-                                    countPerTicker, (long) r.value());
-                            exactlyOnceVerifier.offer(r.key());
+        try {
+            long begin = System.currentTimeMillis();
+            while (System.currentTimeMillis() - begin < durationInMillis) {
+                ConsumerRecords<Long, Long> records = consumer.poll(POLL_TIMEOUT);
+                records.iterator().forEachRemaining(r -> {
+                            String topic = r.topic();
+                            if (topic.contains(AT_LEAST_ONCE.name())) {
+                                assertTrue(topic + " -> Unexpected count for " + r.key() + ", count: " +
+                                        r.value(), r.value() >= countPerTicker);
+                                atLeastOnceVerifier.offer(r.key());
+                            } else {
+                                assertEquals(topic + " -> Unexpected count for " + r.key(),
+                                        countPerTicker, (long) r.value());
+                                exactlyOnceVerifier.offer(r.key());
+                            }
                         }
-                    }
-            );
-        }
-        System.out.println("Cancelling jobs..");
-        consumer.close();
-        atLeastOnceVerifier.close();
-        exactlyOnceVerifier.close();
+                );
+            }
+        } finally {
+            logger.info("Cancelling jobs...");
+            consumer.close();
+            atLeastOnceVerifier.close();
+            exactlyOnceVerifier.close();
 
-        atLeastOnceJob.cancel();
-        exactlyOnceJob.cancel();
-        while (atLeastOnceJob.getStatus() != COMPLETED || exactlyOnceJob.getStatus() != COMPLETED) {
-            SECONDS.sleep(1);
+            for (Job job : atLeastOnceJob) {
+                closeJob(job);
+            }
+            for (Job job : exactlyOnceJob) {
+                closeJob(job);
+            }
         }
     }
 
@@ -156,34 +170,51 @@ public class SnapshotTest {
         producerExecutorService.shutdown();
     }
 
-    private Pipeline pipeline(ProcessingGuarantee guarantee) {
-        String resultTopic = resultsTopicName(guarantee);
+    private void closeJob(Job job) throws InterruptedException {
+        try {
+            job.cancel();
+            while (job.getStatus() != COMPLETED) {
+                SECONDS.sleep(1);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private Pipeline pipeline(ProcessingGuarantee guarantee, int jobIndex) {
+        String resultTopic = resultsTopicName(guarantee, jobIndex);
         Pipeline pipeline = Pipeline.create();
 
         Properties propsForTrades = kafkaPropsForTrades(brokerUri, offsetReset);
         Properties propsForResult = kafkaPropsForResults(brokerUri, offsetReset);
 
         pipeline.drawFrom(KafkaSources.kafka(propsForTrades, ConsumerRecord<Long, Long>::value, topic))
-                .addTimestamps(t -> t, lagMs).setName("Read from Kafka(" + topic + "-" + guarantee + ")")
+                .addTimestamps(t -> t, lagMs)
+                .setName(String.format("ReadKafka(%s-%s-%d)", topic, guarantee, jobIndex))
                 .window(sliding(windowSize, slideBy))
                 .groupingKey(wholeItem())
-                .aggregate(counting()).setName("Aggregate(count)-" + guarantee)
-                .drainTo(KafkaSinks.kafka(propsForResult, resultTopic)).setName("Write to Kafka(" + resultTopic + ")");
+                .aggregate(counting()).setName(String.format("AggregateCount(%s-%s-%d)", topic, guarantee, jobIndex))
+                .drainTo(KafkaSinks.kafka(propsForResult, resultTopic))
+                .setName(String.format("WriteKafka(%s)", resultTopic));
         return pipeline;
     }
 
-    private String resultsTopicName(ProcessingGuarantee guarantee) {
-        return topic + "-results-" + guarantee.name();
+    private String resultsTopicName(ProcessingGuarantee guarantee, int jobIndex) {
+        return topic + "-results-" + guarantee.name() + "-" + jobIndex;
     }
 
-    private Job submitJob(ProcessingGuarantee guarantee) {
-        System.out.println(String.format("Executing %s test job..", guarantee.name()));
-        JobConfig jobConfig = new JobConfig();
-        jobConfig.setName("SnapshotTest(" + guarantee.name() + ")");
-        jobConfig.setSnapshotIntervalMillis(snapshotIntervalMs);
-        jobConfig.setProcessingGuarantee(guarantee);
+    private Job[] submitJobs(ProcessingGuarantee guarantee) {
+        Job[] jobs = new Job[jobCount];
+        for (int i = 0; i < jobCount; i++) {
+            System.out.println(String.format("Executing %s test[%d] job..", guarantee.name(), i));
+            JobConfig jobConfig = new JobConfig();
+            jobConfig.setName(String.format("SnapshotTest(%s[%d])", guarantee.name(), i));
+            jobConfig.setSnapshotIntervalMillis(snapshotIntervalMs);
+            jobConfig.setProcessingGuarantee(guarantee);
 
-        return jet.newJob(pipeline(guarantee), jobConfig);
+            jobs[i]  = jet.newJob(pipeline(guarantee, i), jobConfig);
+        }
+        return jobs;
     }
 
     private static Properties kafkaPropsForTrades(String brokerUrl, String offsetReset) {

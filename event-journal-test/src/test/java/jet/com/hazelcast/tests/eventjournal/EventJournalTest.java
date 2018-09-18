@@ -30,6 +30,7 @@ import com.hazelcast.jet.pipeline.Pipeline;
 import com.hazelcast.jet.pipeline.Sinks;
 import com.hazelcast.jet.pipeline.Sources;
 import com.hazelcast.jet.server.JetBootstrap;
+import com.hazelcast.logging.LoggingService;
 import com.hazelcast.map.journal.EventJournalMapEvent;
 import org.junit.After;
 import org.junit.Before;
@@ -114,7 +115,9 @@ public class EventJournalTest implements Serializable {
         tradeProducer.start();
 
         int windowCount = windowSize / slideBy;
-        QueueVerifier queueVerifier = new QueueVerifier(resultsMapName, windowCount).startVerification();
+        LoggingService loggingService = jet.getHazelcastInstance().getLoggingService();
+        QueueVerifier queueVerifier = new QueueVerifier(loggingService,
+                "Verifier[" + resultsMapName + "]", windowCount).startVerification();
 
         ClientMapProxy<Long, Long> resultMap = (ClientMapProxy) jet.getHazelcastInstance().getMap(resultsMapName);
         EventJournalConsumer<Long, Long> consumer = new EventJournalConsumer<>(resultMap, partitionCount);

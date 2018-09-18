@@ -16,6 +16,9 @@
 
 package tests.snapshot;
 
+import com.hazelcast.logging.ILogger;
+import com.hazelcast.logging.LoggingService;
+
 import java.util.concurrent.PriorityBlockingQueue;
 
 import static com.hazelcast.jet.impl.util.Util.uncheckRun;
@@ -35,21 +38,19 @@ public class QueueVerifier extends Thread {
 
     private static final int INITIAL_QUEUE_SIZE = 10_000;
 
+    private final ILogger logger;
     private final PriorityBlockingQueue<Long> queue;
-
     private final int totalWindowCount;
-
     private final String name;
 
     private int windowCount;
-
     private long key;
-
     private long lastCheck = -1;
 
     private volatile boolean running = true;
 
-    public QueueVerifier(String name, int windowCount) {
+    public QueueVerifier(LoggingService loggingService, String name, int windowCount) {
+        this.logger = loggingService.getLogger(name);
         this.queue = new PriorityBlockingQueue<>(INITIAL_QUEUE_SIZE);
         this.name = name;
         this.totalWindowCount = windowCount;
@@ -58,7 +59,7 @@ public class QueueVerifier extends Thread {
 
     public void offer(long item) {
         if (!running) {
-            throw new AssertionError("Verification for " + name + " failed at key: " + key +
+            throw new AssertionError(name + " failed at key: " + key +
                     ", remaining window count: " + windowCount + ", total window count per key: " + totalWindowCount);
         }
         queue.offer(item);
@@ -75,7 +76,7 @@ public class QueueVerifier extends Thread {
             Long next = queue.peek();
             if (next == null) {
                 //Queue is empty, sleep
-                System.out.println("Name: " + name + ", queue is empty");
+                logger.info("Queue is empty");
                 sleepSeconds(WAIT_SLEEP);
             } else if (next == key) {
                 //Happy path
@@ -98,7 +99,7 @@ public class QueueVerifier extends Thread {
             } else {
                 //sleep for timeout
                 sleepSeconds(WAIT_SLEEP);
-                System.out.println("Name: " + name + ", key : " + key);
+                logger.info("key: " + key);
             }
         }
     }

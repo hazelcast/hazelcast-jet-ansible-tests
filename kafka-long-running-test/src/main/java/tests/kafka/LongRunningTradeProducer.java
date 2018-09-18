@@ -28,9 +28,12 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 
+import static com.hazelcast.jet.impl.util.Util.uncheckRun;
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
+
 public class LongRunningTradeProducer implements AutoCloseable {
 
-    private static final int SLEEPY_MILLIS = 100;
+    private static final int SLEEP_BETWEEN_PRODUCE = 200;
     private static final int QUANTITY = 100;
     private static final int INITIAL_PRICE = 10000;
 
@@ -55,11 +58,7 @@ public class LongRunningTradeProducer implements AutoCloseable {
     public void produce(String topic, int countPerTicker) {
         final long[] timeStamp = {0};
         Iterables.cycle(tickersToPrice.keySet()).forEach(ticker -> {
-            try {
-                Thread.sleep(SLEEPY_MILLIS);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
+            uncheckRun(() -> MILLISECONDS.sleep(SLEEP_BETWEEN_PRODUCE));
             for (int i = 0; i < countPerTicker; i++) {
                 Trade trade = new Trade(timeStamp[0], ticker, QUANTITY, INITIAL_PRICE);
                 producer.send(new ProducerRecord<>(topic, ticker, trade));

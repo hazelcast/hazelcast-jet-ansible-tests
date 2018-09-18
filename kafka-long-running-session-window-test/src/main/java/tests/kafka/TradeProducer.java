@@ -17,23 +17,27 @@
 package tests.kafka;
 
 import com.google.common.collect.Iterables;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.serialization.StringSerializer;
+
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Random;
-import org.apache.kafka.clients.producer.KafkaProducer;
-import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.common.serialization.StringSerializer;
+
+import static com.hazelcast.jet.impl.util.Util.uncheckRun;
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
 public class TradeProducer implements AutoCloseable {
 
     private static final int PRICE_UPPER_BOUND = 20000;
-    private static final int SLEEP_BETWEEN_PRODUCE = 100;
+    private static final int SLEEP_BETWEEN_PRODUCE = 200;
+    private final Random random;
     private KafkaProducer<String, Trade> producer;
     private Map<String, Integer> tickersToPrice = new HashMap<>();
-    private final Random random;
 
     public TradeProducer(String broker) {
         random = new Random();
@@ -56,11 +60,7 @@ public class TradeProducer implements AutoCloseable {
         Iterables.cycle(tickersToPrice.entrySet()).forEach((entry) -> {
             String ticker = entry.getKey();
             Integer price = entry.getValue();
-            try {
-                Thread.sleep(SLEEP_BETWEEN_PRODUCE);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
+            uncheckRun(() -> MILLISECONDS.sleep(SLEEP_BETWEEN_PRODUCE));
             for (int i = 0; i < countPerTicker; i++) {
                 Trade trade = new Trade(timeStamp[0]++, ticker, 1, price);
                 producer.send(new ProducerRecord<>(topic, ticker, trade));

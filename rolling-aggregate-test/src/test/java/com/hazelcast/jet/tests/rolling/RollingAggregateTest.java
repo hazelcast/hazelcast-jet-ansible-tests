@@ -147,10 +147,10 @@ public class RollingAggregateTest {
             long counter = 0;
             while (producing) {
                 map.set(counter, counter++);
-                if (counter % 10000 == 0) {
+                if (counter % 5000 == 0) {
                     map.clear();
                 }
-                LockSupport.parkNanos(100_000);
+                LockSupport.parkNanos(400_000);
             }
         }
 

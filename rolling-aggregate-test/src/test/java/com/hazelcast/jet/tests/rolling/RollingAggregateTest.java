@@ -75,7 +75,7 @@ public class RollingAggregateTest {
         jet = JetBootstrap.getInstance();
         Config config = jet.getHazelcastInstance().getConfig();
         config.addEventJournalConfig(
-                new EventJournalConfig().setMapName(SOURCE).setCapacity(500_000)
+                new EventJournalConfig().setMapName(SOURCE).setCapacity(300_000)
         );
         producer = new Producer(jet.getMap(SOURCE));
         producer.start();
@@ -102,8 +102,6 @@ public class RollingAggregateTest {
 
         JobConfig jobConfig = new JobConfig()
                 .setName("RollingAggregateTest")
-                .addClass(RollingAggregateTest.class)
-                .addClass(VerificationProcessor.class)
                 .setSnapshotIntervalMillis(snapshotIntervalMs)
                 .setProcessingGuarantee(EXACTLY_ONCE);
 

@@ -56,7 +56,7 @@ public class JdbcTest {
 
     private static final String DB_AND_USER = "/soak-test?user=root&password=soak-test";
     private static final String QUEUE_NAME = "queue";
-    private static final int PERSON_COUNT = 50_000;
+    private static final int PERSON_COUNT = 20_000;
 
 
     private JetInstance jet;

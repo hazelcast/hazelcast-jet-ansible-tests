@@ -131,7 +131,7 @@ public class JobManagementTest {
     }
 
     private static void waitForJobStatus(Job job, JobStatus expectedStatus) throws InterruptedException {
-        while (true) {
+        for (int i = 0; i < 100; i++) {
             JobStatus currentStatus = job.getStatus();
             assertNotEquals(FAILED, currentStatus);
             if (currentStatus.equals(expectedStatus)) {
@@ -139,6 +139,8 @@ public class JobManagementTest {
             }
             sleepSeconds(1);
         }
+        throw new IllegalStateException(String.format("Wait for status[%s] timed out. current status: %s",
+                expectedStatus, job.getStatus()));
     }
 
     private static void sleepSeconds(int seconds) throws InterruptedException {

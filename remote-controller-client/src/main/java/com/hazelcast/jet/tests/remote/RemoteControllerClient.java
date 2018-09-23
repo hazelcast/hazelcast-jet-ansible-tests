@@ -21,6 +21,7 @@ import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.core.Member;
 import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.server.JetBootstrap;
+import com.hazelcast.logging.ILogger;
 import com.hazelcast.remotecontroller.Lang;
 import com.hazelcast.remotecontroller.RemoteController;
 import org.apache.thrift.protocol.TBinaryProtocol;
@@ -48,6 +49,7 @@ public final class RemoteControllerClient {
     private static final int VERIFICATION_DURATION_GAP = 15;
 
     private static int logCounter;
+    private static ILogger logger;
 
     private RemoteControllerClient() {
     }
@@ -66,6 +68,7 @@ public final class RemoteControllerClient {
 
         JetInstance jet = JetBootstrap.getInstance();
         HazelcastInstance instance = jet.getHazelcastInstance();
+        logger = instance.getLoggingService().getLogger(RemoteControllerClient.class);
 
         Set<Member> members = instance.getCluster().getMembers();
 
@@ -84,6 +87,7 @@ public final class RemoteControllerClient {
     }
 
     private static void stop(Member member, String logDir) throws Exception {
+        logger.info("Stopping member[" + member + "]");
         call(member.getAddress().getHost(), "sudo initctl stop hazelcast-jet-isolated");
         call(member.getAddress().getHost(), "mv " + logDir + "/hazelcast-jet.log " +
                 logDir + "/hazelcast-jet-" + logCounter + ".log");
@@ -94,6 +98,7 @@ public final class RemoteControllerClient {
     }
 
     private static void start(Member member) throws Exception {
+        logger.info("Starting member[" + member + "]");
         call(member.getAddress().getHost(), "sudo initctl start hazelcast-jet-isolated");
     }
 

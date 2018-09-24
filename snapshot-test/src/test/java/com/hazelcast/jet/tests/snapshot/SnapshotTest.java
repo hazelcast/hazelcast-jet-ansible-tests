@@ -61,12 +61,13 @@ import static org.junit.Assert.assertTrue;
 @RunWith(JUnit4.class)
 public class SnapshotTest {
 
+    private static final String TOPIC = SnapshotTest.class.getSimpleName();
+    private static final String RESULTS_TOPIC = TOPIC + "-RESULTS";
     private static final int POLL_TIMEOUT = 1000;
 
     private JetInstance jet;
     private String brokerUri;
     private String offsetReset;
-    private String topic;
     private long durationInMillis;
     private int countPerTicker;
     private int snapshotIntervalMs;
@@ -89,7 +90,6 @@ public class SnapshotTest {
         }
         producerExecutorService = Executors.newSingleThreadExecutor();
         brokerUri = System.getProperty("brokerUri", "localhost:9092");
-        topic = System.getProperty("topic", "snapshot");
         offsetReset = System.getProperty("offsetReset", "earliest");
         lagMs = Integer.parseInt(System.getProperty("lagMs", "3000"));
         snapshotIntervalMs = Integer.parseInt(System.getProperty("snapshotIntervalMs", "1000"));
@@ -103,7 +103,7 @@ public class SnapshotTest {
 
         producerExecutorService.submit(() -> {
             try (SnapshotTradeProducer tradeProducer = new SnapshotTradeProducer(brokerUri)) {
-                tradeProducer.produce(topic, countPerTicker);
+                tradeProducer.produce(TOPIC, countPerTicker);
             }
         });
     }
@@ -188,19 +188,15 @@ public class SnapshotTest {
         Properties propsForTrades = kafkaPropsForTrades(brokerUri, offsetReset);
         Properties propsForResult = kafkaPropsForResults(brokerUri, offsetReset);
 
-        pipeline.drawFrom(KafkaSources.kafka(propsForTrades, ConsumerRecord<Long, Long>::value, topic))
+        pipeline.drawFrom(KafkaSources.kafka(propsForTrades, ConsumerRecord<Long, Long>::value, TOPIC))
                 .addTimestamps(t -> t, lagMs)
-                .setName(String.format("ReadKafka(%s-%s-%d)", topic, guarantee, jobIndex))
+                .setName(String.format("ReadKafka(%s-%s-%d)", TOPIC, guarantee, jobIndex))
                 .window(sliding(windowSize, slideBy))
                 .groupingKey(wholeItem())
-                .aggregate(counting()).setName(String.format("AggregateCount(%s-%s-%d)", topic, guarantee, jobIndex))
+                .aggregate(counting()).setName(String.format("AggregateCount(%s-%s-%d)", TOPIC, guarantee, jobIndex))
                 .drainTo(KafkaSinks.kafka(propsForResult, resultTopic))
                 .setName(String.format("WriteKafka(%s)", resultTopic));
         return pipeline;
-    }
-
-    private String resultsTopicName(ProcessingGuarantee guarantee, int jobIndex) {
-        return topic + "-results-" + guarantee.name() + "-" + jobIndex;
     }
 
     private Job[] submitJobs(ProcessingGuarantee guarantee) {
@@ -215,6 +211,10 @@ public class SnapshotTest {
             jobs[i]  = jet.newJob(pipeline(guarantee, i), jobConfig);
         }
         return jobs;
+    }
+
+    private static String resultsTopicName(ProcessingGuarantee guarantee, int jobIndex) {
+        return RESULTS_TOPIC + "-" + guarantee.name() + "-" + jobIndex;
     }
 
     private static Properties kafkaPropsForTrades(String brokerUrl, String offsetReset) {

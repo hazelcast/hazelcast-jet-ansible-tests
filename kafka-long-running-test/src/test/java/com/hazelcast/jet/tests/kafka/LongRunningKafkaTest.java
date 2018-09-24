@@ -60,10 +60,12 @@ import static org.junit.Assert.assertEquals;
 @RunWith(JUnit4.class)
 public class LongRunningKafkaTest {
 
+    private static final String TOPIC = LongRunningKafkaTest.class.getSimpleName();
+    private static final String RESULTS_TOPIC = TOPIC + "-RESULTS";
+
     private JetInstance jet;
     private String brokerUri;
     private String offsetReset;
-    private String topic;
     private long durationInMillis;
     private int countPerTicker;
     private int lagMs;
@@ -80,7 +82,6 @@ public class LongRunningKafkaTest {
     public void setUp() {
         producerExecutorService = Executors.newSingleThreadExecutor();
         brokerUri = System.getProperty("brokerUri", "localhost:9092");
-        topic = System.getProperty("topic", String.format("%s-%d", "trades-long-running", System.currentTimeMillis()));
         offsetReset = System.getProperty("offsetReset", "earliest");
         lagMs = Integer.parseInt(System.getProperty("lagMs", "1"));
         windowSize = Integer.parseInt(System.getProperty("windowSize", "20"));
@@ -92,7 +93,7 @@ public class LongRunningKafkaTest {
 
         producerExecutorService.submit(() -> {
             try (LongRunningTradeProducer tradeProducer = new LongRunningTradeProducer(brokerUri)) {
-                tradeProducer.produce(topic, countPerTicker);
+                tradeProducer.produce(TOPIC, countPerTicker);
             }
         });
     }
@@ -139,12 +140,12 @@ public class LongRunningKafkaTest {
 
         Properties propsForResult = kafkaPropertiesForResults(brokerUri, offsetReset);
 
-        pipeline.drawFrom(KafkaSources.kafka(kafkaProps, ConsumerRecord<String, Trade>::value, topic))
+        pipeline.drawFrom(KafkaSources.kafka(kafkaProps, ConsumerRecord<String, Trade>::value, TOPIC))
                 .addTimestamps(Trade::getTime, lagMs)
                 .window(sliding(windowSize, slideBy))
                 .groupingKey(Trade::getTicker)
                 .aggregate(counting())
-                .drainTo(KafkaSinks.kafka(propsForResult, topic + "-results"));
+                .drainTo(KafkaSinks.kafka(propsForResult, RESULTS_TOPIC));
 
         return pipeline;
     }
@@ -153,7 +154,7 @@ public class LongRunningKafkaTest {
         Pipeline pipeline = Pipeline.create();
 
         Properties properties = kafkaPropertiesForResults(brokerUri, offsetReset);
-        pipeline.drawFrom(KafkaSources.<String, Long>kafka(properties, topic + "-results"))
+        pipeline.drawFrom(KafkaSources.<String, Long>kafka(properties, RESULTS_TOPIC))
                 .drainTo(buildVerificationSink());
 
         return pipeline;

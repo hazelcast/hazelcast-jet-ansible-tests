@@ -61,9 +61,9 @@ import static org.junit.Assert.assertNotEquals;
 @RunWith(JUnit4.class)
 public class EventJournalTest implements Serializable {
 
+    private static final String MAP_NAME = EventJournalTest.class.getSimpleName();
+    private static final String RESULTS_MAP_NAME = MAP_NAME + "-RESULTS";
     private transient JetInstance jet;
-    private String mapName;
-    private String resultsMapName;
     private long durationInMillis;
     private int countPerTicker;
     private int snapshotIntervalMs;
@@ -84,8 +84,6 @@ public class EventJournalTest implements Serializable {
         if (isolatedClientConfig != null) {
             System.setProperty("hazelcast.client.config", isolatedClientConfig);
         }
-        mapName = System.getProperty("map", String.format("%s-%d", "event-journal", System.currentTimeMillis()));
-        resultsMapName = mapName + "-results";
         lagMs = Integer.parseInt(System.getProperty("lagMs", "1500"));
         int timestampPerSecond = Integer.parseInt(System.getProperty("timestampPerSecond", "50"));
         snapshotIntervalMs = Integer.parseInt(System.getProperty("snapshotIntervalMs", "5000"));
@@ -97,12 +95,12 @@ public class EventJournalTest implements Serializable {
         partitionCount = jet.getHazelcastInstance().getPartitionService().getPartitions().size();
         Config config = jet.getHazelcastInstance().getConfig();
         config.addEventJournalConfig(
-                new EventJournalConfig().setMapName(mapName).setCapacity(1_000_000)
+                new EventJournalConfig().setMapName(MAP_NAME).setCapacity(1_000_000)
         );
         config.addEventJournalConfig(
-                new EventJournalConfig().setMapName(resultsMapName).setCapacity(20_000)
+                new EventJournalConfig().setMapName(RESULTS_MAP_NAME).setCapacity(20_000)
         );
-        tradeProducer = new EventJournalTradeProducer(countPerTicker, jet.getMap(mapName), timestampPerSecond);
+        tradeProducer = new EventJournalTradeProducer(countPerTicker, jet.getMap(MAP_NAME), timestampPerSecond);
     }
 
     @Test
@@ -117,9 +115,9 @@ public class EventJournalTest implements Serializable {
         int windowCount = windowSize / slideBy;
         LoggingService loggingService = jet.getHazelcastInstance().getLoggingService();
         QueueVerifier queueVerifier = new QueueVerifier(loggingService,
-                "Verifier[" + resultsMapName + "]", windowCount).startVerification();
+                "Verifier[" + RESULTS_MAP_NAME + "]", windowCount).startVerification();
 
-        ClientMapProxy<Long, Long> resultMap = (ClientMapProxy) jet.getHazelcastInstance().getMap(resultsMapName);
+        ClientMapProxy<Long, Long> resultMap = (ClientMapProxy) jet.getHazelcastInstance().getMap(RESULTS_MAP_NAME);
         EventJournalConsumer<Long, Long> consumer = new EventJournalConsumer<>(resultMap, partitionCount);
 
         long begin = System.currentTimeMillis();
@@ -157,14 +155,14 @@ public class EventJournalTest implements Serializable {
     private Pipeline pipeline() {
         Pipeline pipeline = Pipeline.create();
 
-        pipeline.drawFrom(Sources.<Long, Long, Long>mapJournal(mapName, e -> e.getType() == EntryEventType.ADDED,
+        pipeline.drawFrom(Sources.<Long, Long, Long>mapJournal(MAP_NAME, e -> e.getType() == EntryEventType.ADDED,
                 EventJournalMapEvent::getNewValue, START_FROM_OLDEST))
-                .addTimestamps(t -> t, lagMs).setName("Read from map(" + mapName + ")")
+                .addTimestamps(t -> t, lagMs).setName("Read from map(" + MAP_NAME + ")")
                 .peek(alwaysFalse(), Objects::toString).setName("Peek")
                 .window(sliding(windowSize, slideBy))
                 .groupingKey(wholeItem())
                 .aggregate(AggregateOperations.counting()).setName("Aggregate(count)")
-                .drainTo(Sinks.map(resultsMapName)).setName("Write to map(" + resultsMapName + ")");
+                .drainTo(Sinks.map(RESULTS_MAP_NAME)).setName("Write to map(" + RESULTS_MAP_NAME + ")");
         return pipeline;
     }
 

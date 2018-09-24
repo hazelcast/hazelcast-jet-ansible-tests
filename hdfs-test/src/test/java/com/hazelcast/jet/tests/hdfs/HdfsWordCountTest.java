@@ -89,9 +89,9 @@ public class HdfsWordCountTest {
         hdfsUri = System.getProperty("hdfs_name_node", "hdfs://localhost:8020");
         inputPath = System.getProperty("hdfs_input_path", "hdfs-input-") + timestamp;
         outputPath = System.getProperty("hdfs_output_path", "hdfs-output-") + timestamp;
-        distinct = parseLong(System.getProperty("hdfs_distinct", "1000000"));
-        total = parseLong(System.getProperty("hdfs_total", "10000000"));
-        threadCount = parseInt(System.getProperty("hdfs_thread_count", "2"));
+        distinct = parseLong(System.getProperty("hdfs_distinct", "500000"));
+        total = parseLong(System.getProperty("hdfs_total", "4800000"));
+        threadCount = parseInt(System.getProperty("hdfs_thread_count", "1"));
         durationInMillis = MINUTES.toMillis(parseLong(System.getProperty("hdfs_duration_minutes", "30")));
 
         Pipeline pipeline = Pipeline.create();

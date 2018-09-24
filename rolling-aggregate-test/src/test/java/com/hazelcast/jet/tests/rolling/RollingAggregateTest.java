@@ -148,7 +148,7 @@ public class RollingAggregateTest {
                 if (counter % 5000 == 0) {
                     map.clear();
                 }
-                LockSupport.parkNanos(400_000);
+                LockSupport.parkNanos(500_000);
             }
         }
 

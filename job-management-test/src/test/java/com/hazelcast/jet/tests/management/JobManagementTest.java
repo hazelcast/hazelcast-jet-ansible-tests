@@ -105,7 +105,7 @@ public class JobManagementTest {
         Job job = jet.newJob(p, jobConfig);
         waitForJobStatus(job, RUNNING);
 
-        sleepSeconds(10);
+        sleepSeconds(20);
 
 
         long begin = System.currentTimeMillis();
@@ -113,17 +113,17 @@ public class JobManagementTest {
             System.out.println("Suspend the job");
             job.suspend();
             waitForJobStatus(job, SUSPENDED);
-            sleepSeconds(5);
+            sleepSeconds(40);
 
             System.out.println("Resume the job");
             job.resume();
             waitForJobStatus(job, RUNNING);
-            sleepSeconds(20);
+            sleepSeconds(40);
 
             System.out.println("Restart the job");
             job.restart();
             waitForJobStatus(job, RUNNING);
-            sleepSeconds(20);
+            sleepSeconds(40);
         }
 
         job.cancel();
@@ -166,7 +166,7 @@ public class JobManagementTest {
                 if (counter % 5000 == 0) {
                     map.clear();
                 }
-                LockSupport.parkNanos(400_000);
+                LockSupport.parkNanos(500_000);
             }
         }
 

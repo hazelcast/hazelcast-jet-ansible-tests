@@ -16,6 +16,8 @@
 
 package com.hazelcast.jet.tests.jdbc;
 
+import com.hazelcast.config.Config;
+import com.hazelcast.config.QueueConfig;
 import com.hazelcast.core.IQueue;
 import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.Job;
@@ -44,6 +46,8 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map.Entry;
 
 import static com.hazelcast.jet.core.JobStatus.FAILED;
@@ -55,7 +59,7 @@ import static org.junit.Assert.assertNotEquals;
 public class JdbcTest {
 
     private static final String DB_AND_USER = "/soak-test?user=root&password=soak-test";
-    private static final String QUEUE_NAME = "queue";
+    private static final String QUEUE_NAME = JdbcTest.class.getSimpleName();
     private static final int PERSON_COUNT = 20_000;
 
 
@@ -72,6 +76,8 @@ public class JdbcTest {
         connectionUrl = System.getProperty("connectionUrl", "jdbc:mysql://localhost") + DB_AND_USER;
         durationInMillis = MINUTES.toMillis(Integer.parseInt(System.getProperty("durationInMinutes", "30")));
         jet = JetBootstrap.getInstance();
+        Config config = jet.getHazelcastInstance().getConfig();
+        config.addQueueConfig(new QueueConfig().setName(QUEUE_NAME).setMaxSize(PERSON_COUNT * 2));
 
         createAndFillTable();
     }
@@ -87,7 +93,7 @@ public class JdbcTest {
     public void test() throws Exception {
         Sink<String> sink = SinkBuilder
                 .sinkBuilder("queueSink", c -> c.jetInstance().getHazelcastInstance().getQueue(QUEUE_NAME))
-                .<String>receiveFn(IQueue::offer)
+                .<String>receiveFn(IQueue::put)
                 .preferredLocalParallelism(1)
                 .build();
 
@@ -165,23 +171,28 @@ public class JdbcTest {
 
     static class QueueSource {
 
+        private static final int MAX_ELEMENTS = 100;
+
+        private final List<String> tempList = new ArrayList<>(MAX_ELEMENTS);
+
         private final IQueue<String> queue;
-        private final int total;
+        private final int totalParallelism;
 
         private long counter;
 
         QueueSource(Context context) {
             queue = context.jetInstance().getHazelcastInstance().getQueue(QUEUE_NAME);
-            total = context.totalParallelism();
+            totalParallelism = context.totalParallelism();
             counter = context.globalProcessorIndex();
         }
 
         void addToBuffer(SourceBuffer<Entry<Long, String>> buffer) {
-            String item = queue.poll();
-            if (item != null) {
+            queue.drainTo(tempList, MAX_ELEMENTS);
+            for (String item : tempList) {
                 buffer.add(Util.entry(counter, item));
-                counter += total;
+                counter += totalParallelism;
             }
+            tempList.clear();
         }
 
     }

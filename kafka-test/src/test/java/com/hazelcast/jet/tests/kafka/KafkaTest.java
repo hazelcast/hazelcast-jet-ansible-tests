@@ -56,7 +56,8 @@ import static org.junit.Assert.assertTrue;
 @RunWith(JUnit4.class)
 public class KafkaTest {
 
-    private String topic;
+    private static final String TOPIC = KafkaTest.class.getSimpleName();
+
     private int lagMs;
     private int windowSize;
     private int slideBy;
@@ -72,7 +73,6 @@ public class KafkaTest {
     @Before
     public void setUp() {
         String brokerUri = System.getProperty("brokerUri", "localhost:9092");
-        topic = System.getProperty("topic", String.format("%s-%d", "trades", System.currentTimeMillis()));
         String offsetReset = System.getProperty("offsetReset", "earliest");
         lagMs = Integer.parseInt(System.getProperty("lagMs", "10"));
         windowSize = Integer.parseInt(System.getProperty("windowSize", "50"));
@@ -84,7 +84,7 @@ public class KafkaTest {
         jet = JetBootstrap.getInstance();
 
         try (TradeProducer tradeProducer = new TradeProducer(brokerUri)) {
-            tradeProducer.produce(topic, tickerCount, countPerTicker);
+            tradeProducer.produce(TOPIC, tickerCount, countPerTicker);
         }
     }
 
@@ -128,7 +128,7 @@ public class KafkaTest {
     private Pipeline pipeline() {
         Pipeline pipeline = Pipeline.create();
 
-        pipeline.drawFrom(KafkaSources.kafka(kafkaProps, ConsumerRecord<String, Trade>::value, topic))
+        pipeline.drawFrom(KafkaSources.kafka(kafkaProps, ConsumerRecord<String, Trade>::value, TOPIC))
                 .addTimestamps(Trade::getTime, lagMs)
                 .window(sliding(windowSize, slideBy))
                 .groupingKey(Trade::getTicker)

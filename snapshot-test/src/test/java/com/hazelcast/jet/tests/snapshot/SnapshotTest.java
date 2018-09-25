@@ -84,6 +84,7 @@ public class SnapshotTest {
 
     @Before
     public void setUp() {
+        System.setProperty("hazelcast.logging.type", "log4j");
         String isolatedClientConfig = System.getProperty("isolatedClientConfig");
         if (isolatedClientConfig != null) {
             System.setProperty("hazelcast.client.config", isolatedClientConfig);

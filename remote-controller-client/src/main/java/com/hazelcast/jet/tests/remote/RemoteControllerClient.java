@@ -55,7 +55,7 @@ public final class RemoteControllerClient {
     }
 
     public static void main(String[] args) throws Exception {
-//
+        System.setProperty("hazelcast.logging.type", "log4j");
         String jetHome = System.getProperty("jetHome");
         System.setProperty("hazelcast.client.config", jetHome + "/config/hazelcast-client-isolated.xml");
         String logDir = jetHome + "/logs";

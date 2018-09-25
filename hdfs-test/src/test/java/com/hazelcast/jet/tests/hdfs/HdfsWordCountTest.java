@@ -84,6 +84,7 @@ public class HdfsWordCountTest {
 
     @Before
     public void init() {
+        System.setProperty("hazelcast.logging.type", "log4j");
         jet = JetBootstrap.getInstance();
         long timestamp = System.nanoTime();
         hdfsUri = System.getProperty("hdfs_name_node", "hdfs://localhost:8020");

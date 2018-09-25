@@ -73,6 +73,7 @@ public class JdbcTest {
 
     @Before
     public void setup() throws SQLException {
+        System.setProperty("hazelcast.logging.type", "log4j");
         connectionUrl = System.getProperty("connectionUrl", "jdbc:mysql://localhost") + DB_AND_USER;
         durationInMillis = MINUTES.toMillis(Integer.parseInt(System.getProperty("durationInMinutes", "30")));
         jet = JetBootstrap.getInstance();

@@ -80,6 +80,7 @@ public class LongRunningKafkaTest {
 
     @Before
     public void setUp() {
+        System.setProperty("hazelcast.logging.type", "log4j");
         producerExecutorService = Executors.newSingleThreadExecutor();
         brokerUri = System.getProperty("brokerUri", "localhost:9092");
         offsetReset = System.getProperty("offsetReset", "earliest");

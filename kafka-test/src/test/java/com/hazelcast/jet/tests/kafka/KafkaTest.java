@@ -72,6 +72,7 @@ public class KafkaTest {
 
     @Before
     public void setUp() {
+        System.setProperty("hazelcast.logging.type", "log4j");
         String brokerUri = System.getProperty("brokerUri", "localhost:9092");
         String offsetReset = System.getProperty("offsetReset", "earliest");
         lagMs = Integer.parseInt(System.getProperty("lagMs", "10"));

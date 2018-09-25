@@ -60,6 +60,7 @@ public class JmsTest {
 
     @Before
     public void setup() {
+        System.setProperty("hazelcast.logging.type", "log4j");
         brokerURL = System.getProperty("brokerURL", "tcp://localhost:61616");
         durationInMillis = MINUTES.toMillis(Integer.parseInt(System.getProperty("durationInMinutes", "10")));
         jet = JetBootstrap.getInstance();

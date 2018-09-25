@@ -64,7 +64,7 @@ public class RollingAggregateTest {
     }
 
     @Before
-    public void setUp() {
+    public void setUp() throws InterruptedException {
         System.setProperty("hazelcast.logging.type", "log4j");
         String isolatedClientConfig = System.getProperty("isolatedClientConfig");
         if (isolatedClientConfig != null) {
@@ -77,6 +77,7 @@ public class RollingAggregateTest {
         config.addEventJournalConfig(
                 new EventJournalConfig().setMapName(SOURCE).setCapacity(300_000)
         );
+        SECONDS.sleep(5);
         producer = new Producer(jet.getMap(SOURCE));
         producer.start();
     }

@@ -67,6 +67,7 @@ public class JobManagementTest {
 
     @Before
     public void setup() {
+        System.setProperty("hazelcast.logging.type", "log4j");
         durationInMillis = MINUTES.toMillis(Integer.parseInt(System.getProperty("durationInMinutes", "30")));
         snapshotIntervalMs = Integer.parseInt(System.getProperty("snapshotIntervalMs", "5000"));
         jet = JetBootstrap.getInstance();

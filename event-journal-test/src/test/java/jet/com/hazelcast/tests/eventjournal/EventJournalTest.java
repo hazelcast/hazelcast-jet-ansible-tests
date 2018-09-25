@@ -43,11 +43,9 @@ import tests.eventjournal.EventJournalTradeProducer;
 import tests.snapshot.QueueVerifier;
 
 import java.io.Serializable;
-import java.util.Objects;
 
 import static com.hazelcast.jet.core.JobStatus.COMPLETED;
 import static com.hazelcast.jet.core.JobStatus.FAILED;
-import static com.hazelcast.jet.function.DistributedFunctions.alwaysFalse;
 import static com.hazelcast.jet.function.DistributedFunctions.wholeItem;
 import static com.hazelcast.jet.impl.util.Util.uncheckRun;
 import static com.hazelcast.jet.pipeline.JournalInitialPosition.START_FROM_OLDEST;
@@ -158,7 +156,6 @@ public class EventJournalTest implements Serializable {
         pipeline.drawFrom(Sources.<Long, Long, Long>mapJournal(MAP_NAME, e -> e.getType() == EntryEventType.ADDED,
                 EventJournalMapEvent::getNewValue, START_FROM_OLDEST))
                 .addTimestamps(t -> t, lagMs).setName("Read from map(" + MAP_NAME + ")")
-                .peek(alwaysFalse(), Objects::toString).setName("Peek")
                 .window(sliding(windowSize, slideBy))
                 .groupingKey(wholeItem())
                 .aggregate(AggregateOperations.counting()).setName("Aggregate(count)")

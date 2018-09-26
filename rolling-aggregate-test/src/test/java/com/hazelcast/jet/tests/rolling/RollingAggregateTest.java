@@ -18,6 +18,7 @@ package com.hazelcast.jet.tests.rolling;
 
 import com.hazelcast.config.Config;
 import com.hazelcast.config.EventJournalConfig;
+import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.jet.IMapJet;
 import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.Job;
@@ -26,6 +27,7 @@ import com.hazelcast.jet.core.JobStatus;
 import com.hazelcast.jet.pipeline.Pipeline;
 import com.hazelcast.jet.pipeline.Sources;
 import com.hazelcast.jet.server.JetBootstrap;
+import com.hazelcast.logging.ILogger;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -33,8 +35,6 @@ import org.junit.runner.JUnitCore;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import tests.rolling.VerificationProcessor;
-
-import java.util.concurrent.locks.LockSupport;
 
 import static com.hazelcast.jet.Util.mapEventNewValue;
 import static com.hazelcast.jet.Util.mapPutEvents;
@@ -47,7 +47,7 @@ import static com.hazelcast.jet.pipeline.JournalInitialPosition.START_FROM_OLDES
 import static com.hazelcast.jet.pipeline.Sinks.fromProcessor;
 import static java.util.concurrent.TimeUnit.MINUTES;
 import static java.util.concurrent.TimeUnit.SECONDS;
-import static org.junit.Assert.assertNotEquals;
+import static java.util.concurrent.locks.LockSupport.parkNanos;
 
 @RunWith(JUnit4.class)
 public class RollingAggregateTest {
@@ -56,6 +56,7 @@ public class RollingAggregateTest {
 
     private JetInstance jet;
     private Producer producer;
+    private ILogger logger;
     private long durationInMillis;
     private long snapshotIntervalMs;
 
@@ -73,21 +74,23 @@ public class RollingAggregateTest {
         durationInMillis = MINUTES.toMillis(Integer.parseInt(System.getProperty("durationInMinutes", "30")));
         snapshotIntervalMs = Integer.parseInt(System.getProperty("snapshotIntervalMs", "5000"));
         jet = JetBootstrap.getInstance();
-        Config config = jet.getHazelcastInstance().getConfig();
+        HazelcastInstance hazelcastInstance = jet.getHazelcastInstance();
+        logger = hazelcastInstance.getLoggingService().getLogger(RollingAggregateTest.class);
+        Config config = hazelcastInstance.getConfig();
         config.addEventJournalConfig(
                 new EventJournalConfig().setMapName(SOURCE).setCapacity(300_000)
         );
-        producer = new Producer(jet.getMap(SOURCE));
+        producer = new Producer(logger, jet.getMap(SOURCE));
         producer.start();
     }
 
     @After
     public void teardown() throws InterruptedException {
-        if (jet != null) {
-            jet.shutdown();
-        }
         if (producer != null) {
             producer.stop();
+        }
+        if (jet != null) {
+            jet.shutdown();
         }
     }
 
@@ -109,7 +112,7 @@ public class RollingAggregateTest {
 
         long begin = System.currentTimeMillis();
         while (System.currentTimeMillis() - begin < durationInMillis) {
-            assertNotEquals(getJobStatus(job), FAILED);
+            assertJobStatus(job);
             SECONDS.sleep(30);
         }
 
@@ -121,22 +124,32 @@ public class RollingAggregateTest {
         }
     }
 
-    private static JobStatus getJobStatus(Job job) {
+    private void assertJobStatus(Job job) {
+        if (FAILED.equals(getJobStatus(job))) {
+            logger.severe("Job is failed");
+            job.join();
+        }
+    }
+
+    private JobStatus getJobStatus(Job job) {
         try {
             return job.getStatus();
-        } catch (Exception ignored) {
+        } catch (Exception e) {
+            logger.warning("Exception during status check", e);
             return null;
         }
     }
 
     static class Producer {
 
+        private final ILogger logger;
         private final IMapJet<Long, Long> map;
         private final Thread thread;
 
         private volatile boolean producing = true;
 
-        Producer(IMapJet<Long, Long> map) {
+        Producer(ILogger logger, IMapJet<Long, Long> map) {
+            this.logger = logger;
             this.map = map;
             this.thread = new Thread(this::run);
         }
@@ -147,14 +160,15 @@ public class RollingAggregateTest {
                 try {
                     map.set(counter, counter);
                 } catch (Exception e) {
-                    e.printStackTrace();
+                    logger.severe("Exception during producing, counter: " + counter, e);
+                    parkNanos(SECONDS.toNanos(1));
                     continue;
                 }
                 counter++;
                 if (counter % 5000 == 0) {
                     map.clear();
                 }
-                LockSupport.parkNanos(500_000);
+                parkNanos(500_000);
             }
         }
 

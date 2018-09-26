@@ -37,8 +37,6 @@ import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import tests.management.VerificationProcessor;
 
-import java.util.concurrent.locks.LockSupport;
-
 import static com.hazelcast.jet.Util.mapEventNewValue;
 import static com.hazelcast.jet.Util.mapPutEvents;
 import static com.hazelcast.jet.core.JobStatus.COMPLETED;
@@ -48,6 +46,7 @@ import static com.hazelcast.jet.core.JobStatus.SUSPENDED;
 import static com.hazelcast.jet.pipeline.JournalInitialPosition.START_FROM_OLDEST;
 import static java.util.concurrent.TimeUnit.MINUTES;
 import static java.util.concurrent.TimeUnit.SECONDS;
+import static java.util.concurrent.locks.LockSupport.parkNanos;
 import static org.junit.Assert.assertNotEquals;
 
 @RunWith(JUnit4.class)
@@ -81,11 +80,11 @@ public class JobManagementTest {
 
     @After
     public void cleanup() throws InterruptedException {
-        if (jet != null) {
-            jet.shutdown();
-        }
         if (producer != null) {
             producer.stop();
+        }
+        if (jet != null) {
+            jet.shutdown();
         }
     }
 
@@ -167,13 +166,14 @@ public class JobManagementTest {
                     map.set(counter, counter);
                 } catch (Exception e) {
                     e.printStackTrace();
+                    parkNanos(SECONDS.toNanos(1));
                     continue;
                 }
                 counter++;
                 if (counter % 5000 == 0) {
                     map.clear();
                 }
-                LockSupport.parkNanos(500_000);
+                parkNanos(500_000);
             }
         }
 

@@ -163,7 +163,13 @@ public class JobManagementTest {
         void run() {
             long counter = 0;
             while (producing) {
-                map.set(counter, counter++);
+                try {
+                    map.set(counter, counter);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    continue;
+                }
+                counter++;
                 if (counter % 5000 == 0) {
                     map.clear();
                 }

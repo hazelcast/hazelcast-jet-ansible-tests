@@ -77,8 +77,12 @@ public class RollingAggregateTest {
         config.addEventJournalConfig(
                 new EventJournalConfig().setMapName(SOURCE).setCapacity(300_000)
         );
-        SECONDS.sleep(5);
-        producer = new Producer(jet.getMap(SOURCE));
+        SECONDS.sleep(2);
+        IMapJet<Long, Long> sourceMap = jet.getMap(SOURCE);
+        sourceMap.destroy();
+        SECONDS.sleep(1);
+        sourceMap = jet.getMap(SOURCE);
+        producer = new Producer(sourceMap);
         producer.start();
     }
 

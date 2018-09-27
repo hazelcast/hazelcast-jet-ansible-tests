@@ -16,8 +16,8 @@
 
 package tests.rolling;
 
-import com.hazelcast.core.IAtomicLong;
 import com.hazelcast.jet.core.AbstractProcessor;
+import com.hazelcast.jet.core.BroadcastKey;
 import com.hazelcast.jet.core.ProcessorMetaSupplier;
 import com.hazelcast.jet.core.ProcessorSupplier;
 
@@ -25,8 +25,7 @@ import static com.hazelcast.jet.core.ProcessorMetaSupplier.preferLocalParallelis
 
 public class VerificationProcessor extends AbstractProcessor {
 
-    private long max;
-    private IAtomicLong persist;
+    private long max = -1;
     private boolean processed;
 
     public static ProcessorMetaSupplier supplier() {
@@ -45,16 +44,16 @@ public class VerificationProcessor extends AbstractProcessor {
     }
 
     @Override
-    protected void init(Context context) {
-        persist = context.jetInstance().getHazelcastInstance().getAtomicLong("persist");
-        max = persist.get();
+    public boolean saveToSnapshot() {
+        if (!processed) {
+            return true;
+        }
+        return tryEmitToSnapshot(BroadcastKey.broadcastKey(max), max);
     }
 
     @Override
-    public boolean saveToSnapshot() {
-        if (processed) {
-            persist.set(max);
-        }
-        return true;
+    protected void restoreFromSnapshot(Object key, Object value) {
+        assert max == -1 : "Restore called twice, currentValue: " + max + ", newValue: " + value;
+        max = (long) value;
     }
 }

@@ -69,6 +69,7 @@ public class EventJournalTest implements Serializable {
     private int windowSize;
     private int slideBy;
     private int partitionCount;
+    private int memberSize;
     private EventJournalTradeProducer tradeProducer;
 
     public static void main(String[] args) {
@@ -90,6 +91,7 @@ public class EventJournalTest implements Serializable {
         countPerTicker = Integer.parseInt(System.getProperty("countPerTicker", "100"));
         durationInMillis = MINUTES.toMillis(Integer.parseInt(System.getProperty("durationInMinutes", "30")));
         jet = JetBootstrap.getInstance();
+        memberSize = jet.getHazelcastInstance().getCluster().getMembers().size();
         partitionCount = jet.getHazelcastInstance().getPartitionService().getPartitions().size();
         Config config = jet.getHazelcastInstance().getConfig();
         config.addEventJournalConfig(
@@ -155,6 +157,7 @@ public class EventJournalTest implements Serializable {
 
         pipeline.drawFrom(Sources.<Long, Long, Long>mapJournal(MAP_NAME, e -> e.getType() == EntryEventType.ADDED,
                 EventJournalMapEvent::getNewValue, START_FROM_OLDEST))
+                .setLocalParallelism(partitionCount / memberSize)
                 .addTimestamps(t -> t, lagMs).setName("Read from map(" + MAP_NAME + ")")
                 .window(sliding(windowSize, slideBy))
                 .groupingKey(wholeItem())

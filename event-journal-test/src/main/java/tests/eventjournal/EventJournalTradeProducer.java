@@ -78,7 +78,8 @@ public class EventJournalTradeProducer extends Thread {
                 }
                 long realTimestamp1 = realTimestamp.get();
                 LOGGER.info("Produced realEventTime=" + realTimestamp1 + ", " + toLocalTime(realTimestamp1) + " lag="
-                        + (NANOSECONDS.toSeconds(elapsedRT * timestampPerSecond) - realTimestamp1));
+                        + (NANOSECONDS.toSeconds(elapsedRT * timestampPerSecond) - realTimestamp1)
+                        + ", pendingAsyncOps=" + pendingAsyncOps.get());
             }
             timestamp++;
         }

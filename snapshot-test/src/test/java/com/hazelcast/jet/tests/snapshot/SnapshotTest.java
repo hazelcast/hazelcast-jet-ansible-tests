@@ -20,6 +20,7 @@ import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.config.ProcessingGuarantee;
+import com.hazelcast.jet.core.JobStatus;
 import com.hazelcast.jet.kafka.KafkaSinks;
 import com.hazelcast.jet.kafka.KafkaSources;
 import com.hazelcast.jet.pipeline.Pipeline;
@@ -51,11 +52,15 @@ import static com.hazelcast.jet.aggregate.AggregateOperations.counting;
 import static com.hazelcast.jet.config.ProcessingGuarantee.AT_LEAST_ONCE;
 import static com.hazelcast.jet.config.ProcessingGuarantee.EXACTLY_ONCE;
 import static com.hazelcast.jet.core.JobStatus.COMPLETED;
+import static com.hazelcast.jet.core.JobStatus.FAILED;
 import static com.hazelcast.jet.function.DistributedFunctions.wholeItem;
+import static com.hazelcast.jet.impl.util.Util.uncheckRun;
 import static com.hazelcast.jet.pipeline.WindowDefinition.sliding;
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.MINUTES;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 
 @RunWith(JUnit4.class)
@@ -112,8 +117,8 @@ public class SnapshotTest {
     @Test
     public void snapshotTest() throws Exception {
         logger.info("SnapshotTest jobCount: " + jobCount);
-        Job[] atLeastOnceJob = submitJobs(AT_LEAST_ONCE);
-        Job[] exactlyOnceJob = submitJobs(EXACTLY_ONCE);
+        Job[] atLeastOnceJobs = submitJobs(AT_LEAST_ONCE);
+        Job[] exactlyOnceJobs = submitJobs(EXACTLY_ONCE);
 
         int windowCount = windowSize / slideBy;
         LoggingService loggingService = jet.getHazelcastInstance().getLoggingService();
@@ -150,16 +155,18 @@ public class SnapshotTest {
                         }
                 );
             }
+            assertJobStatuses(atLeastOnceJobs);
+            assertJobStatuses(exactlyOnceJobs);
         } finally {
             logger.info("Cancelling jobs...");
             consumer.close();
             atLeastOnceVerifier.close();
             exactlyOnceVerifier.close();
 
-            for (Job job : atLeastOnceJob) {
+            for (Job job : atLeastOnceJobs) {
                 closeJob(job);
             }
-            for (Job job : exactlyOnceJob) {
+            for (Job job : exactlyOnceJobs) {
                 closeJob(job);
             }
         }
@@ -212,6 +219,21 @@ public class SnapshotTest {
             jobs[i]  = jet.newJob(pipeline(guarantee, i), jobConfig);
         }
         return jobs;
+    }
+
+    private static void assertJobStatuses(Job[] jobs) {
+        for (Job job : jobs) {
+            assertNotEquals(getJobStatus(job), FAILED);
+        }
+    }
+
+    private static JobStatus getJobStatus(Job job) {
+        try {
+            return job.getStatus();
+        } catch (Exception e) {
+            uncheckRun(() -> MILLISECONDS.sleep(250));
+            return getJobStatus(job);
+        }
     }
 
     private static String resultsTopicName(ProcessingGuarantee guarantee, int jobIndex) {

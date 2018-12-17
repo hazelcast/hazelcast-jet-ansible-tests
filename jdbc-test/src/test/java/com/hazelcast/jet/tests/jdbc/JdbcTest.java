@@ -61,6 +61,7 @@ public class JdbcTest {
     private static final String DB_AND_USER = "/soak-test?user=root&password=soak-test";
     private static final String QUEUE_NAME = JdbcTest.class.getSimpleName();
     private static final int PERSON_COUNT = 20_000;
+    private static final int FILTER_PERCENT = 10;
 
 
     private JetInstance jet;
@@ -107,6 +108,7 @@ public class JdbcTest {
 
         Pipeline p1 = Pipeline.create();
         p1.drawFrom(source)
+          .filter(entry -> entry.getKey() % 100 < FILTER_PERCENT)
           .drainTo(Sinks.jdbc("INSERT INTO PERSON_ALL(id, name) VALUES(?, ?)", connectionUrl,
                   (stmt, entry) -> {
                       stmt.setLong(1, entry.getKey());
@@ -129,7 +131,7 @@ public class JdbcTest {
             jobCounter++;
         }
 
-        assertTableCount(jobCounter * PERSON_COUNT);
+        assertTableCount(jobCounter * PERSON_COUNT * FILTER_PERCENT / 100);
 
         streamJob.cancel();
 

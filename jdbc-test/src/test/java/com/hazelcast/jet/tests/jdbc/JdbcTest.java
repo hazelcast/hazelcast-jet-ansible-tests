@@ -106,7 +106,7 @@ public class JdbcTest {
 
 
         Pipeline p1 = Pipeline.create();
-        p1.drawFrom(source)
+        p1.drawFrom(source).withoutTimestamps()
           .drainTo(Sinks.jdbc("INSERT INTO PERSON_ALL(id, name) VALUES(?, ?)", connectionUrl,
                   (stmt, entry) -> {
                       stmt.setLong(1, entry.getKey());

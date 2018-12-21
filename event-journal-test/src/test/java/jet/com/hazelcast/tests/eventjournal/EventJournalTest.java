@@ -157,8 +157,8 @@ public class EventJournalTest implements Serializable {
 
         pipeline.drawFrom(Sources.<Long, Long, Long>mapJournal(MAP_NAME, e -> e.getType() == EntryEventType.ADDED,
                 EventJournalMapEvent::getNewValue, START_FROM_OLDEST))
+                .withTimestamps(t -> t, lagMs).setName("Read from map(" + MAP_NAME + ")")
                 .setLocalParallelism(partitionCount / memberSize)
-                .addTimestamps(t -> t, lagMs).setName("Read from map(" + MAP_NAME + ")")
                 .window(sliding(windowSize, slideBy))
                 .groupingKey(wholeItem())
                 .aggregate(AggregateOperations.counting()).setName("Aggregate(count)")

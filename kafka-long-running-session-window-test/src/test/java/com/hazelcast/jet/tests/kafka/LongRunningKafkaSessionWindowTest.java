@@ -49,12 +49,10 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import static com.hazelcast.jet.aggregate.AggregateOperations.counting;
-import static com.hazelcast.jet.core.JobStatus.COMPLETED;
 import static com.hazelcast.jet.core.JobStatus.RUNNING;
 import static com.hazelcast.jet.core.JobStatus.STARTING;
 import static com.hazelcast.jet.pipeline.WindowDefinition.session;
 import static java.util.concurrent.TimeUnit.MINUTES;
-import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.Assert.assertEquals;
 
 @RunWith(JUnit4.class)
@@ -123,11 +121,6 @@ public class LongRunningKafkaSessionWindowTest {
 
         testJob.cancel();
         verificationJob.cancel();
-
-        while (testJob.getStatus() != COMPLETED ||
-                verificationJob.getStatus() != COMPLETED) {
-            SECONDS.sleep(1);
-        }
     }
 
     @After

@@ -50,11 +50,9 @@ import java.util.concurrent.Executors;
 import static com.hazelcast.jet.aggregate.AggregateOperations.counting;
 import static com.hazelcast.jet.config.ProcessingGuarantee.AT_LEAST_ONCE;
 import static com.hazelcast.jet.config.ProcessingGuarantee.EXACTLY_ONCE;
-import static com.hazelcast.jet.core.JobStatus.COMPLETED;
 import static com.hazelcast.jet.function.DistributedFunctions.wholeItem;
 import static com.hazelcast.jet.pipeline.WindowDefinition.sliding;
 import static java.util.concurrent.TimeUnit.MINUTES;
-import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -112,8 +110,8 @@ public class SnapshotTest {
     @Test
     public void snapshotTest() throws Exception {
         logger.info("SnapshotTest jobCount: " + jobCount);
-        Job[] atLeastOnceJob = submitJobs(AT_LEAST_ONCE);
-        Job[] exactlyOnceJob = submitJobs(EXACTLY_ONCE);
+        Job[] atLeastOnceJobs = submitJobs(AT_LEAST_ONCE);
+        Job[] exactlyOnceJobs = submitJobs(EXACTLY_ONCE);
 
         int windowCount = windowSize / slideBy;
         LoggingService loggingService = jet.getHazelcastInstance().getLoggingService();
@@ -156,11 +154,11 @@ public class SnapshotTest {
             atLeastOnceVerifier.close();
             exactlyOnceVerifier.close();
 
-            for (Job job : atLeastOnceJob) {
-                closeJob(job);
+            for (Job job : atLeastOnceJobs) {
+                job.cancel();
             }
-            for (Job job : exactlyOnceJob) {
-                closeJob(job);
+            for (Job job : exactlyOnceJobs) {
+                job.cancel();
             }
         }
     }
@@ -169,17 +167,6 @@ public class SnapshotTest {
     public void tearDown() {
         jet.shutdown();
         producerExecutorService.shutdown();
-    }
-
-    private void closeJob(Job job) throws InterruptedException {
-        try {
-            job.cancel();
-            while (job.getStatus() != COMPLETED) {
-                SECONDS.sleep(1);
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
     }
 
     private Pipeline pipeline(ProcessingGuarantee guarantee, int jobIndex) {

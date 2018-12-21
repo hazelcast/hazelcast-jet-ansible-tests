@@ -142,7 +142,7 @@ public class LongRunningKafkaSessionWindowTest {
         Properties propsForResult = kafkaPropertiesForResults(brokerUri, offsetReset);
 
         pipeline.drawFrom(KafkaSources.kafka(kafkaProps, ConsumerRecord<String, Trade>::value, TOPIC))
-                .addTimestamps(Trade::getTime, lagMs)
+                .withTimestamps(Trade::getTime, lagMs)
                 .window(session(sessionTimeout))
                 .groupingKey(Trade::getTicker)
                 .aggregate(counting())
@@ -156,6 +156,7 @@ public class LongRunningKafkaSessionWindowTest {
 
         Properties properties = kafkaPropertiesForResults(brokerUri, offsetReset);
         pipeline.drawFrom(KafkaSources.<String, Long>kafka(properties, RESULTS_TOPIC))
+                .withoutTimestamps()
                 .drainTo(buildVerificationSink());
 
         return pipeline;

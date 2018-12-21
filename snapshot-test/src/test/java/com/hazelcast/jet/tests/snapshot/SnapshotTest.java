@@ -190,7 +190,7 @@ public class SnapshotTest {
         Properties propsForResult = kafkaPropsForResults(brokerUri, offsetReset);
 
         pipeline.drawFrom(KafkaSources.kafka(propsForTrades, ConsumerRecord<Long, Long>::value, TOPIC))
-                .addTimestamps(t -> t, lagMs)
+                .withTimestamps(t -> t, lagMs)
                 .setName(String.format("ReadKafka(%s-%s-%d)", TOPIC, guarantee, jobIndex))
                 .window(sliding(windowSize, slideBy))
                 .groupingKey(wholeItem())

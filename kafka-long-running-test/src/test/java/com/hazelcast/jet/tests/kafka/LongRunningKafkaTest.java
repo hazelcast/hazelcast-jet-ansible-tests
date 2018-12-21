@@ -142,7 +142,7 @@ public class LongRunningKafkaTest {
         Properties propsForResult = kafkaPropertiesForResults(brokerUri, offsetReset);
 
         pipeline.drawFrom(KafkaSources.kafka(kafkaProps, ConsumerRecord<String, Trade>::value, TOPIC))
-                .addTimestamps(Trade::getTime, lagMs)
+                .withTimestamps(Trade::getTime, lagMs)
                 .window(sliding(windowSize, slideBy))
                 .groupingKey(Trade::getTicker)
                 .aggregate(counting())
@@ -156,6 +156,7 @@ public class LongRunningKafkaTest {
 
         Properties properties = kafkaPropertiesForResults(brokerUri, offsetReset);
         pipeline.drawFrom(KafkaSources.<String, Long>kafka(properties, RESULTS_TOPIC))
+                .withoutTimestamps()
                 .drainTo(buildVerificationSink());
 
         return pipeline;

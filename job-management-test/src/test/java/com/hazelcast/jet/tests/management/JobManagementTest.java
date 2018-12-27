@@ -92,7 +92,6 @@ public class JobManagementTest {
     public void test() throws InterruptedException {
         Pipeline p = Pipeline.create();
         p.drawFrom(Sources.<Long, Long, Long>mapJournal(SOURCE, mapPutEvents(), mapEventNewValue(), START_FROM_OLDEST))
-         .withoutTimestamps()
          .groupingKey(l -> 0L)
          .mapUsingContext(ContextFactory.withCreateFn(jet -> null), (v, k, t) -> t)
          .drainTo(Sinks.fromProcessor("sink", VerificationProcessor.supplier()));

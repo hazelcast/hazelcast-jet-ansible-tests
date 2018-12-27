@@ -100,7 +100,7 @@ public class RollingAggregateTest {
         Pipeline p = Pipeline.create();
 
         p.drawFrom(Sources.<Long, Long, Long>mapJournal(SOURCE, mapPutEvents(), mapEventNewValue(), START_FROM_OLDEST))
-         .withoutTimestamps().setName("Stream from map(" + SOURCE + ")")
+         .setName("Stream from map(" + SOURCE + ")")
          .rollingAggregate(maxBy(comparing(val -> val))).setName("RollingAggregate(max)")
          .drainTo(fromProcessor("VerificationSink", VerificationProcessor.supplier()));
 

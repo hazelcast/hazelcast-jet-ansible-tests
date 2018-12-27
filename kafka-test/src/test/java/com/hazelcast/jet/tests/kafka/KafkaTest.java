@@ -130,7 +130,7 @@ public class KafkaTest {
         Pipeline pipeline = Pipeline.create();
 
         pipeline.drawFrom(KafkaSources.kafka(kafkaProps, ConsumerRecord<String, Trade>::value, TOPIC))
-                .withTimestamps(Trade::getTime, lagMs)
+                .addTimestamps(Trade::getTime, lagMs)
                 .window(sliding(windowSize, slideBy))
                 .groupingKey(Trade::getTicker)
                 .aggregate(counting(), (winStart, timestamp, key, value) -> {

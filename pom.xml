@@ -7,7 +7,7 @@
     <groupId>com.hazelcast.jet.tests</groupId>
     <artifactId>hazelcast-jet-ansible-tests</artifactId>
     <packaging>pom</packaging>
-    <version>0.8-SNAPSHOT</version>
+    <version>0.7.3-SNAPSHOT</version>
     <description>Soak Tests for Hazelcast Jet</description>
     <modules>
         <module>kafka-test</module>
@@ -25,7 +25,7 @@
 
     <properties>
         <jdk.version>1.8</jdk.version>
-        <jet.version>0.8-SNAPSHOT</jet.version>
+        <jet.version>0.7.3-SNAPSHOT</jet.version>
         <main.basedir>${project.basedir}</main.basedir>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 

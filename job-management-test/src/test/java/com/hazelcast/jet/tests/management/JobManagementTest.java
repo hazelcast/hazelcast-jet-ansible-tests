@@ -39,7 +39,6 @@ import tests.management.VerificationProcessor;
 
 import static com.hazelcast.jet.Util.mapEventNewValue;
 import static com.hazelcast.jet.Util.mapPutEvents;
-import static com.hazelcast.jet.core.JobStatus.COMPLETED;
 import static com.hazelcast.jet.core.JobStatus.FAILED;
 import static com.hazelcast.jet.core.JobStatus.RUNNING;
 import static com.hazelcast.jet.core.JobStatus.SUSPENDED;
@@ -128,7 +127,6 @@ public class JobManagementTest {
         }
 
         job.cancel();
-        waitForJobStatus(job, COMPLETED);
     }
 
     private static void waitForJobStatus(Job job, JobStatus expectedStatus) throws InterruptedException {

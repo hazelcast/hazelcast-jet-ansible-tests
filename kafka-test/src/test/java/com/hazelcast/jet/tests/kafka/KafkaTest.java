@@ -19,7 +19,6 @@ package com.hazelcast.jet.tests.kafka;
 import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.config.JobConfig;
-import com.hazelcast.jet.core.JobStatus;
 import com.hazelcast.jet.kafka.KafkaSources;
 import com.hazelcast.jet.pipeline.Pipeline;
 import com.hazelcast.jet.pipeline.Sinks;
@@ -45,12 +44,9 @@ import java.util.Properties;
 import java.util.stream.Collectors;
 
 import static com.hazelcast.jet.aggregate.AggregateOperations.counting;
-import static com.hazelcast.jet.core.JobStatus.FAILED;
 import static com.hazelcast.jet.pipeline.WindowDefinition.sliding;
 import static java.lang.System.currentTimeMillis;
 import static java.util.concurrent.TimeUnit.MINUTES;
-import static java.util.concurrent.TimeUnit.SECONDS;
-import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 
 @RunWith(JUnit4.class)
@@ -97,7 +93,6 @@ public class KafkaTest {
         Thread.sleep(MINUTES.toMillis(1));
         System.out.println("Cancelling job...");
         job.cancel();
-        waitForJobStatus(job, JobStatus.COMPLETED);
 
         Thread.sleep(MINUTES.toMillis(1));
 
@@ -112,9 +107,8 @@ public class KafkaTest {
                                           )
                                           )
                                   )
-                                  .entrySet()
+                                  .values()
                                   .stream()
-                                  .map(Entry::getValue)
                                   .flatMap(Collection::stream)
                                   .allMatch(countedTicker -> countedTicker
                                           .getValue().equals(String.valueOf(countPerTicker)));
@@ -142,17 +136,6 @@ public class KafkaTest {
 
 
         return pipeline;
-    }
-
-    private static void waitForJobStatus(Job job, JobStatus expectedStatus) throws InterruptedException {
-        while (true) {
-            JobStatus currentStatus = job.getStatus();
-            assertNotEquals(FAILED, currentStatus);
-            if (currentStatus.equals(expectedStatus)) {
-                return;
-            }
-            SECONDS.sleep(1);
-        }
     }
 
     private static Properties getKafkaProperties(String brokerUrl, String offsetReset) {

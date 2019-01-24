@@ -10,9 +10,6 @@
     <version>0.8-SNAPSHOT</version>
     <description>Soak Tests for Hazelcast Jet</description>
     <modules>
-        <module>kafka-test</module>
-        <module>kafka-long-running-test</module>
-        <module>kafka-long-running-session-window-test</module>
         <module>hdfs-test</module>
         <module>snapshot-test</module>
         <module>remote-controller-client</module>
@@ -21,6 +18,7 @@
         <module>job-management-test</module>
         <module>jms-test</module>
         <module>jdbc-test</module>
+        <module>kafka-session-window-test</module>
     </modules>
 
     <properties>

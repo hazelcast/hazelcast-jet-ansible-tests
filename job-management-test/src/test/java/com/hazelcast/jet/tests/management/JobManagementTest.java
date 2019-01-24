@@ -93,7 +93,7 @@ public class JobManagementTest {
         p.drawFrom(Sources.<Long, Long, Long>mapJournal(SOURCE, mapPutEvents(), mapEventNewValue(), START_FROM_OLDEST))
          .withoutTimestamps()
          .groupingKey(l -> 0L)
-         .mapUsingContext(ContextFactory.withCreateFn(jet -> null), (v, k, t) -> t)
+         .mapUsingContext(ContextFactory.withCreateFn(jet -> null), (c, k, v) -> v)
          .drainTo(Sinks.fromProcessor("sink", VerificationProcessor.supplier()));
 
         JobConfig jobConfig = new JobConfig()

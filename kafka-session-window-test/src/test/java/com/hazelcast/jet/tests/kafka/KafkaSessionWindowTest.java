@@ -56,9 +56,9 @@ import static java.util.concurrent.TimeUnit.MINUTES;
 import static org.junit.Assert.assertEquals;
 
 @RunWith(JUnit4.class)
-public class LongRunningKafkaSessionWindowTest {
+public class KafkaSessionWindowTest {
 
-    private static final String TOPIC = LongRunningKafkaSessionWindowTest.class.getSimpleName();
+    private static final String TOPIC = KafkaSessionWindowTest.class.getSimpleName();
     private static final String RESULTS_TOPIC = TOPIC + "-RESULTS";
 
     private int sessionTimeout;
@@ -72,7 +72,7 @@ public class LongRunningKafkaSessionWindowTest {
     private ExecutorService producerExecutorService;
 
     public static void main(String[] args) {
-        JUnitCore.main(LongRunningKafkaSessionWindowTest.class.getName());
+        JUnitCore.main(KafkaSessionWindowTest.class.getName());
     }
 
     @Before

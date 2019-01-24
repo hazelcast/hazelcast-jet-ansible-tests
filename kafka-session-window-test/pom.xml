@@ -4,7 +4,7 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <artifactId>kafka-long-running-session-window-test</artifactId>
+    <artifactId>kafka-session-window-test</artifactId>
 
     <parent>
         <groupId>com.hazelcast.jet.tests</groupId>
@@ -38,7 +38,7 @@
                 <configuration>
                     <archive>
                         <manifest>
-                            <mainClass>com.hazelcast.jet.tests.kafka.LongRunningKafkaSessionWindowTest</mainClass>
+                            <mainClass>com.hazelcast.jet.tests.kafka.KafkaSessionWindowTest</mainClass>
                         </manifest>
                     </archive>
                 </configuration>

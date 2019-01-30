@@ -19,9 +19,7 @@ package com.hazelcast.jet.tests.jdbc;
 import com.hazelcast.config.Config;
 import com.hazelcast.config.QueueConfig;
 import com.hazelcast.core.IQueue;
-import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.Job;
-import com.hazelcast.jet.Util;
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.core.Processor.Context;
 import com.hazelcast.jet.pipeline.Pipeline;
@@ -32,11 +30,10 @@ import com.hazelcast.jet.pipeline.SourceBuilder;
 import com.hazelcast.jet.pipeline.SourceBuilder.SourceBuffer;
 import com.hazelcast.jet.pipeline.Sources;
 import com.hazelcast.jet.pipeline.StreamSource;
-import com.hazelcast.jet.server.JetBootstrap;
+import com.hazelcast.jet.tests.common.AbstractSoakTest;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
-import org.junit.runner.JUnitCore;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
@@ -51,32 +48,31 @@ import java.util.List;
 import java.util.Map.Entry;
 
 import static com.hazelcast.jet.core.JobStatus.FAILED;
+import static com.hazelcast.jet.tests.common.Util.entry;
+import static com.hazelcast.jet.tests.common.Util.runTestWithArguments;
 import static java.util.concurrent.TimeUnit.MINUTES;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.Assert.assertNotEquals;
 
 @RunWith(JUnit4.class)
-public class JdbcTest {
+public class JdbcTest extends AbstractSoakTest {
 
     private static final String DB_AND_USER = "/soak-test?user=root&password=soak-test";
     private static final String QUEUE_NAME = JdbcTest.class.getSimpleName();
     private static final int PERSON_COUNT = 20_000;
 
-
-    private JetInstance jet;
     private String connectionUrl;
     private long durationInMillis;
 
     public static void main(String[] args) {
-        JUnitCore.main(JdbcTest.class.getName());
+        runTestWithArguments(JdbcTest.class.getName(), args, 2);
     }
 
     @Before
     public void setup() throws SQLException {
-        System.setProperty("hazelcast.logging.type", "log4j");
         connectionUrl = System.getProperty("connectionUrl", "jdbc:mysql://localhost") + DB_AND_USER;
         durationInMillis = MINUTES.toMillis(Integer.parseInt(System.getProperty("durationInMinutes", "30")));
-        jet = JetBootstrap.getInstance();
+
         Config config = jet.getHazelcastInstance().getConfig();
         config.addQueueConfig(new QueueConfig().setName(QUEUE_NAME).setMaxSize(PERSON_COUNT * 2));
 
@@ -190,7 +186,7 @@ public class JdbcTest {
         void addToBuffer(SourceBuffer<Entry<Long, String>> buffer) {
             queue.drainTo(tempList, MAX_ELEMENTS);
             for (String item : tempList) {
-                buffer.add(Util.entry(counter, item));
+                buffer.add(entry(counter, item));
                 counter += totalParallelism;
             }
             tempList.clear();

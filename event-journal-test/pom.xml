@@ -21,7 +21,12 @@
         <dependency>
             <groupId>com.hazelcast.jet.tests</groupId>
             <artifactId>snapshot-test</artifactId>
-            <version>0.8-SNAPSHOT</version>
+            <version>${jet.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.hazelcast.jet.tests</groupId>
+            <artifactId>soak-tests-common</artifactId>
+            <version>${jet.version}</version>
         </dependency>
     </dependencies>
 
@@ -33,7 +38,7 @@
                 <configuration>
                     <archive>
                         <manifest>
-                            <mainClass>jet.com.hazelcast.tests.eventjournal.EventJournalTest</mainClass>
+                            <mainClass>com.hazelcast.jet.tests.eventjournal.EventJournalTest</mainClass>
                         </manifest>
                     </archive>
                 </configuration>
@@ -41,7 +46,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-shade-plugin</artifactId>
-                <version>2.1</version>
+                <version>${maven.shade.plugin.version}</version>
                 <executions>
                     <execution>
                         <phase>package</phase>
@@ -55,7 +60,7 @@
                                 <transformer
                                         implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                                     <manifestEntries>
-                                        <Main-Class>jet.com.hazelcast.tests.eventjournal.EventJournalTest</Main-Class>
+                                        <Main-Class>com.hazelcast.jet.tests.eventjournal.EventJournalTest</Main-Class>
                                     </manifestEntries>
                                 </transformer>
                             </transformers>
@@ -73,7 +78,7 @@
                             <artifactSet>
                                 <includes>
                                     <include>com.hazelcast.jet.tests:*</include>
-                                    <include>jet.com.hazelcast.tests.eventjournal:*</include>
+                                    <include>com.hazelcast.jet.tests.eventjournal:*</include>
                                 </includes>
                             </artifactSet>
                         </configuration>

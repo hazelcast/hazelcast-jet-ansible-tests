@@ -14,54 +14,48 @@
  * limitations under the License.
  */
 
-package jet.com.hazelcast.tests.eventjournal;
+package com.hazelcast.jet.tests.eventjournal;
 
 import com.hazelcast.client.proxy.ClientMapProxy;
 import com.hazelcast.config.Config;
 import com.hazelcast.config.EventJournalConfig;
 import com.hazelcast.core.EntryEventType;
-import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.aggregate.AggregateOperations;
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.config.ProcessingGuarantee;
-import com.hazelcast.jet.core.JobStatus;
 import com.hazelcast.jet.pipeline.Pipeline;
 import com.hazelcast.jet.pipeline.Sinks;
 import com.hazelcast.jet.pipeline.Sources;
-import com.hazelcast.jet.server.JetBootstrap;
+import com.hazelcast.jet.tests.common.AbstractSoakTest;
 import com.hazelcast.logging.LoggingService;
 import com.hazelcast.map.journal.EventJournalMapEvent;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
-import org.junit.runner.JUnitCore;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import tests.eventjournal.EventJournalConsumer;
 import tests.eventjournal.EventJournalTradeProducer;
 import tests.snapshot.QueueVerifier;
 
-import java.io.Serializable;
-
-import static com.hazelcast.jet.core.JobStatus.COMPLETED;
 import static com.hazelcast.jet.core.JobStatus.FAILED;
 import static com.hazelcast.jet.function.DistributedFunctions.wholeItem;
-import static com.hazelcast.jet.impl.util.Util.uncheckRun;
 import static com.hazelcast.jet.pipeline.JournalInitialPosition.START_FROM_OLDEST;
 import static com.hazelcast.jet.pipeline.WindowDefinition.sliding;
-import static java.util.concurrent.TimeUnit.MILLISECONDS;
-import static java.util.concurrent.TimeUnit.MINUTES;
+import static com.hazelcast.jet.tests.common.Util.getJobStatus;
+import static com.hazelcast.jet.tests.common.Util.runTestWithArguments;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 
 @RunWith(JUnit4.class)
-public class EventJournalTest implements Serializable {
+public class EventJournalTest extends AbstractSoakTest {
 
     private static final String MAP_NAME = EventJournalTest.class.getSimpleName();
     private static final String RESULTS_MAP_NAME = MAP_NAME + "-RESULTS";
-    private transient JetInstance jet;
+
+
     private long durationInMillis;
     private int countPerTicker;
     private int snapshotIntervalMs;
@@ -73,24 +67,19 @@ public class EventJournalTest implements Serializable {
     private EventJournalTradeProducer tradeProducer;
 
     public static void main(String[] args) {
-        JUnitCore.main(EventJournalTest.class.getName());
+        runTestWithArguments(EventJournalTest.class.getName(), args, 7);
     }
 
     @Before
     public void setUp() {
-        System.setProperty("hazelcast.logging.type", "log4j");
-        String isolatedClientConfig = System.getProperty("isolatedClientConfig");
-        if (isolatedClientConfig != null) {
-            System.setProperty("hazelcast.client.config", isolatedClientConfig);
-        }
-        lagMs = Integer.parseInt(System.getProperty("lagMs", "1500"));
-        int timestampPerSecond = Integer.parseInt(System.getProperty("timestampPerSecond", "50"));
-        snapshotIntervalMs = Integer.parseInt(System.getProperty("snapshotIntervalMs", "5000"));
-        windowSize = Integer.parseInt(System.getProperty("windowSize", "20"));
-        slideBy = Integer.parseInt(System.getProperty("slideBy", "10"));
-        countPerTicker = Integer.parseInt(System.getProperty("countPerTicker", "100"));
-        durationInMillis = MINUTES.toMillis(Integer.parseInt(System.getProperty("durationInMinutes", "30")));
-        jet = JetBootstrap.getInstance();
+        lagMs = propertyInt("lagMs", 1500);
+        int timestampPerSecond = propertyInt("timestampPerSecond", 50);
+        snapshotIntervalMs = propertyInt("snapshotIntervalMs", 5000);
+        windowSize = propertyInt("windowSize", 20);
+        slideBy = propertyInt("slideBy", 10);
+        countPerTicker = propertyInt("countPerTicker", 100);
+        durationInMillis = durationInMillis();
+
         memberSize = jet.getHazelcastInstance().getCluster().getMembers().size();
         partitionCount = jet.getHazelcastInstance().getPartitionService().getPartitions().size();
         Config config = jet.getHazelcastInstance().getConfig();
@@ -132,14 +121,10 @@ public class EventJournalTest implements Serializable {
             }
             assertNotEquals(getJobStatus(job), FAILED);
         }
+        assertNotEquals(getJobStatus(job), FAILED);
         System.out.println("Cancelling jobs..");
         queueVerifier.close();
         job.cancel();
-        JobStatus status = getJobStatus(job);
-        while (status != COMPLETED && status != FAILED) {
-            SECONDS.sleep(1);
-            status = getJobStatus(job);
-        }
     }
 
     @After
@@ -166,13 +151,5 @@ public class EventJournalTest implements Serializable {
         return pipeline;
     }
 
-    private static JobStatus getJobStatus(Job job) {
-        try {
-            return job.getStatus();
-        } catch (Exception e) {
-            uncheckRun(() -> MILLISECONDS.sleep(250));
-            return getJobStatus(job);
-        }
-    }
 
 }

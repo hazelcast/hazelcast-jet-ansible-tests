@@ -16,7 +16,6 @@
 
 package com.hazelcast.jet.tests.hdfs;
 
-import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.core.ProcessorMetaSupplier;
 import com.hazelcast.jet.hadoop.HdfsSinks;
@@ -24,8 +23,7 @@ import com.hazelcast.jet.hadoop.HdfsSources;
 import com.hazelcast.jet.pipeline.BatchSource;
 import com.hazelcast.jet.pipeline.Pipeline;
 import com.hazelcast.jet.pipeline.Sink;
-import com.hazelcast.jet.pipeline.Sinks;
-import com.hazelcast.jet.server.JetBootstrap;
+import com.hazelcast.jet.tests.common.AbstractSoakTest;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocalFileSystem;
@@ -39,7 +37,6 @@ import org.apache.hadoop.mapred.TextOutputFormat;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
-import org.junit.runner.JUnitCore;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import tests.hdfs.WordGenerator;
@@ -55,8 +52,9 @@ import java.util.concurrent.Executors;
 import static com.hazelcast.jet.aggregate.AggregateOperations.counting;
 import static com.hazelcast.jet.core.processor.Processors.noopP;
 import static com.hazelcast.jet.function.DistributedFunctions.wholeItem;
+import static com.hazelcast.jet.pipeline.Sinks.fromProcessor;
 import static com.hazelcast.jet.pipeline.Sources.batchFromProcessor;
-import static java.lang.Integer.parseInt;
+import static com.hazelcast.jet.tests.common.Util.runTestWithArguments;
 import static java.lang.Long.parseLong;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.MINUTES;
@@ -64,41 +62,38 @@ import static org.junit.Assert.assertEquals;
 import static tests.hdfs.WordGenerator.wordGenerator;
 
 @RunWith(JUnit4.class)
-public class HdfsWordCountTest {
+public class HdfsWordCountTest extends AbstractSoakTest {
 
     private static final String TAB_STRING = "\t";
 
-    private JetInstance jet;
     private String hdfsUri;
     private String inputPath;
     private String outputPath;
-    private long distinct;
-    private long total;
+    private int distinct;
+    private int total;
     private int threadCount;
     private long durationInMillis;
     private volatile Throwable error;
 
     public static void main(String[] args) {
-        JUnitCore.main(HdfsWordCountTest.class.getName());
+        runTestWithArguments(HdfsWordCountTest.class.getName(), args, 5);
     }
 
     @Before
     public void init() {
-        System.setProperty("hazelcast.logging.type", "log4j");
-        jet = JetBootstrap.getInstance();
         long timestamp = System.nanoTime();
-        hdfsUri = System.getProperty("hdfs_name_node", "hdfs://localhost:8020");
-        inputPath = System.getProperty("hdfs_input_path", "hdfs-input-") + timestamp;
-        outputPath = System.getProperty("hdfs_output_path", "hdfs-output-") + timestamp;
-        distinct = parseLong(System.getProperty("hdfs_distinct", "500000"));
-        total = parseLong(System.getProperty("hdfs_total", "4800000"));
-        threadCount = parseInt(System.getProperty("hdfs_thread_count", "1"));
-        durationInMillis = MINUTES.toMillis(parseLong(System.getProperty("hdfs_duration_minutes", "30")));
+        hdfsUri = property("hdfs_name_node", "hdfs://localhost:8020");
+        inputPath = property("hdfs_input_path", "hdfs-input-") + timestamp;
+        outputPath = property("hdfs_output_path", "hdfs-output-") + timestamp;
+        distinct = propertyInt("hdfs_distinct", 500000);
+        total = propertyInt("hdfs_total", 4800000);
+        threadCount = propertyInt("hdfs_thread_count", 1);
+        durationInMillis = durationInMillis();
 
         Pipeline pipeline = Pipeline.create();
 
         BatchSource<Object> source = batchFromProcessor("generator", wordGenerator(hdfsUri, inputPath, distinct, total));
-        Sink<Object> noopSink = Sinks.fromProcessor("noopSink", ProcessorMetaSupplier.of(noopP()));
+        Sink<Object> noopSink = fromProcessor("noopSink", ProcessorMetaSupplier.of(noopP()));
         pipeline.drawFrom(source).drainTo(noopSink);
 
         JobConfig jobConfig = new JobConfig();

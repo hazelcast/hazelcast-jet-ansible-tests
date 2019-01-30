@@ -16,19 +16,16 @@
 
 package com.hazelcast.jet.tests.jms;
 
-import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.config.JobConfig;
-import com.hazelcast.jet.core.JobStatus;
 import com.hazelcast.jet.pipeline.Pipeline;
 import com.hazelcast.jet.pipeline.Sinks;
 import com.hazelcast.jet.pipeline.Sources;
-import com.hazelcast.jet.server.JetBootstrap;
+import com.hazelcast.jet.tests.common.AbstractSoakTest;
 import org.apache.activemq.ActiveMQConnectionFactory;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
-import org.junit.runner.JUnitCore;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import tests.jms.JmsMessageConsumer;
@@ -36,34 +33,33 @@ import tests.jms.JmsMessageProducer;
 
 import static com.hazelcast.jet.core.JobStatus.FAILED;
 import static com.hazelcast.jet.core.JobStatus.RUNNING;
-import static java.util.concurrent.TimeUnit.MINUTES;
+import static com.hazelcast.jet.tests.common.Util.runTestWithArguments;
+import static com.hazelcast.jet.tests.common.Util.waitForJobStatus;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 
 @RunWith(JUnit4.class)
-public class JmsTest {
+public class JmsTest extends AbstractSoakTest {
 
     private static final String SOURCE_QUEUE = "source";
     private static final String MIDDLE_QUEUE = "middle";
     private static final String SINK_QUEUE = "sink";
 
-    private JetInstance jet;
     private JmsMessageProducer producer;
     private JmsMessageConsumer consumer;
     private String brokerURL;
     private long durationInMillis;
 
     public static void main(String[] args) {
-        JUnitCore.main(JmsTest.class.getName());
+        runTestWithArguments(JmsTest.class.getName(), args, 2);
     }
 
     @Before
     public void setup() {
-        System.setProperty("hazelcast.logging.type", "log4j");
-        brokerURL = System.getProperty("brokerURL", "tcp://localhost:61616");
-        durationInMillis = MINUTES.toMillis(Integer.parseInt(System.getProperty("durationInMinutes", "10")));
-        jet = JetBootstrap.getInstance();
+        brokerURL = property("brokerURL", "tcp://localhost:61616");
+        durationInMillis = durationInMillis();
+
         producer = new JmsMessageProducer(brokerURL, SOURCE_QUEUE);
         consumer = new JmsMessageConsumer(brokerURL, SINK_QUEUE);
     }
@@ -116,11 +112,9 @@ public class JmsTest {
         System.out.println("Consumer stopped");
 
         job2.cancel();
-//        waitForJobStatus(job2, COMPLETED);
         System.out.println("Job2 completed");
 
         job1.cancel();
-//        waitForJobStatus(job1, COMPLETED);
         System.out.println("Job1 completed");
 
     }
@@ -137,15 +131,4 @@ public class JmsTest {
         assertEquals(expectedTotalCount, consumer.getCount());
     }
 
-    private static void waitForJobStatus(Job job, JobStatus expectedStatus) throws InterruptedException {
-        while (true) {
-            JobStatus currentStatus = job.getStatus();
-            System.out.println("expectedStatus: " + expectedStatus + ", actualStatus: " + currentStatus);
-            assertNotEquals(FAILED, currentStatus);
-            if (currentStatus.equals(expectedStatus)) {
-                return;
-            }
-            SECONDS.sleep(1);
-        }
-    }
 }

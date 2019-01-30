@@ -19,56 +19,51 @@ package com.hazelcast.jet.tests.management;
 import com.hazelcast.config.Config;
 import com.hazelcast.config.EventJournalConfig;
 import com.hazelcast.jet.IMapJet;
-import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.config.ProcessingGuarantee;
-import com.hazelcast.jet.core.JobStatus;
 import com.hazelcast.jet.pipeline.ContextFactory;
 import com.hazelcast.jet.pipeline.Pipeline;
 import com.hazelcast.jet.pipeline.Sinks;
 import com.hazelcast.jet.pipeline.Sources;
-import com.hazelcast.jet.server.JetBootstrap;
+import com.hazelcast.jet.tests.common.AbstractSoakTest;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
-import org.junit.runner.JUnitCore;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import tests.management.VerificationProcessor;
 
 import static com.hazelcast.jet.Util.mapEventNewValue;
 import static com.hazelcast.jet.Util.mapPutEvents;
-import static com.hazelcast.jet.core.JobStatus.FAILED;
 import static com.hazelcast.jet.core.JobStatus.RUNNING;
 import static com.hazelcast.jet.core.JobStatus.SUSPENDED;
 import static com.hazelcast.jet.pipeline.JournalInitialPosition.START_FROM_OLDEST;
-import static java.util.concurrent.TimeUnit.MINUTES;
+import static com.hazelcast.jet.tests.common.Util.runTestWithArguments;
+import static com.hazelcast.jet.tests.common.Util.sleepSeconds;
+import static com.hazelcast.jet.tests.common.Util.waitForJobStatus;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static java.util.concurrent.locks.LockSupport.parkNanos;
-import static org.junit.Assert.assertNotEquals;
 
 @RunWith(JUnit4.class)
-public class JobManagementTest {
+public class JobManagementTest extends AbstractSoakTest {
 
     private static final String SOURCE = JobManagementTest.class.getSimpleName();
 
-    private JetInstance jet;
     private Producer producer;
+    private int snapshotIntervalMs;
     private long durationInMillis;
-    private long snapshotIntervalMs;
 
 
     public static void main(String[] args) {
-        JUnitCore.main(JobManagementTest.class.getName());
+        runTestWithArguments(JobManagementTest.class.getName(), args, 2);
     }
 
     @Before
     public void setup() {
-        System.setProperty("hazelcast.logging.type", "log4j");
-        durationInMillis = MINUTES.toMillis(Integer.parseInt(System.getProperty("durationInMinutes", "30")));
-        snapshotIntervalMs = Integer.parseInt(System.getProperty("snapshotIntervalMs", "5000"));
-        jet = JetBootstrap.getInstance();
+        snapshotIntervalMs = propertyInt("snapshotIntervalMs", 5000);
+        durationInMillis = durationInMillis();
+
         Config config = jet.getHazelcastInstance().getConfig();
         config.addEventJournalConfig(
                 new EventJournalConfig().setMapName(SOURCE).setCapacity(300_000)
@@ -127,23 +122,6 @@ public class JobManagementTest {
         }
 
         job.cancel();
-    }
-
-    private static void waitForJobStatus(Job job, JobStatus expectedStatus) throws InterruptedException {
-        for (int i = 0; i < 100; i++) {
-            JobStatus currentStatus = job.getStatus();
-            assertNotEquals(FAILED, currentStatus);
-            if (currentStatus.equals(expectedStatus)) {
-                return;
-            }
-            sleepSeconds(1);
-        }
-        throw new IllegalStateException(String.format("Wait for status[%s] timed out. current status: %s",
-                expectedStatus, job.getStatus()));
-    }
-
-    private static void sleepSeconds(int seconds) throws InterruptedException {
-        SECONDS.sleep(seconds);
     }
 
     static class Producer {

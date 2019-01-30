@@ -29,7 +29,8 @@ import org.apache.thrift.protocol.TProtocol;
 import org.apache.thrift.transport.TSocket;
 import org.apache.thrift.transport.TTransport;
 
-import java.util.Set;
+import java.util.ArrayList;
+import java.util.Collections;
 
 import static com.hazelcast.jet.impl.util.Util.uncheckRun;
 import static java.lang.Integer.parseInt;
@@ -70,7 +71,8 @@ public final class RemoteControllerClient {
         HazelcastInstance instance = jet.getHazelcastInstance();
         logger = instance.getLoggingService().getLogger(RemoteControllerClient.class);
 
-        Set<Member> members = instance.getCluster().getMembers();
+        ArrayList<Member> members = new ArrayList<>(instance.getCluster().getMembers());
+        Collections.shuffle(members);
 
         long begin = System.currentTimeMillis();
         sleepMinutes(initialSleep);

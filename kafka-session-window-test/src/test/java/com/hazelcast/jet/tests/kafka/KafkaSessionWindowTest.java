@@ -16,7 +16,6 @@
 
 package com.hazelcast.jet.tests.kafka;
 
-import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.config.ProcessingGuarantee;
@@ -26,7 +25,7 @@ import com.hazelcast.jet.kafka.KafkaSources;
 import com.hazelcast.jet.pipeline.Pipeline;
 import com.hazelcast.jet.pipeline.Sink;
 import com.hazelcast.jet.pipeline.SinkBuilder;
-import com.hazelcast.jet.server.JetBootstrap;
+import com.hazelcast.jet.tests.common.AbstractSoakTest;
 import com.hazelcast.util.UuidUtil;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.serialization.LongDeserializer;
@@ -36,7 +35,6 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
-import org.junit.runner.JUnitCore;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import tests.kafka.Trade;
@@ -52,11 +50,12 @@ import static com.hazelcast.jet.aggregate.AggregateOperations.counting;
 import static com.hazelcast.jet.core.JobStatus.RUNNING;
 import static com.hazelcast.jet.core.JobStatus.STARTING;
 import static com.hazelcast.jet.pipeline.WindowDefinition.session;
+import static com.hazelcast.jet.tests.common.Util.runTestWithArguments;
 import static java.util.concurrent.TimeUnit.MINUTES;
 import static org.junit.Assert.assertEquals;
 
 @RunWith(JUnit4.class)
-public class KafkaSessionWindowTest {
+public class KafkaSessionWindowTest extends AbstractSoakTest {
 
     private static final String TOPIC = KafkaSessionWindowTest.class.getSimpleName();
     private static final String RESULTS_TOPIC = TOPIC + "-RESULTS";
@@ -66,27 +65,24 @@ public class KafkaSessionWindowTest {
     private String offsetReset;
     private int lagMs;
     private int countPerTicker;
-    private Properties kafkaProps;
-    private JetInstance jet;
     private long durationInMillis;
-    private ExecutorService producerExecutorService;
+
+    private transient ExecutorService producerExecutorService;
 
     public static void main(String[] args) {
-        JUnitCore.main(KafkaSessionWindowTest.class.getName());
+        runTestWithArguments(KafkaSessionWindowTest.class.getName(), args, 6);
     }
 
     @Before
     public void setUp() {
-        System.setProperty("hazelcast.logging.type", "log4j");
         producerExecutorService = Executors.newSingleThreadExecutor();
-        brokerUri = System.getProperty("brokerUri", "localhost:9092");
-        offsetReset = System.getProperty("offsetReset", "earliest");
-        lagMs = Integer.parseInt(System.getProperty("lagMs", "50"));
-        countPerTicker = Integer.parseInt(System.getProperty("countPerTicker", "20"));
-        sessionTimeout = Integer.parseInt(System.getProperty("sessionTimeout", "100"));
-        durationInMillis = MINUTES.toMillis(Integer.parseInt(System.getProperty("durationInMinutes", "3")));
-        kafkaProps = kafkaPropertiesForTrades(brokerUri, offsetReset);
-        jet = JetBootstrap.getInstance();
+
+        brokerUri = property("brokerUri", "localhost:9092");
+        offsetReset = property("offsetReset", "earliest");
+        lagMs = propertyInt("lagMs", 50);
+        countPerTicker = propertyInt("countPerTicker", 20);
+        sessionTimeout = propertyInt("sessionTimeout", 100);
+        durationInMillis = durationInMillis();
 
         producerExecutorService.submit(() -> {
             try (TradeProducer tradeProducer = new TradeProducer(brokerUri)) {
@@ -132,6 +128,7 @@ public class KafkaSessionWindowTest {
     private Pipeline pipeline() {
         Pipeline pipeline = Pipeline.create();
 
+        Properties kafkaProps = kafkaPropertiesForTrades(brokerUri, offsetReset);
         Properties propsForResult = kafkaPropertiesForResults(brokerUri, offsetReset);
 
         pipeline.drawFrom(KafkaSources.kafka(kafkaProps, ConsumerRecord<String, Trade>::value, TOPIC))

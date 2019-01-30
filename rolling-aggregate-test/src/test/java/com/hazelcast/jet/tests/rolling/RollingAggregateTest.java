@@ -20,18 +20,16 @@ import com.hazelcast.config.Config;
 import com.hazelcast.config.EventJournalConfig;
 import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.jet.IMapJet;
-import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.config.JobConfig;
-import com.hazelcast.jet.core.JobStatus;
 import com.hazelcast.jet.pipeline.Pipeline;
 import com.hazelcast.jet.pipeline.Sources;
-import com.hazelcast.jet.server.JetBootstrap;
+import com.hazelcast.jet.tests.common.AbstractSoakTest;
 import com.hazelcast.logging.ILogger;
 import org.junit.After;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
-import org.junit.runner.JUnitCore;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import tests.rolling.VerificationProcessor;
@@ -40,40 +38,34 @@ import static com.hazelcast.jet.Util.mapEventNewValue;
 import static com.hazelcast.jet.Util.mapPutEvents;
 import static com.hazelcast.jet.aggregate.AggregateOperations.maxBy;
 import static com.hazelcast.jet.config.ProcessingGuarantee.EXACTLY_ONCE;
-import static com.hazelcast.jet.core.JobStatus.COMPLETED;
 import static com.hazelcast.jet.core.JobStatus.FAILED;
 import static com.hazelcast.jet.function.DistributedComparator.comparing;
 import static com.hazelcast.jet.pipeline.JournalInitialPosition.START_FROM_OLDEST;
 import static com.hazelcast.jet.pipeline.Sinks.fromProcessor;
-import static java.util.concurrent.TimeUnit.MINUTES;
+import static com.hazelcast.jet.tests.common.Util.getJobStatus;
+import static com.hazelcast.jet.tests.common.Util.runTestWithArguments;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static java.util.concurrent.locks.LockSupport.parkNanos;
 
 @RunWith(JUnit4.class)
-public class RollingAggregateTest {
+public class RollingAggregateTest extends AbstractSoakTest {
 
     private static final String SOURCE = RollingAggregateTest.class.getSimpleName();
 
-    private JetInstance jet;
     private Producer producer;
     private ILogger logger;
     private long durationInMillis;
     private long snapshotIntervalMs;
 
     public static void main(String[] args) {
-        JUnitCore.main(RollingAggregateTest.class.getName());
+        runTestWithArguments(RollingAggregateTest.class.getName(), args, 2);
     }
 
     @Before
     public void setUp() {
-        System.setProperty("hazelcast.logging.type", "log4j");
-        String isolatedClientConfig = System.getProperty("isolatedClientConfig");
-        if (isolatedClientConfig != null) {
-            System.setProperty("hazelcast.client.config", isolatedClientConfig);
-        }
-        durationInMillis = MINUTES.toMillis(Integer.parseInt(System.getProperty("durationInMinutes", "30")));
-        snapshotIntervalMs = Integer.parseInt(System.getProperty("snapshotIntervalMs", "5000"));
-        jet = JetBootstrap.getInstance();
+        snapshotIntervalMs = propertyInt("snapshotIntervalMs", 5000);
+        durationInMillis = durationInMillis();
+
         HazelcastInstance hazelcastInstance = jet.getHazelcastInstance();
         logger = hazelcastInstance.getLoggingService().getLogger(RollingAggregateTest.class);
         Config config = hazelcastInstance.getConfig();
@@ -113,32 +105,12 @@ public class RollingAggregateTest {
 
         long begin = System.currentTimeMillis();
         while (System.currentTimeMillis() - begin < durationInMillis) {
-            assertJobStatus(job);
+            Assert.assertNotEquals(FAILED, getJobStatus(job));
             SECONDS.sleep(30);
         }
 
+        logger.info("Cancelling job...");
         job.cancel();
-        JobStatus status = getJobStatus(job);
-        while (status != COMPLETED && status != FAILED) {
-            SECONDS.sleep(1);
-            status = getJobStatus(job);
-        }
-    }
-
-    private void assertJobStatus(Job job) {
-        if (FAILED.equals(getJobStatus(job))) {
-            logger.severe("Job is failed");
-            job.join();
-        }
-    }
-
-    private JobStatus getJobStatus(Job job) {
-        try {
-            return job.getStatus();
-        } catch (Exception e) {
-            logger.warning("Exception during status check", e);
-            return null;
-        }
     }
 
     static class Producer {

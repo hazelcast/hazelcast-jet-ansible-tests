@@ -16,14 +16,13 @@
 
 package com.hazelcast.jet.tests.snapshot;
 
-import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.config.ProcessingGuarantee;
 import com.hazelcast.jet.kafka.KafkaSinks;
 import com.hazelcast.jet.kafka.KafkaSources;
 import com.hazelcast.jet.pipeline.Pipeline;
-import com.hazelcast.jet.server.JetBootstrap;
+import com.hazelcast.jet.tests.common.AbstractSoakTest;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.logging.LoggingService;
 import com.hazelcast.util.UuidUtil;
@@ -35,7 +34,6 @@ import org.apache.kafka.common.serialization.LongSerializer;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
-import org.junit.runner.JUnitCore;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import tests.snapshot.QueueVerifier;
@@ -52,18 +50,17 @@ import static com.hazelcast.jet.config.ProcessingGuarantee.AT_LEAST_ONCE;
 import static com.hazelcast.jet.config.ProcessingGuarantee.EXACTLY_ONCE;
 import static com.hazelcast.jet.function.DistributedFunctions.wholeItem;
 import static com.hazelcast.jet.pipeline.WindowDefinition.sliding;
-import static java.util.concurrent.TimeUnit.MINUTES;
+import static com.hazelcast.jet.tests.common.Util.runTestWithArguments;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 @RunWith(JUnit4.class)
-public class SnapshotTest {
+public class SnapshotTest extends AbstractSoakTest {
 
     private static final String TOPIC = SnapshotTest.class.getSimpleName();
     private static final String RESULTS_TOPIC = TOPIC + "-RESULTS";
     private static final int POLL_TIMEOUT = 1000;
 
-    private JetInstance jet;
     private String brokerUri;
     private String offsetReset;
     private long durationInMillis;
@@ -77,27 +74,22 @@ public class SnapshotTest {
     private ILogger logger;
 
     public static void main(String[] args) {
-        JUnitCore.main(SnapshotTest.class.getName());
+        runTestWithArguments(SnapshotTest.class.getName(), args, 9);
     }
 
     @Before
     public void setUp() {
-        System.setProperty("hazelcast.logging.type", "log4j");
-        String isolatedClientConfig = System.getProperty("isolatedClientConfig");
-        if (isolatedClientConfig != null) {
-            System.setProperty("hazelcast.client.config", isolatedClientConfig);
-        }
         producerExecutorService = Executors.newSingleThreadExecutor();
-        brokerUri = System.getProperty("brokerUri", "localhost:9092");
-        offsetReset = System.getProperty("offsetReset", "earliest");
-        lagMs = Integer.parseInt(System.getProperty("lagMs", "3000"));
-        snapshotIntervalMs = Integer.parseInt(System.getProperty("snapshotIntervalMs", "1000"));
-        windowSize = Integer.parseInt(System.getProperty("windowSize", "20"));
-        slideBy = Integer.parseInt(System.getProperty("slideBy", "10"));
-        jobCount = Integer.parseInt(System.getProperty("jobCount", "2"));
-        countPerTicker = Integer.parseInt(System.getProperty("countPerTicker", "1000"));
-        durationInMillis = MINUTES.toMillis(Integer.parseInt(System.getProperty("durationInMinutes", "5")));
-        jet = JetBootstrap.getInstance();
+        brokerUri = property("brokerUri", "localhost:9092");
+        offsetReset = property("offsetReset", "earliest");
+        lagMs = propertyInt("lagMs", 3000);
+        snapshotIntervalMs = propertyInt("snapshotIntervalMs", 1000);
+        windowSize = propertyInt("windowSize", 20);
+        slideBy = propertyInt("slideBy", 10);
+        jobCount = propertyInt("jobCount", 2);
+        countPerTicker = propertyInt("countPerTicker", 1000);
+        durationInMillis = durationInMillis();
+
         logger = jet.getHazelcastInstance().getLoggingService().getLogger(SnapshotTest.class);
 
         producerExecutorService.submit(() -> {
@@ -196,7 +188,7 @@ public class SnapshotTest {
             jobConfig.setSnapshotIntervalMillis(snapshotIntervalMs);
             jobConfig.setProcessingGuarantee(guarantee);
 
-            jobs[i]  = jet.newJob(pipeline(guarantee, i), jobConfig);
+            jobs[i] = jet.newJob(pipeline(guarantee, i), jobConfig);
         }
         return jobs;
     }

@@ -65,7 +65,7 @@
         <dependency>
             <groupId>com.hazelcast.jet.tests</groupId>
             <artifactId>soak-tests-common</artifactId>
-            <version>0.8-SNAPSHOT</version>
+            <version>${jet.version}</version>
         </dependency>
 
     </dependencies>
@@ -121,25 +121,6 @@
                                     <include>com.hazelcast.jet.tests.hdfs:*</include>
                                 </includes>
                             </artifactSet>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
-            <plugin>
-                <groupId>org.codehaus.mojo</groupId>
-                <artifactId>build-helper-maven-plugin</artifactId>
-                <version>1.4</version>
-                <executions>
-                    <execution>
-                        <id>add-test-source</id>
-                        <phase>generate-sources</phase>
-                        <goals>
-                            <goal>add-source</goal>
-                        </goals>
-                        <configuration>
-                            <sources>
-                                <source>${basedir}/src/test/java</source>
-                            </sources>
                         </configuration>
                     </execution>
                 </executions>

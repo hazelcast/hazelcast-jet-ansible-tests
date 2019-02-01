@@ -33,6 +33,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 
 import static com.hazelcast.jet.impl.util.Util.uncheckRun;
+import static com.hazelcast.jet.tests.common.Util.parseArguments;
 import static java.lang.Integer.parseInt;
 import static java.util.concurrent.TimeUnit.MINUTES;
 
@@ -40,7 +41,7 @@ import static java.util.concurrent.TimeUnit.MINUTES;
  * This class is used to connect to the HazelcastRemoteController
  * instances running on the cluster machines and restart
  * Hazelcast Jet instances one by one cycling through instances.
- *
+ * <p>
  * A python script is invoked on the remote machine which
  * stops/starts a system service `hazelcast-jet-isolated`
  */
@@ -57,11 +58,12 @@ public final class RemoteControllerClient {
 
     public static void main(String[] args) throws Exception {
         System.setProperty("hazelcast.logging.type", "log4j");
+        parseArguments(args);
         String jetHome = System.getProperty("jetHome");
-        System.setProperty("hazelcast.client.config", jetHome + "/config/hazelcast-client-isolated.xml");
         String logDir = jetHome + "/logs";
         int initialSleep = parseInt(System.getProperty("initialSleepMinutes", "5"));
         int sleepBetweenRestart = parseInt(System.getProperty("sleepBetweenRestartMinutes", "5"));
+        boolean shuffle = Boolean.parseBoolean(System.getProperty("shuffle", "true"));
         int durationInMinutes = parseInt(System.getProperty("durationInMinutes", "30")) - VERIFICATION_DURATION_GAP;
         System.out.println("RemoteController will run for " + durationInMinutes);
 
@@ -72,7 +74,9 @@ public final class RemoteControllerClient {
         logger = instance.getLoggingService().getLogger(RemoteControllerClient.class);
 
         ArrayList<Member> members = new ArrayList<>(instance.getCluster().getMembers());
-        Collections.shuffle(members);
+        if (shuffle) {
+            Collections.shuffle(members);
+        }
 
         long begin = System.currentTimeMillis();
         sleepMinutes(initialSleep);

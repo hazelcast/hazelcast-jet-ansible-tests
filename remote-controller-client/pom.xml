@@ -34,6 +34,11 @@
             <version>3.0.0</version>
             <scope>provided</scope>
         </dependency>
+        <dependency>
+            <groupId>com.hazelcast.jet.tests</groupId>
+            <artifactId>soak-tests-common</artifactId>
+            <version>${jet.version}</version>
+        </dependency>
     </dependencies>
 
     <build>
@@ -83,6 +88,7 @@
                             </filters>
                             <artifactSet>
                                 <includes>
+                                    <include>com.hazelcast.jet.tests:*</include>
                                     <include>com.hazelcast:hazelcast-remote-controller:*</include>
                                 </includes>
                             </artifactSet>

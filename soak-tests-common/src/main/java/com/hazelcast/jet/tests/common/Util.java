@@ -18,14 +18,14 @@ package com.hazelcast.jet.tests.common;
 
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.core.JobStatus;
-import org.junit.runner.JUnitCore;
 
 import java.util.AbstractMap;
-import java.util.Arrays;
 import java.util.Map;
 
 import static com.hazelcast.jet.core.JobStatus.FAILED;
 import static com.hazelcast.jet.impl.util.Util.uncheckRun;
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
+import static java.util.concurrent.TimeUnit.MINUTES;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.Assert.assertNotEquals;
 
@@ -45,7 +45,7 @@ public final class Util {
         }
     }
 
-    public static void waitForJobStatus(Job job, JobStatus expectedStatus) throws InterruptedException {
+    public static void waitForJobStatus(Job job, JobStatus expectedStatus) {
         for (int i = 0; i < JOB_STATUS_RETRY_COUNT; i++) {
             JobStatus currentStatus = getJobStatus(job);
             assertNotEquals(FAILED, currentStatus);
@@ -58,27 +58,23 @@ public final class Util {
                 expectedStatus, job.getStatus()));
     }
 
-    public static void runTestWithArguments(String name, String[] args, int expectedArgumentCount) {
-        System.setProperty("hazelcast.logging.type", "log4j");
-        parseArguments(args, expectedArgumentCount);
-        JUnitCore.main(name);
-    }
-
     public static <K, V> Map.Entry<K, V> entry(K key, V value) {
         return new AbstractMap.SimpleImmutableEntry<>(key, value);
     }
 
-    public static void sleepSeconds(int seconds) throws InterruptedException {
-        SECONDS.sleep(seconds);
+    public static void sleepMinutes(int minutes) {
+        uncheckRun(() -> MINUTES.sleep(minutes));
     }
 
-    private static void parseArguments(String[] args, int expectedArgumentCount) {
-        if (expectedArgumentCount != args.length) {
-            System.err.println("Wrong number of arguments: expected: " + expectedArgumentCount +
-                    ", actual: " + args.length);
-            System.err.println("Arguments: " + Arrays.toString(args));
-            System.exit(1);
-        }
+    public static void sleepSeconds(int seconds) {
+        uncheckRun(() -> SECONDS.sleep(seconds));
+    }
+
+    public static void sleepMillis(int millis) {
+        uncheckRun(() -> MILLISECONDS.sleep(millis));
+    }
+
+    public static void parseArguments(String[] args) {
         for (String arg : args) {
             String[] split = arg.split("=");
             if (split.length != 2) {

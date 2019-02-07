@@ -42,7 +42,7 @@ import static com.hazelcast.jet.tests.common.Util.waitForJobStatus;
 public class JobManagementTest extends AbstractSoakTest {
 
     private static final int DEFAULT_SNAPSHOT_INTERVAL = 5000;
-    private static final int EVENT_JOURNAL_CAPACITY = 300_000;
+    private static final int EVENT_JOURNAL_CAPACITY = 1_500_000;
     private static final int MAP_CLEAR_THRESHOLD = 5000;
 
     private static final String SOURCE = JobManagementTest.class.getSimpleName();

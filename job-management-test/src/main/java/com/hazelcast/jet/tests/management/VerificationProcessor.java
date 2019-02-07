@@ -25,26 +25,31 @@ import java.util.PriorityQueue;
 
 import static com.hazelcast.jet.core.ProcessorMetaSupplier.preferLocalParallelismOne;
 
-public class VerificationProcessor extends AbstractProcessor {
+public final class VerificationProcessor extends AbstractProcessor {
 
     private static final int MAX_QUEUE_SIZE = 50_000;
+
+    private final boolean odds;
 
     private boolean processed;
     private long counter;
     private PriorityQueue<Long> queue = new PriorityQueue<>();
 
-    static ProcessorMetaSupplier supplier() {
-        return preferLocalParallelismOne(ProcessorSupplier.of(VerificationProcessor::new));
+    private VerificationProcessor(boolean odds) {
+        this.odds = odds;
     }
 
     @Override
     protected boolean tryProcess(int ordinal, Object item) {
         processed = true;
         long value = (Long) item;
-        if (value != counter) {
+        assertValue(value);
+        if (value < counter) {
+            // discard stale value
+        } else if (value != counter) {
             queue.offer(value);
         } else {
-            counter++;
+            incrementCounter();
             consumeQueue();
         }
         if (queue.size() > MAX_QUEUE_SIZE) {
@@ -62,6 +67,11 @@ public class VerificationProcessor extends AbstractProcessor {
     protected void restoreFromSnapshot(Object key, Object value) {
         counter = (Long) ((BroadcastKey) key).key();
         queue = (PriorityQueue<Long>) value;
+
+        if ((odds && !isOdd(counter)) || (!odds && isOdd(counter))) {
+            counter++;
+        }
+        queue.removeIf(v -> (odds && !isOdd(v)) || (!odds && isOdd(v)));
     }
 
     private void consumeQueue() {
@@ -70,9 +80,27 @@ public class VerificationProcessor extends AbstractProcessor {
             if (peeked == null || counter != peeked) {
                 break;
             }
-            counter++;
+            incrementCounter();
             queue.poll();
         }
+    }
+
+    private void incrementCounter() {
+        counter += 2;
+    }
+
+    private void assertValue(long value) {
+        if ((odds && !isOdd(value)) || (!odds && isOdd(value))) {
+            throw new AssertionError("Value should not be odd. odds: " + odds + ", value: " + value);
+        }
+    }
+
+    static ProcessorMetaSupplier supplier(boolean odds) {
+        return preferLocalParallelismOne(ProcessorSupplier.of(() -> new VerificationProcessor(odds)));
+    }
+
+    private static boolean isOdd(long value) {
+        return value % 2 != 0;
     }
 }
 

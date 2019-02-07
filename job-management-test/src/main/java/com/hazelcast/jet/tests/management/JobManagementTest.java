@@ -20,6 +20,7 @@ import com.hazelcast.config.Config;
 import com.hazelcast.config.EventJournalConfig;
 import com.hazelcast.jet.IMapJet;
 import com.hazelcast.jet.Job;
+import com.hazelcast.jet.JobStateSnapshot;
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.config.ProcessingGuarantee;
 import com.hazelcast.jet.pipeline.ContextFactory;
@@ -50,6 +51,8 @@ public class JobManagementTest extends AbstractSoakTest {
     private int snapshotIntervalMs;
     private long durationInMillis;
 
+    private transient boolean odds;
+
     public static void main(String[] args) throws Exception {
         new JobManagementTest().run(args);
     }
@@ -66,42 +69,45 @@ public class JobManagementTest extends AbstractSoakTest {
         producer.start();
     }
 
-    public void test() throws Exception {
-        Pipeline p = Pipeline.create();
-        p.drawFrom(Sources.<Long, Long, Long>mapJournal(SOURCE, mapPutEvents(), mapEventNewValue(), START_FROM_OLDEST))
-         .withoutTimestamps()
-         .groupingKey(l -> 0L)
-         .mapUsingContext(ContextFactory.withCreateFn(jet -> null), (c, k, v) -> v)
-         .drainTo(Sinks.fromProcessor("sink", VerificationProcessor.supplier()));
-
-        JobConfig jobConfig = new JobConfig()
-                .setName("JobManagementTest")
-                .setProcessingGuarantee(ProcessingGuarantee.EXACTLY_ONCE)
-                .setSnapshotIntervalMillis(snapshotIntervalMs)
-                .setAutoScaling(false);
-
-        Job job = jet.newJob(p, jobConfig);
+    public void test() {
+        // Submit the job without initial snapshot
+        Job job = jet.newJob(pipeline(odds), jobConfig(null));
         waitForJobStatus(job, RUNNING);
-
         sleepMinutes(1);
 
 
         long begin = System.currentTimeMillis();
         while (System.currentTimeMillis() - begin < durationInMillis) {
-            System.out.println("Suspend the job");
+            logger.info("Suspend the job");
             job.suspend();
             waitForJobStatus(job, SUSPENDED);
             sleepMinutes(1);
 
-            System.out.println("Resume the job");
+            logger.info("Resume the job");
             job.resume();
             waitForJobStatus(job, RUNNING);
             sleepMinutes(1);
 
-            System.out.println("Restart the job");
+            logger.info("Restart the job");
             job.restart();
             waitForJobStatus(job, RUNNING);
             sleepMinutes(1);
+
+            logger.info("Cancel job and export snapshot");
+            JobStateSnapshot exportedSnapshot = job.cancelAndExportSnapshot("JobManagementTestSnapshot");
+            sleepMinutes(1);
+
+            // Change the job (filters either odds or evens)
+            odds = !odds;
+
+            logger.info("Upgrade job");
+            job = jet.newJob(pipeline(odds), jobConfig(exportedSnapshot.name()));
+            waitForJobStatus(job, RUNNING);
+            sleepMinutes(1);
+
+            // Destroy the initial snapshot, by now job should produce new
+            // snapshots for restart so it is safe.
+            exportedSnapshot.destroy();
         }
 
         job.cancel();
@@ -114,6 +120,27 @@ public class JobManagementTest extends AbstractSoakTest {
         if (jet != null) {
             jet.shutdown();
         }
+    }
+
+    private JobConfig jobConfig(String initialSnapshot) {
+        return new JobConfig()
+                .setName("JobManagementTest")
+                .setProcessingGuarantee(ProcessingGuarantee.EXACTLY_ONCE)
+                .setSnapshotIntervalMillis(snapshotIntervalMs)
+                .setInitialSnapshotName(initialSnapshot)
+                .setAutoScaling(false);
+    }
+
+    private static Pipeline pipeline(boolean odds) {
+        Pipeline p = Pipeline.create();
+        p.drawFrom(Sources.<Long, Long, Long>mapJournal(SOURCE, mapPutEvents(), mapEventNewValue(), START_FROM_OLDEST))
+         .withoutTimestamps()
+         .groupingKey(l -> 0L)
+         .mapUsingContext(ContextFactory.withCreateFn(jet -> null), (c, k, v) -> v)
+         .filter(v -> v % 2 == (odds ? 1 : 0))
+         .drainTo(Sinks.fromProcessor("sink", VerificationProcessor.supplier(odds)));
+
+        return p;
     }
 
     static class Producer {

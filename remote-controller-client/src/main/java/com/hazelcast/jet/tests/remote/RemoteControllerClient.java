@@ -91,10 +91,12 @@ public final class RemoteControllerClient {
 
                 counter[0]++;
                 if (counter[0] % memberCount == 0) {
-//                    shutdownCluster(m, jetHome, members);
-//                    sleepMinutes(1);
-//                    startCluster(members);
+                    shutdownCluster(m, jetHome, members);
+                    sleepMinutes(1);
+                    startCluster(members);
+                    sleepMinutes(sleepBetweenRestart);
                 }
+
             } catch (Exception e) {
                 e.printStackTrace();
                 System.exit(1);

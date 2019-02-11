@@ -18,11 +18,11 @@ package com.hazelcast.jet.tests.eventjournal;
 
 import com.hazelcast.client.config.ClientConfig;
 import com.hazelcast.client.config.XmlClientConfigBuilder;
-import com.hazelcast.client.proxy.ClientMapProxy;
 import com.hazelcast.config.Config;
 import com.hazelcast.config.EventJournalConfig;
 import com.hazelcast.core.EntryEventType;
 import com.hazelcast.core.HazelcastInstance;
+import com.hazelcast.core.IMap;
 import com.hazelcast.jet.IMapJet;
 import com.hazelcast.jet.Jet;
 import com.hazelcast.jet.JetInstance;
@@ -106,7 +106,7 @@ public class EventJournalTest extends AbstractSoakTest {
         QueueVerifier queueVerifier = new QueueVerifier(loggingService,
                 "Verifier[" + RESULTS_MAP_NAME + "]", windowCount).startVerification();
 
-        ClientMapProxy<Long, Long> resultMap = (ClientMapProxy) remoteClient.getHazelcastInstance().getMap(RESULTS_MAP_NAME);
+        IMap<Long, Long> resultMap = remoteClient.getHazelcastInstance().getMap(RESULTS_MAP_NAME);
         EventJournalConsumer<Long, Long> consumer = new EventJournalConsumer<>(resultMap, partitionCount);
 
         long begin = System.currentTimeMillis();

@@ -18,6 +18,7 @@ package com.hazelcast.jet.tests.eventjournal;
 
 import com.hazelcast.client.proxy.ClientMapProxy;
 import com.hazelcast.core.ICompletableFuture;
+import com.hazelcast.core.IMap;
 import com.hazelcast.map.journal.EventJournalMapEvent;
 import com.hazelcast.ringbuffer.ReadResultSet;
 
@@ -34,8 +35,8 @@ class EventJournalConsumer<K, V> {
     private final int partitionCount;
     private final long[] offsets;
 
-    EventJournalConsumer(ClientMapProxy<K, V> proxy, int partitionCount) {
-        this.proxy = proxy;
+    EventJournalConsumer(IMap<K, V> map, int partitionCount) {
+        this.proxy = (ClientMapProxy<K, V>) map;
         this.partitionCount = partitionCount;
         offsets = new long[partitionCount];
     }

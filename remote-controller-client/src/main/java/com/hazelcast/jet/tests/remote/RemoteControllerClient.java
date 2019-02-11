@@ -118,7 +118,7 @@ public final class RemoteControllerClient {
         logger.info("Shutdown cluster");
         String host = member.getAddress().getHost();
         int port = member.getAddress().getPort();
-        call(member, jetHome + "/bin/cluster.sh -a " + host + " -p " + port + " -o shutdown");
+        call(member, jetHome + "/bin/cluster.sh -a " + host + " -p " + port + " -o shutdown -g jet -P jet-pass");
         members.forEach(m -> uncheckRun(() -> rollLogs(m, jetHome)));
     }
 

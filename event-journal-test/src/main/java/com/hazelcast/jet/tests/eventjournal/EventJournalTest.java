@@ -106,7 +106,7 @@ public class EventJournalTest extends AbstractSoakTest {
         QueueVerifier queueVerifier = new QueueVerifier(loggingService,
                 "Verifier[" + RESULTS_MAP_NAME + "]", windowCount).startVerification();
 
-        ClientMapProxy<Long, Long> resultMap = (ClientMapProxy) jet.getHazelcastInstance().getMap(RESULTS_MAP_NAME);
+        ClientMapProxy<Long, Long> resultMap = (ClientMapProxy) remoteClient.getHazelcastInstance().getMap(RESULTS_MAP_NAME);
         EventJournalConsumer<Long, Long> consumer = new EventJournalConsumer<>(resultMap, partitionCount);
 
         long begin = System.currentTimeMillis();

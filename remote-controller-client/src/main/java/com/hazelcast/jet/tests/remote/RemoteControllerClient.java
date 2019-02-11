@@ -125,6 +125,7 @@ public final class RemoteControllerClient {
         logger.info("Stopping member[" + member + "]");
         call(member, "sudo initctl stop hazelcast-jet-isolated");
         rollLogs(member, jetHome);
+        removeHotRestartData(member, jetHome);
     }
 
     private static void rollLogs(Member member, String jetHome) throws Exception {
@@ -133,6 +134,10 @@ public final class RemoteControllerClient {
         call(member, "mv " + jetHome + "/logs/hazelcast-jet.gc.log " +
                 jetHome + "/logs/hazelcast-jet.gc-" + logCounter + ".log");
         logCounter++;
+    }
+
+    private static void removeHotRestartData(Member member, String jetHome) throws Exception {
+        call(member, "rm -rf " + jetHome + "/hot-restart");
     }
 
     private static void start(Member member) throws Exception {

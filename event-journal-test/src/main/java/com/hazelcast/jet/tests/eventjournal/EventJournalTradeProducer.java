@@ -30,7 +30,7 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 
 public class EventJournalTradeProducer extends Thread {
 
-    private static final int ASYNC_OP_LIMIT = 50_000;
+    private static final int ASYNC_OP_LIMIT = 10_000;
 
     private final int countPerTicker;
     private final ILogger logger;

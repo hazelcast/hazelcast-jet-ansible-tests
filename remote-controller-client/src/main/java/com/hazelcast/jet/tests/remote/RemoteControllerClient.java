@@ -31,6 +31,7 @@ import org.apache.thrift.transport.TTransport;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
 
 import static com.hazelcast.jet.impl.util.Util.uncheckRun;
 import static com.hazelcast.jet.tests.common.Util.parseArguments;
@@ -60,7 +61,6 @@ public final class RemoteControllerClient {
         System.setProperty("hazelcast.logging.type", "log4j");
         parseArguments(args);
         String jetHome = System.getProperty("jetHome");
-        String logDir = jetHome + "/logs";
         int initialSleep = parseInt(System.getProperty("initialSleepMinutes", "5"));
         int sleepBetweenRestart = parseInt(System.getProperty("sleepBetweenRestartMinutes", "5"));
         boolean shuffle = Boolean.parseBoolean(System.getProperty("shuffle", "true"));
@@ -73,18 +73,32 @@ public final class RemoteControllerClient {
         HazelcastInstance instance = jet.getHazelcastInstance();
         logger = instance.getLoggingService().getLogger(RemoteControllerClient.class);
 
-        ArrayList<Member> members = new ArrayList<>(instance.getCluster().getMembers());
+        List<Member> members = new ArrayList<>(instance.getCluster().getMembers());
         if (shuffle) {
             Collections.shuffle(members);
         }
 
+        int memberCount = members.size();
         long begin = System.currentTimeMillis();
         sleepMinutes(initialSleep);
+        int[] counter = new int[]{0};
         Iterables.cycle(members).forEach(m -> {
-            uncheckRun(() -> stop(m, logDir));
-            uncheckRun(() -> sleepMinutes(sleepBetweenRestart));
-            uncheckRun(() -> start(m));
-            uncheckRun(() -> sleepMinutes(sleepBetweenRestart));
+            try {
+                stop(m, jetHome);
+                sleepMinutes(sleepBetweenRestart);
+                start(m);
+                sleepMinutes(sleepBetweenRestart);
+
+                counter[0]++;
+                if (counter[0] % memberCount == 0) {
+//                    shutdownCluster(m, jetHome, members);
+//                    sleepMinutes(1);
+//                    startCluster(members);
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+                System.exit(1);
+            }
             if (System.currentTimeMillis() - begin > duration) {
                 System.out.println("Exiting Remote Controller Client");
                 System.exit(0);
@@ -92,24 +106,40 @@ public final class RemoteControllerClient {
         });
     }
 
-    private static void stop(Member member, String logDir) throws Exception {
-        logger.info("Stopping member[" + member + "]");
-        call(member.getAddress().getHost(), "sudo initctl stop hazelcast-jet-isolated");
-        call(member.getAddress().getHost(), "mv " + logDir + "/hazelcast-jet.log " +
-                logDir + "/hazelcast-jet-" + logCounter + ".log");
-        call(member.getAddress().getHost(), "mv " + logDir + "/hazelcast-jet.gc.log " +
-                logDir + "/hazelcast-jet.gc-" + logCounter + ".log");
-        logCounter++;
+    private static void startCluster(List<Member> members) throws Exception {
+        logger.info("Start cluster");
+        members.forEach(m -> uncheckRun(() -> start(m)));
+    }
 
+    private static void shutdownCluster(Member member, String jetHome, List<Member> members) throws Exception {
+        logger.info("Shutdown cluster");
+        String host = member.getAddress().getHost();
+        int port = member.getAddress().getPort();
+        call(member, jetHome + "/bin/cluster.sh -a " + host + " -p " + port + " -o shutdown");
+        members.forEach(m -> uncheckRun(() -> rollLogs(m, jetHome)));
+    }
+
+    private static void stop(Member member, String jetHome) throws Exception {
+        logger.info("Stopping member[" + member + "]");
+        call(member, "sudo initctl stop hazelcast-jet-isolated");
+        rollLogs(member, jetHome);
+    }
+
+    private static void rollLogs(Member member, String jetHome) throws Exception {
+        call(member, "mv " + jetHome + "/logs/hazelcast-jet.log " +
+                jetHome + "/logs/hazelcast-jet-" + logCounter + ".log");
+        call(member, "mv " + jetHome + "/logs/hazelcast-jet.gc.log " +
+                jetHome + "/logs/hazelcast-jet.gc-" + logCounter + ".log");
+        logCounter++;
     }
 
     private static void start(Member member) throws Exception {
         logger.info("Starting member[" + member + "]");
-        call(member.getAddress().getHost(), "sudo initctl start hazelcast-jet-isolated");
+        call(member, "sudo initctl start hazelcast-jet-isolated");
     }
 
-    private static void call(String host, String command) throws Exception {
-        TTransport transport = new TSocket(host, DEFAULT_PORT);
+    private static void call(Member member, String command) throws Exception {
+        TTransport transport = new TSocket(member.getAddress().getHost(), DEFAULT_PORT);
         transport.open();
         TProtocol protocol = new TBinaryProtocol(transport);
         RemoteController.Client client = new RemoteController.Client(protocol);

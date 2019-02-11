@@ -24,6 +24,7 @@ import com.hazelcast.jet.server.JetBootstrap;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.remotecontroller.Lang;
 import com.hazelcast.remotecontroller.RemoteController;
+import com.hazelcast.remotecontroller.Response;
 import org.apache.thrift.protocol.TBinaryProtocol;
 import org.apache.thrift.protocol.TProtocol;
 import org.apache.thrift.transport.TSocket;
@@ -151,7 +152,8 @@ public final class RemoteControllerClient {
         TProtocol protocol = new TBinaryProtocol(transport);
         RemoteController.Client client = new RemoteController.Client(protocol);
         String script = "import subprocess\nprocess = subprocess.call(['" + command + "'], shell=True)";
-        client.executeOnController(null, script, Lang.PYTHON);
+        Response response = client.executeOnController(null, script, Lang.PYTHON);
+        logger.info("The response of the command [" + command + "]: " + response);
         transport.close();
     }
 

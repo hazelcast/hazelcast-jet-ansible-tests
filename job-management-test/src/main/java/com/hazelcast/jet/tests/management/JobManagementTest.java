@@ -44,7 +44,7 @@ public class JobManagementTest extends AbstractSoakTest {
     private static final int DEFAULT_SNAPSHOT_INTERVAL = 5000;
     private static final int EVENT_JOURNAL_CAPACITY = 1_500_000;
     private static final int MAP_CLEAR_THRESHOLD = 5000;
-    private static final int PRODUCER_SLEEP_MILLIS = 20;
+    private static final int PRODUCER_SLEEP_MILLIS = 5;
 
     private static final String SOURCE = JobManagementTest.class.getSimpleName();
 

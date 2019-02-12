@@ -117,7 +117,7 @@ public abstract class AbstractSoakTest implements Serializable {
     }
 
     protected void assertNotEquals(Object expected, Object actual) {
-        assertNotEquals("expected: " + expected + ", actual: " + actual, expected, actual);
+        assertNotEquals("not expected: " + expected + ", actual: " + actual, expected, actual);
     }
 
     protected void assertNotEquals(String message, Object expected, Object actual) {

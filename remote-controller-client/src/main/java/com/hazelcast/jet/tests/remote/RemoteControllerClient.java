@@ -52,7 +52,7 @@ public final class RemoteControllerClient {
 
     private static final int DEFAULT_PORT = 9701;
     private static final int VERIFICATION_DURATION_GAP = 15;
-    private static final int SLEEP_BETWEEN_CLUSTER_RESTART_SECONDS = 10;
+    private static final int SLEEP_BETWEEN_CLUSTER_RESTART_SECONDS = 30;
 
     private static int logCounter;
     private static ILogger logger;

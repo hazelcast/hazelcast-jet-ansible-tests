@@ -20,6 +20,7 @@ import com.hazelcast.jet.core.AbstractProcessor;
 import com.hazelcast.jet.core.BroadcastKey;
 import com.hazelcast.jet.core.ProcessorMetaSupplier;
 import com.hazelcast.jet.core.ProcessorSupplier;
+import com.hazelcast.logging.ILogger;
 
 import java.util.PriorityQueue;
 
@@ -34,9 +35,15 @@ public final class VerificationProcessor extends AbstractProcessor {
     private boolean processed;
     private long counter;
     private PriorityQueue<Long> queue = new PriorityQueue<>();
+    private ILogger logger;
 
     private VerificationProcessor(boolean odds) {
         this.odds = odds;
+    }
+
+    @Override
+    protected void init(Context context) {
+        logger = context.logger();
     }
 
     @Override
@@ -45,7 +52,7 @@ public final class VerificationProcessor extends AbstractProcessor {
         long value = (Long) item;
         assertValue(value);
         if (value < counter) {
-            // discard stale value
+            logger.info("discard stale value: " + value + ", counter: " + counter);
         } else if (value != counter) {
             queue.offer(value);
         } else {
@@ -60,6 +67,8 @@ public final class VerificationProcessor extends AbstractProcessor {
 
     @Override
     public boolean saveToSnapshot() {
+        logger.info(String.format("saveToSnapshot odd: %b, counter: %d, size: %d, peek: %d",
+                odds, counter, queue.size(), queue.peek()));
         return !processed || tryEmitToSnapshot(BroadcastKey.broadcastKey(counter), queue);
     }
 
@@ -67,6 +76,9 @@ public final class VerificationProcessor extends AbstractProcessor {
     protected void restoreFromSnapshot(Object key, Object value) {
         counter = (Long) ((BroadcastKey) key).key();
         queue = (PriorityQueue<Long>) value;
+
+        logger.info(String.format("restoreFromSnapshot odd: %b, counter: %d, size: %d, peek: %d",
+                odds, counter, queue.size(), queue.peek()));
 
         if ((odds && !isOdd(counter)) || (!odds && isOdd(counter))) {
             counter++;

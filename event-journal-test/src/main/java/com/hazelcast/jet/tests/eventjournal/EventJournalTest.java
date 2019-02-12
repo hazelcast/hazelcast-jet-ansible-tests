@@ -56,8 +56,8 @@ public class EventJournalTest extends AbstractSoakTest {
     private static final int DEFAULT_WINDOW_SIZE = 20;
     private static final int DEFAULT_SLIDE_BY = 10;
     private static final int DEFAULT_COUNTER_PER_TICKER = 100;
-    private static final int EVENT_JOURNAL_CAPACITY = 1_000_000;
-    private static final int RESULTS_EVENT_JOURNAL_CAPACITY = 20_000;
+    private static final int EVENT_JOURNAL_CAPACITY = 1_500_000;
+    private static final int RESULTS_EVENT_JOURNAL_CAPACITY = 40_000;
 
     private static final String MAP_NAME = EventJournalTest.class.getSimpleName();
     private static final String RESULTS_MAP_NAME = MAP_NAME + "-RESULTS";

@@ -38,6 +38,7 @@ import static com.hazelcast.jet.impl.util.Util.uncheckRun;
 import static com.hazelcast.jet.tests.common.Util.parseArguments;
 import static java.lang.Integer.parseInt;
 import static java.util.concurrent.TimeUnit.MINUTES;
+import static java.util.concurrent.TimeUnit.SECONDS;
 
 /**
  * This class is used to connect to the HazelcastRemoteController
@@ -51,6 +52,7 @@ public final class RemoteControllerClient {
 
     private static final int DEFAULT_PORT = 9701;
     private static final int VERIFICATION_DURATION_GAP = 15;
+    private static final int SLEEP_BETWEEN_CLUSTER_RESTART_SECONDS = 10;
 
     private static int logCounter;
     private static ILogger logger;
@@ -93,7 +95,7 @@ public final class RemoteControllerClient {
                 counter[0]++;
                 if (counter[0] % memberCount == 0) {
                     shutdownCluster(m, jetHome, members);
-                    sleepMinutes(1);
+                    sleepSeconds(SLEEP_BETWEEN_CLUSTER_RESTART_SECONDS);
                     startCluster(members);
                     sleepMinutes(sleepBetweenRestart);
                 }
@@ -159,5 +161,9 @@ public final class RemoteControllerClient {
 
     private static void sleepMinutes(int minutes) throws InterruptedException {
         MINUTES.sleep(minutes);
+    }
+
+    private static void sleepSeconds(int seconds) throws InterruptedException {
+        SECONDS.sleep(seconds);
     }
 }

@@ -23,11 +23,13 @@ import com.hazelcast.jet.Job;
 import com.hazelcast.jet.JobStateSnapshot;
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.config.ProcessingGuarantee;
+import com.hazelcast.jet.function.DistributedPredicate;
 import com.hazelcast.jet.pipeline.ContextFactory;
 import com.hazelcast.jet.pipeline.Pipeline;
 import com.hazelcast.jet.pipeline.Sinks;
 import com.hazelcast.jet.pipeline.Sources;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
+import com.hazelcast.map.journal.EventJournalMapEvent;
 
 import static com.hazelcast.jet.Util.mapEventNewValue;
 import static com.hazelcast.jet.Util.mapPutEvents;
@@ -134,14 +136,17 @@ public class JobManagementTest extends AbstractSoakTest {
 
     private static Pipeline pipeline(boolean odds) {
         Pipeline p = Pipeline.create();
-        p.drawFrom(Sources.<Long, Long, Long>mapJournal(SOURCE, mapPutEvents(), mapEventNewValue(), START_FROM_OLDEST))
+        p.drawFrom(Sources.mapJournal(SOURCE, filter(odds), mapEventNewValue(), START_FROM_OLDEST))
          .withoutTimestamps()
          .groupingKey(l -> 0L)
          .mapUsingContext(ContextFactory.withCreateFn(jet -> null), (c, k, v) -> v)
-         .filter(v -> v % 2 == (odds ? 1 : 0))
          .drainTo(Sinks.fromProcessor("sink", VerificationProcessor.supplier(odds)));
-
         return p;
+    }
+
+    private static DistributedPredicate<EventJournalMapEvent<Long, Long>> filter(boolean odds) {
+        DistributedPredicate<EventJournalMapEvent<Long, Long>> putEvents = mapPutEvents();
+        return e -> putEvents.test(e) && (e.getNewValue() % 2 == (odds ? 1 : 0));
     }
 
     static class Producer {

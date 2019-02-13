@@ -32,11 +32,11 @@ import static java.util.concurrent.TimeUnit.SECONDS;
  */
 public class QueueVerifier extends Thread {
 
-    private static final long TIMEOUT = 120_000;
+    private static final long TIMEOUT = 50_000;
 
-    private static final int WAIT_SLEEP = 5;
+    private static final int WAIT_SLEEP_SECONDS = 10;
 
-    private static final int INITIAL_QUEUE_SIZE = 10_000;
+    private static final int INITIAL_QUEUE_SIZE = 1_000;
 
     private final ILogger logger;
     private final PriorityBlockingQueue<Long> queue;
@@ -77,7 +77,7 @@ public class QueueVerifier extends Thread {
             if (next == null) {
                 //Queue is empty, sleep
                 logger.info("Queue is empty");
-                sleepSeconds(WAIT_SLEEP);
+                sleepSeconds(WAIT_SLEEP_SECONDS);
             } else if (next == key) {
                 //Happy path
                 queue.poll();
@@ -98,7 +98,7 @@ public class QueueVerifier extends Thread {
                 running = false;
             } else {
                 //sleep for timeout
-                sleepSeconds(WAIT_SLEEP);
+                sleepSeconds(WAIT_SLEEP_SECONDS);
                 logger.info("key: " + key);
             }
         }

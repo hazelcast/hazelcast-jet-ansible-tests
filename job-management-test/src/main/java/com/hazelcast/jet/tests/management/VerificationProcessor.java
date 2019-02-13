@@ -67,9 +67,12 @@ public final class VerificationProcessor extends AbstractProcessor {
 
     @Override
     public boolean saveToSnapshot() {
+        if (!processed) {
+            return true;
+        }
         logger.info(String.format("saveToSnapshot odd: %b, counter: %d, size: %d, peek: %d",
                 odds, counter, queue.size(), queue.peek()));
-        return !processed || tryEmitToSnapshot(BroadcastKey.broadcastKey(counter), queue);
+        return tryEmitToSnapshot(BroadcastKey.broadcastKey(counter), queue);
     }
 
     @Override

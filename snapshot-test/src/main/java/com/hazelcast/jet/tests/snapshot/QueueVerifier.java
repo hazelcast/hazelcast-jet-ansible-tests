@@ -33,10 +33,9 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 public class QueueVerifier extends Thread {
 
     private static final long TIMEOUT = 50_000;
-
     private static final int WAIT_SLEEP_SECONDS = 10;
-
     private static final int INITIAL_QUEUE_SIZE = 1_000;
+    private static final int LOG_QUEUE_LIMIT = 30;
 
     private final ILogger logger;
     private final PriorityBlockingQueue<Long> queue;
@@ -58,7 +57,13 @@ public class QueueVerifier extends Thread {
     }
 
     public void offer(long item) {
+        if (logger.isFinestEnabled()) {
+            logger.finest("item: " + item);
+        }
         if (!running) {
+            StringBuilder builder = new StringBuilder("key: ").append(key).append(" - items: ");
+            queue.stream().limit(LOG_QUEUE_LIMIT).forEachOrdered(i -> builder.append(i).append(", "));
+            logger.severe(builder.toString());
             throw new AssertionError(name + " failed at key: " + key +
                     ", remaining window count: " + windowCount + ", total window count per key: " + totalWindowCount);
         }

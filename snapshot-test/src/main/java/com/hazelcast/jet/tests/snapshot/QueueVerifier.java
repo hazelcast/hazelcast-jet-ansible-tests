@@ -32,7 +32,7 @@ import static java.util.concurrent.TimeUnit.SECONDS;
  */
 public class QueueVerifier extends Thread {
 
-    private static final long TIMEOUT = 50_000;
+    private static final long TIMEOUT = 120_000;
     private static final int WAIT_SLEEP_SECONDS = 10;
     private static final int INITIAL_QUEUE_SIZE = 1_000;
     private static final int LOG_QUEUE_LIMIT = 30;

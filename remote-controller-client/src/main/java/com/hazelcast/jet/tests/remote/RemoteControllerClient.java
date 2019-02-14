@@ -128,8 +128,8 @@ public final class RemoteControllerClient {
         String host = member.getAddress().getHost();
         int port = member.getAddress().getPort();
         call(member, jetHome + "/bin/cluster.sh -a " + host + " -p " + port +
-                " -o change-state -s passive -g jet -P jet-pass");
-        sleepSeconds(1);
+                " -o change-state -s frozen -g jet -P jet-pass");
+        sleepSeconds(SLEEP_BETWEEN_STATE_CHANGE_SECONDS);
         call(member, jetHome + "/bin/cluster.sh -a " + host + " -p " + port +
                 " -o shutdown -g jet -P jet-pass");
         members.forEach(m -> uncheckRun(() -> rollLogs(m, jetHome)));

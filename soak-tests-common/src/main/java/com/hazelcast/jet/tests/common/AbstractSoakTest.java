@@ -42,16 +42,20 @@ public abstract class AbstractSoakTest implements Serializable {
         try {
             init();
         } catch (Throwable t) {
+            t.printStackTrace();
             logger.severe(t);
             teardown();
+            logger.info("Finished with failure at init");
             System.exit(1);
         }
         logger.info("Running...");
         try {
             test();
         } catch (Throwable t) {
+            t.printStackTrace();
             logger.severe(t);
             teardown();
+            logger.info("Finished with failure at test");
             System.exit(1);
         }
         logger.info("Teardown...");

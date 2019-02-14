@@ -57,8 +57,8 @@ public class QueueVerifier extends Thread {
     }
 
     public void offer(long item) {
-        if (logger.isFinestEnabled()) {
-            logger.finest("item: " + item);
+        if (logger.isFineEnabled()) {
+            logger.fine("item: " + item);
         }
         if (!running) {
             StringBuilder builder = new StringBuilder("key: ").append(key).append(" - items: ");

@@ -57,9 +57,7 @@ public class QueueVerifier extends Thread {
     }
 
     public void offer(long item) {
-        if (logger.isFineEnabled()) {
-            logger.fine("item: " + item);
-        }
+        logger.info("item: " + item);
         if (!running) {
             StringBuilder builder = new StringBuilder("key: ").append(key).append(" - items: ");
             queue.stream().limit(LOG_QUEUE_LIMIT).forEachOrdered(i -> builder.append(i).append(", "));

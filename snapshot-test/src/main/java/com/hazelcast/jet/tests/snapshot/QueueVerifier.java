@@ -57,10 +57,12 @@ public class QueueVerifier extends Thread {
     }
 
     public void offer(long item) {
-        logger.info("item: " + item);
+        logger.info("offer for verification item: " + item);
         if (!running) {
             StringBuilder builder = new StringBuilder("key: ").append(key).append(" - items: ");
-            queue.stream().limit(LOG_QUEUE_LIMIT).forEachOrdered(i -> builder.append(i).append(", "));
+            for (int i = 0; i < LOG_QUEUE_LIMIT; i++) {
+                builder.append(queue.poll()).append(", ");
+            }
             logger.severe(builder.toString());
             throw new AssertionError(name + " failed at key: " + key +
                     ", remaining window count: " + windowCount + ", total window count per key: " + totalWindowCount);

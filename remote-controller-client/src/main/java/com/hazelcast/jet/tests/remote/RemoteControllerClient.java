@@ -85,18 +85,18 @@ public final class RemoteControllerClient {
         long begin = System.currentTimeMillis();
         sleepMinutes(initialSleep);
         int[] counter = new int[]{0};
-        Iterables.cycle(members).forEach(m -> {
+        Iterables.cycle(members).forEach(member -> {
             try {
-                stop(m, jetHome);
+                stop(member, jetHome);
                 sleepMinutes(sleepBetweenRestart);
-                start(m);
+                start(member);
                 sleepMinutes(sleepBetweenRestart);
 
                 counter[0]++;
                 if (counter[0] % memberCount == 0) {
-                    shutdownCluster(m, jetHome, members);
+                    shutdownCluster(member, jetHome, members);
                     sleepSeconds(SLEEP_BETWEEN_CLUSTER_RESTART_SECONDS);
-                    startCluster(m, jetHome, members);
+                    startCluster(members);
                     sleepMinutes(sleepBetweenRestart);
                 }
 
@@ -111,24 +111,15 @@ public final class RemoteControllerClient {
         });
     }
 
-    private static void startCluster(Member member, String jetHome, List<Member> members) throws Exception {
+    private static void startCluster(List<Member> members) {
         logger.info("Start cluster");
         members.forEach(m -> uncheckRun(() -> start(m)));
-
-//        sleepSeconds(SLEEP_BETWEEN_CLUSTER_RESTART_SECONDS);
-//        String host = member.getAddress().getHost();
-//        int port = member.getAddress().getPort();
-//        call(member, jetHome + "/bin/cluster.sh -a " + host + " -p " + port +
-//                " -o change-state -s active -g jet -P jet-pass");
     }
 
     private static void shutdownCluster(Member member, String jetHome, List<Member> members) throws Exception {
         logger.info("Shutdown cluster");
         String host = member.getAddress().getHost();
         int port = member.getAddress().getPort();
-//        call(member, jetHome + "/bin/cluster.sh -a " + host + " -p " + port +
-//                " -o change-state -s frozen -g jet -P jet-pass");
-//        sleepSeconds(SLEEP_BETWEEN_CLUSTER_RESTART_SECONDS);
         call(member, jetHome + "/bin/cluster.sh -a " + host + " -p " + port +
                 " -o shutdown -g jet -P jet-pass");
         members.forEach(m -> uncheckRun(() -> rollLogs(m, jetHome)));

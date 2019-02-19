@@ -57,9 +57,8 @@ public class QueueVerifier extends Thread {
     }
 
     public void offer(long item) {
-        logger.info("offer for verification item: " + item);
         if (!running) {
-            StringBuilder builder = new StringBuilder("key: ").append(key).append(" - items: ");
+            StringBuilder builder = new StringBuilder("PriorityQueue -> key: ").append(key).append(" - items: ");
             for (int i = 0; i < LOG_QUEUE_LIMIT; i++) {
                 builder.append(queue.poll()).append(", ");
             }

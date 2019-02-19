@@ -114,21 +114,21 @@ public final class RemoteControllerClient {
     private static void startCluster(Member member, String jetHome, List<Member> members) throws Exception {
         logger.info("Start cluster");
         members.forEach(m -> uncheckRun(() -> start(m)));
-        sleepSeconds(SLEEP_BETWEEN_CLUSTER_RESTART_SECONDS);
 
-        String host = member.getAddress().getHost();
-        int port = member.getAddress().getPort();
-        call(member, jetHome + "/bin/cluster.sh -a " + host + " -p " + port +
-                " -o change-state -s active -g jet -P jet-pass");
+//        sleepSeconds(SLEEP_BETWEEN_CLUSTER_RESTART_SECONDS);
+//        String host = member.getAddress().getHost();
+//        int port = member.getAddress().getPort();
+//        call(member, jetHome + "/bin/cluster.sh -a " + host + " -p " + port +
+//                " -o change-state -s active -g jet -P jet-pass");
     }
 
     private static void shutdownCluster(Member member, String jetHome, List<Member> members) throws Exception {
         logger.info("Shutdown cluster");
         String host = member.getAddress().getHost();
         int port = member.getAddress().getPort();
-        call(member, jetHome + "/bin/cluster.sh -a " + host + " -p " + port +
-                " -o change-state -s frozen -g jet -P jet-pass");
-        sleepSeconds(SLEEP_BETWEEN_CLUSTER_RESTART_SECONDS);
+//        call(member, jetHome + "/bin/cluster.sh -a " + host + " -p " + port +
+//                " -o change-state -s frozen -g jet -P jet-pass");
+//        sleepSeconds(SLEEP_BETWEEN_CLUSTER_RESTART_SECONDS);
         call(member, jetHome + "/bin/cluster.sh -a " + host + " -p " + port +
                 " -o shutdown -g jet -P jet-pass");
         members.forEach(m -> uncheckRun(() -> rollLogs(m, jetHome)));

@@ -35,6 +35,7 @@ import com.hazelcast.jet.pipeline.StreamStageWithKey;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
 import com.hazelcast.jet.tests.common.BasicEventJournalProducer;
 import com.hazelcast.jet.tests.eventjournal.EventJournalConsumer;
+import com.hazelcast.logging.ILogger;
 
 import java.util.Map;
 import java.util.PriorityQueue;
@@ -47,6 +48,7 @@ import static com.hazelcast.jet.Util.toCompletableFuture;
 import static com.hazelcast.jet.core.JobStatus.FAILED;
 import static com.hazelcast.jet.pipeline.JournalInitialPosition.START_FROM_OLDEST;
 import static com.hazelcast.jet.tests.common.Util.getJobStatus;
+import static com.hazelcast.jet.tests.common.Util.sleepMinutes;
 import static java.util.stream.Collectors.toMap;
 
 public class AsyncTransformTest extends AbstractSoakTest {
@@ -95,7 +97,7 @@ public class AsyncTransformTest extends AbstractSoakTest {
     }
 
     @Override
-    protected void test() throws Exception {
+    protected void test() {
         JobConfig jobConfig = new JobConfig();
         jobConfig.setName(AsyncTransformTest.class.getSimpleName());
         jobConfig.setSnapshotIntervalMillis(snapshotIntervalMs);
@@ -113,6 +115,7 @@ public class AsyncTransformTest extends AbstractSoakTest {
             assertNotEquals(getJobStatus(job), FAILED);
             assertTrue(orderedVerifier.isRunning());
             assertTrue(unorderedVerifier.isRunning());
+            sleepMinutes(1);
         }
     }
 
@@ -151,12 +154,14 @@ public class AsyncTransformTest extends AbstractSoakTest {
 
     public static class Verifier {
 
-        private static final int QUEUE_SIZE_LIMIT = 10000;
+        private static final int QUEUE_SIZE_LIMIT = 10_000;
+        private static final int LOG_COUNTER = 10_000;
 
         private final EventJournalConsumer<Long, Long> consumer;
         private final Thread thread;
         private final Map<Long, Long> localJoinMap;
         private final PriorityQueue<Long> queue;
+        private final ILogger logger;
 
         private volatile boolean running = true;
 
@@ -164,6 +169,7 @@ public class AsyncTransformTest extends AbstractSoakTest {
             this.localJoinMap = localJoinMap;
             queue = new PriorityQueue<>();
             HazelcastInstance hazelcastInstance = client.getHazelcastInstance();
+            logger = hazelcastInstance.getLoggingService().getLogger(Verifier.class.getSimpleName() + "-" + mapName);
             int partitionCount = hazelcastInstance.getPartitionService().getPartitions().size();
             consumer = new EventJournalConsumer<>(hazelcastInstance.getMap(mapName), partitionCount);
             thread = new Thread(this::run);
@@ -189,16 +195,17 @@ public class AsyncTransformTest extends AbstractSoakTest {
                             queue.poll();
                             counter++;
                         }
+                        if (counter % LOG_COUNTER == 0) {
+                            logger.info("counter: " + counter);
+                        }
                     }
                     if (queue.size() == QUEUE_SIZE_LIMIT) {
-                        System.out.println("Queue size reached limit(" + QUEUE_SIZE_LIMIT + "), size: " + queue.size());
+                        logger.severe(String.format("Queue size reached limit(%d), size: %d",
+                                QUEUE_SIZE_LIMIT, queue.size()));
                         running = false;
                     }
-                    if (queue.size() != 0) {
-                        System.out.println("qwe size: " + queue.size());
-                    }
                 } catch (Exception e) {
-                    e.printStackTrace();
+                    logger.severe("Exception during verification", e);
                     running = false;
                 }
             }

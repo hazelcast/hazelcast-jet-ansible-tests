@@ -16,10 +16,13 @@
 
 package com.hazelcast.jet.tests.common;
 
+import com.hazelcast.client.config.ClientConfig;
+import com.hazelcast.client.config.XmlClientConfigBuilder;
 import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.server.JetBootstrap;
 import com.hazelcast.logging.ILogger;
 
+import java.io.IOException;
 import java.io.Serializable;
 
 import static com.hazelcast.jet.tests.common.Util.parseArguments;
@@ -60,6 +63,9 @@ public abstract class AbstractSoakTest implements Serializable {
         }
         logger.info("Teardown...");
         teardown();
+        if (jet != null) {
+            jet.shutdown();
+        }
         logger.info("Finished OK");
         System.exit(0);
     }
@@ -78,6 +84,15 @@ public abstract class AbstractSoakTest implements Serializable {
         return MINUTES.toMillis(propertyInt("durationInMinutes", DEFAULT_DURATION_MINUTES));
     }
 
+    protected ClientConfig remoteClusterClientConfig() throws IOException {
+        String remoteClusterXml = property("remoteClusterXml", null);
+        if (remoteClusterXml == null) {
+            throw new IllegalArgumentException("Remote cluster xml should be set");
+        }
+
+        return new XmlClientConfigBuilder(remoteClusterXml).build();
+    }
+
     protected int propertyInt(String name, int defaultValue) {
         String value = System.getProperty(name);
         if (value != null) {
@@ -90,61 +105,61 @@ public abstract class AbstractSoakTest implements Serializable {
         return jet.getHazelcastInstance().getLoggingService().getLogger(clazz);
     }
 
-    protected void assertEquals(int expected, int actual) {
+    protected static void assertEquals(int expected, int actual) {
         assertEquals("expected: " + expected + ", actual: " + actual, expected, actual);
     }
 
-    protected void assertEquals(String message, int expected, int actual) {
+    protected static void assertEquals(String message, int expected, int actual) {
         if (expected != actual) {
             throw new AssertionError(message);
         }
     }
 
-    protected void assertEquals(long expected, long actual) {
+    protected static void assertEquals(long expected, long actual) {
         assertEquals("expected: " + expected + ", actual: " + actual, expected, actual);
     }
 
-    protected void assertEquals(String message, long expected, long actual) {
+    protected static void assertEquals(String message, long expected, long actual) {
         if (expected != actual) {
             throw new AssertionError(message);
         }
     }
 
-    protected void assertEquals(Object expected, Object actual) {
+    protected static void assertEquals(Object expected, Object actual) {
         assertEquals("expected: " + expected + ", actual: " + actual, expected, actual);
     }
 
-    protected void assertEquals(String message, Object expected, Object actual) {
+    protected static void assertEquals(String message, Object expected, Object actual) {
         if (!expected.equals(actual)) {
             throw new AssertionError(message);
         }
     }
 
-    protected void assertNotEquals(Object expected, Object actual) {
+    protected static void assertNotEquals(Object expected, Object actual) {
         assertNotEquals("not expected: " + expected + ", actual: " + actual, expected, actual);
     }
 
-    protected void assertNotEquals(String message, Object expected, Object actual) {
+    protected static void assertNotEquals(String message, Object expected, Object actual) {
         if (expected.equals(actual)) {
             throw new AssertionError(message);
         }
     }
 
-    protected void assertTrue(boolean actual) {
+    protected static void assertTrue(boolean actual) {
         assertTrue("expected: true, actual: " + actual, actual);
     }
 
-    protected void assertTrue(String message, boolean actual) {
+    protected static void assertTrue(String message, boolean actual) {
         if (!actual) {
             throw new AssertionError(message);
         }
     }
 
-    protected void assertFalse(boolean actual) {
+    protected static void assertFalse(boolean actual) {
         assertFalse("expected: false, actual: " + actual, actual);
     }
 
-    protected void assertFalse(String message, boolean actual) {
+    protected static void assertFalse(String message, boolean actual) {
         if (actual) {
             throw new AssertionError(message);
         }

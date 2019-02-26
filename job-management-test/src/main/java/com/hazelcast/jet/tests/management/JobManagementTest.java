@@ -120,9 +120,6 @@ public class JobManagementTest extends AbstractSoakTest {
         if (producer != null) {
             producer.stop();
         }
-        if (jet != null) {
-            jet.shutdown();
-        }
     }
 
     private JobConfig jobConfig(String initialSnapshot) {

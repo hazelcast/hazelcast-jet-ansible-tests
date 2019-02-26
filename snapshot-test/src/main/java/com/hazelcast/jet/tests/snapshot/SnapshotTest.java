@@ -145,8 +145,9 @@ public class SnapshotTest extends AbstractSoakTest {
     }
 
     public void teardown() {
-        jet.shutdown();
-        producerExecutorService.shutdown();
+        if (producerExecutorService != null) {
+            producerExecutorService.shutdown();
+        }
     }
 
     private Pipeline pipeline(ProcessingGuarantee guarantee, int jobIndex) {

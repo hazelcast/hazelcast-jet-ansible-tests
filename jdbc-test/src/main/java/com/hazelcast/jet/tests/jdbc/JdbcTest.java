@@ -116,9 +116,6 @@ public class JdbcTest extends AbstractSoakTest {
     }
 
     public void teardown() {
-        if (jet != null) {
-            jet.shutdown();
-        }
     }
 
     private void assertTableCount(long expectedTableCount) throws SQLException, InterruptedException {

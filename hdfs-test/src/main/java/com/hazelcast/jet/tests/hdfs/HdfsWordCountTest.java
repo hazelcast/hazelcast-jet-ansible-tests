@@ -120,7 +120,6 @@ public class HdfsWordCountTest extends AbstractSoakTest {
     }
 
     public void teardown() {
-        jet.shutdown();
     }
 
     private void executeJob(int threadIndex) {

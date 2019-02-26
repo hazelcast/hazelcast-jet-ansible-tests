@@ -27,7 +27,7 @@ import java.util.List;
 import java.util.function.Consumer;
 
 
-class EventJournalConsumer<K, V> {
+public class EventJournalConsumer<K, V> {
 
     private static final int POLL_COUNT = 20;
 
@@ -35,13 +35,13 @@ class EventJournalConsumer<K, V> {
     private final int partitionCount;
     private final long[] offsets;
 
-    EventJournalConsumer(IMap<K, V> map, int partitionCount) {
+    public EventJournalConsumer(IMap<K, V> map, int partitionCount) {
         this.proxy = (ClientMapProxy<K, V>) map;
         this.partitionCount = partitionCount;
         offsets = new long[partitionCount];
     }
 
-    boolean drain(Consumer<EventJournalMapEvent<K, V>> consumer) throws Exception {
+    public boolean drain(Consumer<EventJournalMapEvent<K, V>> consumer) throws Exception {
         boolean isEmpty = true;
         List<ICompletableFuture<ReadResultSet<EventJournalMapEvent<K, V>>>> futureList = new ArrayList<>();
         for (int i = 0; i < partitionCount; i++) {

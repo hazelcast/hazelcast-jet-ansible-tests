@@ -17,10 +17,6 @@
 package com.hazelcast.jet.tests.rolling;
 
 import com.hazelcast.client.config.ClientConfig;
-import com.hazelcast.client.config.XmlClientConfigBuilder;
-import com.hazelcast.config.Config;
-import com.hazelcast.config.EventJournalConfig;
-import com.hazelcast.jet.IMapJet;
 import com.hazelcast.jet.Jet;
 import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.Job;
@@ -28,9 +24,7 @@ import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.pipeline.Pipeline;
 import com.hazelcast.jet.pipeline.Sources;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
-import com.hazelcast.logging.ILogger;
-
-import java.io.IOException;
+import com.hazelcast.jet.tests.common.BasicEventJournalProducer;
 
 import static com.hazelcast.jet.Util.mapEventNewValue;
 import static com.hazelcast.jet.Util.mapPutEvents;
@@ -41,25 +35,22 @@ import static com.hazelcast.jet.function.DistributedComparator.comparing;
 import static com.hazelcast.jet.pipeline.JournalInitialPosition.START_FROM_OLDEST;
 import static com.hazelcast.jet.pipeline.Sinks.fromProcessor;
 import static com.hazelcast.jet.tests.common.Util.getJobStatus;
-import static com.hazelcast.jet.tests.common.Util.sleepMillis;
 import static com.hazelcast.jet.tests.common.Util.sleepMinutes;
-import static com.hazelcast.jet.tests.common.Util.sleepSeconds;
 
 public class RollingAggregateTest extends AbstractSoakTest {
 
+    private static final String SOURCE = RollingAggregateTest.class.getSimpleName();
     private static final int DEFAULT_SNAPSHOT_INTERVAL = 5000;
     private static final int EVENT_JOURNAL_CAPACITY = 600_000;
-    private static final int MAP_CLEAR_THRESHOLD = 5000;
-    private static final int PRODUCER_SLEEP_MILLIS = 5;
 
-    private static final String SOURCE = RollingAggregateTest.class.getSimpleName();
 
-    private Producer producer;
-    private long durationInMillis;
     private long snapshotIntervalMs;
+    private long durationInMillis;
 
-    private transient ClientConfig remoteClientConfig;
+
+    private transient ClientConfig remoteClusterClientConfig;
     private transient JetInstance remoteClient;
+    private transient BasicEventJournalProducer producer;
 
     public static void main(String[] args) throws Exception {
         new RollingAggregateTest().run(args);
@@ -68,15 +59,18 @@ public class RollingAggregateTest extends AbstractSoakTest {
     public void init() throws Exception {
         snapshotIntervalMs = propertyInt("snapshotIntervalMs", DEFAULT_SNAPSHOT_INTERVAL);
         durationInMillis = durationInMillis();
-        String remoteClusterXml = property("remoteClusterXml", null);
+        remoteClusterClientConfig = remoteClusterClientConfig();
 
-        configureProducer(remoteClusterXml);
+        remoteClient = Jet.newJetClient(remoteClusterClientConfig);
+
+        producer = new BasicEventJournalProducer(remoteClient, SOURCE, EVENT_JOURNAL_CAPACITY);
+        producer.start();
     }
 
-    public void test() throws Exception {
+    public void test() {
         Pipeline p = Pipeline.create();
 
-        p.drawFrom(Sources.<Long, Long, Long>remoteMapJournal(SOURCE, remoteClientConfig,
+        p.drawFrom(Sources.<Long, Long, Long>remoteMapJournal(SOURCE, remoteClusterClientConfig,
                 mapPutEvents(), mapEventNewValue(), START_FROM_OLDEST))
          .withoutTimestamps().setName("Stream from map(" + SOURCE + ")")
          .rollingAggregate(maxBy(comparing(val -> val))).setName("RollingAggregate(max)")
@@ -103,69 +97,8 @@ public class RollingAggregateTest extends AbstractSoakTest {
         if (producer != null) {
             producer.stop();
         }
-        if (jet != null) {
-            jet.shutdown();
-        }
         if (remoteClient != null) {
             remoteClient.shutdown();
-        }
-    }
-
-    private void configureProducer(String remoteClusterXml) throws IOException {
-        if (remoteClusterXml == null) {
-            throw new IllegalArgumentException("Remote cluster xml should be set");
-        }
-        remoteClientConfig = new XmlClientConfigBuilder(remoteClusterXml).build();
-        remoteClient = Jet.newJetClient(remoteClientConfig);
-
-        Config config = remoteClient.getHazelcastInstance().getConfig();
-        config.addEventJournalConfig(
-                new EventJournalConfig().setMapName(SOURCE).setCapacity(EVENT_JOURNAL_CAPACITY)
-        );
-        remoteClient.getMap(SOURCE).destroy();
-        producer = new Producer(logger, remoteClient.getMap(SOURCE));
-        producer.start();
-    }
-
-    static class Producer {
-
-        private final ILogger logger;
-        private final IMapJet<Long, Long> map;
-        private final Thread thread;
-
-        private volatile boolean producing = true;
-
-        Producer(ILogger logger, IMapJet<Long, Long> map) {
-            this.logger = logger;
-            this.map = map;
-            this.thread = new Thread(this::run);
-        }
-
-        void run() {
-            long counter = 0;
-            while (producing) {
-                try {
-                    map.set(counter, counter);
-                } catch (Exception e) {
-                    logger.severe("Exception during producing, counter: " + counter, e);
-                    sleepSeconds(1);
-                    continue;
-                }
-                counter++;
-                if (counter % MAP_CLEAR_THRESHOLD == 0) {
-                    map.clear();
-                }
-                sleepMillis(PRODUCER_SLEEP_MILLIS);
-            }
-        }
-
-        void start() {
-            thread.start();
-        }
-
-        void stop() throws InterruptedException {
-            producing = false;
-            thread.join();
         }
     }
 

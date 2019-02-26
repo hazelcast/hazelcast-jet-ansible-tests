@@ -17,7 +17,6 @@
 package com.hazelcast.jet.tests.eventjournal;
 
 import com.hazelcast.client.config.ClientConfig;
-import com.hazelcast.client.config.XmlClientConfigBuilder;
 import com.hazelcast.config.Config;
 import com.hazelcast.config.EventJournalConfig;
 import com.hazelcast.core.EntryEventType;
@@ -72,7 +71,7 @@ public class EventJournalTest extends AbstractSoakTest {
     private int partitionCount;
     private int memberSize;
 
-    private transient ClientConfig remoteClientConfig;
+    private transient ClientConfig remoteClusterClientConfig;
     private transient EventJournalTradeProducer tradeProducer;
     private transient JetInstance remoteClient;
 
@@ -88,9 +87,10 @@ public class EventJournalTest extends AbstractSoakTest {
         slideBy = propertyInt("slideBy", DEFAULT_SLIDE_BY);
         countPerTicker = propertyInt("countPerTicker", DEFAULT_COUNTER_PER_TICKER);
         durationInMillis = durationInMillis();
-        String remoteClusterXml = property("remoteClusterXml", null);
 
-        configureTradeProducer(remoteClusterXml);
+        remoteClusterClientConfig = remoteClusterClientConfig();
+
+        configureTradeProducer();
     }
 
     public void test() throws Exception {
@@ -131,9 +131,6 @@ public class EventJournalTest extends AbstractSoakTest {
         if (tradeProducer != null) {
             tradeProducer.close();
         }
-        if (jet != null) {
-            jet.shutdown();
-        }
         if (remoteClient != null) {
             remoteClient.shutdown();
         }
@@ -142,24 +139,20 @@ public class EventJournalTest extends AbstractSoakTest {
     private Pipeline pipeline() {
         Pipeline pipeline = Pipeline.create();
 
-        pipeline.drawFrom(Sources.<Long, Long, Long>remoteMapJournal(MAP_NAME, remoteClientConfig,
+        pipeline.drawFrom(Sources.<Long, Long, Long>remoteMapJournal(MAP_NAME, remoteClusterClientConfig,
                 e -> e.getType() == EntryEventType.ADDED, EventJournalMapEvent::getNewValue, START_FROM_OLDEST))
                 .withTimestamps(t -> t, lagMs).setName("Read from map(" + MAP_NAME + ")")
                 .setLocalParallelism(partitionCount / memberSize)
                 .window(sliding(windowSize, slideBy))
                 .groupingKey(wholeItem())
                 .aggregate(AggregateOperations.counting()).setName("Aggregate(count)")
-                .drainTo(Sinks.remoteMap(RESULTS_MAP_NAME, remoteClientConfig))
+                .drainTo(Sinks.remoteMap(RESULTS_MAP_NAME, remoteClusterClientConfig))
                 .setName("Write to map(" + RESULTS_MAP_NAME + ")");
         return pipeline;
     }
 
-    private void configureTradeProducer(String remoteClusterXml) throws IOException {
-        if (remoteClusterXml == null) {
-            throw new IllegalArgumentException("Remote cluster xml should be set");
-        }
-        remoteClientConfig = new XmlClientConfigBuilder(remoteClusterXml).build();
-        remoteClient = Jet.newJetClient(remoteClientConfig);
+    private void configureTradeProducer() throws IOException {
+        remoteClient = Jet.newJetClient(remoteClusterClientConfig);
         HazelcastInstance hazelcastInstance = remoteClient.getHazelcastInstance();
 
         memberSize = hazelcastInstance.getCluster().getMembers().size();

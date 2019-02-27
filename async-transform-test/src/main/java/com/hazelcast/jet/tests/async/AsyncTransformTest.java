@@ -185,7 +185,7 @@ public class AsyncTransformTest extends AbstractSoakTest {
             logger = hazelcastInstance.getLoggingService().getLogger(Verifier.class.getSimpleName() + "-" + mapName);
             int partitionCount = hazelcastInstance.getPartitionService().getPartitions().size();
             map = hazelcastInstance.getMap(mapName);
-            consumer = new EventJournalConsumer<>(map, partitionCount);
+            consumer = new EventJournalConsumer<>(map, mapPutEvents(), partitionCount);
             thread = new Thread(this::run);
             thread.start();
         }

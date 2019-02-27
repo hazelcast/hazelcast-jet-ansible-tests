@@ -40,6 +40,7 @@ import com.hazelcast.map.journal.EventJournalMapEvent;
 
 import java.io.IOException;
 
+import static com.hazelcast.jet.Util.mapPutEvents;
 import static com.hazelcast.jet.core.JobStatus.FAILED;
 import static com.hazelcast.jet.function.DistributedFunctions.wholeItem;
 import static com.hazelcast.jet.pipeline.JournalInitialPosition.START_FROM_OLDEST;
@@ -107,7 +108,7 @@ public class EventJournalTest extends AbstractSoakTest {
                 "Verifier[" + RESULTS_MAP_NAME + "]", windowCount).startVerification();
 
         IMap<Long, Long> resultMap = remoteClient.getHazelcastInstance().getMap(RESULTS_MAP_NAME);
-        EventJournalConsumer<Long, Long> consumer = new EventJournalConsumer<>(resultMap, partitionCount);
+        EventJournalConsumer<Long, Long> consumer = new EventJournalConsumer<>(resultMap, mapPutEvents(), partitionCount);
 
         long begin = System.currentTimeMillis();
         while (System.currentTimeMillis() - begin < durationInMillis) {

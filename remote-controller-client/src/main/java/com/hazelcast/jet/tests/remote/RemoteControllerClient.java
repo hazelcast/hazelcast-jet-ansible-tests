@@ -87,7 +87,7 @@ public final class RemoteControllerClient {
         int[] counter = new int[]{0};
         Iterables.cycle(members).forEach(member -> {
             try {
-                stop(member, jetHome);
+                stopAndClear(member, jetHome);
                 sleepMinutes(sleepBetweenRestart);
                 start(member);
                 sleepMinutes(sleepBetweenRestart);
@@ -122,14 +122,18 @@ public final class RemoteControllerClient {
         int port = member.getAddress().getPort();
         call(member, jetHome + "/bin/cluster.sh -a " + host + " -p " + port +
                 " -o shutdown -g jet -P jet-pass");
-        members.forEach(m -> uncheckRun(() -> rollLogs(m, jetHome)));
+        members.forEach(m -> uncheckRun(() -> stop(m, jetHome)));
+    }
+
+    private static void stopAndClear(Member member, String jetHome) throws Exception {
+        stop(member, jetHome);
+        removeHotRestartData(member, jetHome);
     }
 
     private static void stop(Member member, String jetHome) throws Exception {
         logger.info("Stopping member[" + member + "]");
         call(member, "sudo initctl stop hazelcast-jet-isolated");
         rollLogs(member, jetHome);
-        removeHotRestartData(member, jetHome);
     }
 
     private static void rollLogs(Member member, String jetHome) throws Exception {

@@ -20,6 +20,7 @@ import com.hazelcast.client.config.ClientConfig;
 import com.hazelcast.config.Config;
 import com.hazelcast.config.EventJournalConfig;
 import com.hazelcast.core.HazelcastInstance;
+import com.hazelcast.core.IMap;
 import com.hazelcast.jet.Jet;
 import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.Job;
@@ -49,7 +50,6 @@ import static com.hazelcast.jet.pipeline.JournalInitialPosition.START_FROM_OLDES
 import static com.hazelcast.jet.tests.common.Util.getJobStatus;
 import static com.hazelcast.jet.tests.common.Util.sleepMinutes;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
-import static java.util.concurrent.TimeUnit.NANOSECONDS;
 
 public class AsyncTransformTest extends AbstractSoakTest {
 
@@ -57,12 +57,12 @@ public class AsyncTransformTest extends AbstractSoakTest {
     private static final String ORDERED_SINK = SOURCE + "-orderedSink";
     private static final String UNORDERED_SINK = SOURCE + "-unorderedSink";
     private static final int DEFAULT_SNAPSHOT_INTERVAL = 5000;
-    private static final int DEFAULT_MAX_SCHEDULER_DELAY = (int) MILLISECONDS.toNanos(1);
+    private static final int DEFAULT_MAX_SCHEDULER_DELAY = 500;
     private static final int EVENT_JOURNAL_CAPACITY = 600_000;
     private static final int SCHEDULER_CORE_SIZE = 5;
 
     private long snapshotIntervalMs;
-    private long maxSchedulerDelayNanos;
+    private long maxSchedulerDelayMillis;
     private long durationInMillis;
 
     private transient ClientConfig remoteClusterClientConfig;
@@ -76,7 +76,7 @@ public class AsyncTransformTest extends AbstractSoakTest {
     @Override
     protected void init() throws Exception {
         snapshotIntervalMs = propertyInt("snapshotIntervalMs", DEFAULT_SNAPSHOT_INTERVAL);
-        maxSchedulerDelayNanos = propertyInt("maxSchedulerDelayNanos", DEFAULT_MAX_SCHEDULER_DELAY);
+        maxSchedulerDelayMillis = propertyInt("maxSchedulerDelayMillis", DEFAULT_MAX_SCHEDULER_DELAY);
         durationInMillis = durationInMillis();
         remoteClusterClientConfig = remoteClusterClientConfig();
 
@@ -126,7 +126,7 @@ public class AsyncTransformTest extends AbstractSoakTest {
                                          .withoutTimestamps().setName("Stream from map(" + SOURCE + ")");
 
         ContextFactory<Scheduler> orderedContextFactory = ContextFactory
-                .withCreateFn(x -> new Scheduler(SCHEDULER_CORE_SIZE, maxSchedulerDelayNanos))
+                .withCreateFn(x -> new Scheduler(SCHEDULER_CORE_SIZE, maxSchedulerDelayMillis))
                 .withLocalSharing();
         sourceStage.mapUsingContextAsync(orderedContextFactory, Scheduler::schedule)
                    .drainTo(Sinks.remoteMap(ORDERED_SINK, remoteClusterClientConfig));
@@ -151,17 +151,17 @@ public class AsyncTransformTest extends AbstractSoakTest {
     public static class Scheduler {
 
         private final ScheduledThreadPoolExecutor scheduledExecutor;
-        private final long maxSchedulerDelayNanos;
+        private final long maxSchedulerDelayMillis;
 
-        Scheduler(int coreSize, long maxSchedulerDelayNanos) {
+        Scheduler(int coreSize, long maxSchedulerDelayMillis) {
             this.scheduledExecutor = new ScheduledThreadPoolExecutor(coreSize);
-            this.maxSchedulerDelayNanos = maxSchedulerDelayNanos;
+            this.maxSchedulerDelayMillis = maxSchedulerDelayMillis;
         }
 
         CompletableFuture<Map.Entry<Long, Long>> schedule(long value) {
             CompletableFuture<Map.Entry<Long, Long>> future = new CompletableFuture<>();
             scheduledExecutor.schedule(() -> future.complete(entry(value, -value)),
-                    ThreadLocalRandom.current().nextLong(maxSchedulerDelayNanos), NANOSECONDS);
+                    ThreadLocalRandom.current().nextLong(maxSchedulerDelayMillis), MILLISECONDS);
             return future;
         }
     }
@@ -174,6 +174,7 @@ public class AsyncTransformTest extends AbstractSoakTest {
         private final EventJournalConsumer<Long, Long> consumer;
         private final Thread thread;
         private final PriorityQueue<Long> queue;
+        private final IMap<Long, Long> map;
         private final ILogger logger;
 
         private volatile boolean running = true;
@@ -183,7 +184,8 @@ public class AsyncTransformTest extends AbstractSoakTest {
             HazelcastInstance hazelcastInstance = client.getHazelcastInstance();
             logger = hazelcastInstance.getLoggingService().getLogger(Verifier.class.getSimpleName() + "-" + mapName);
             int partitionCount = hazelcastInstance.getPartitionService().getPartitions().size();
-            consumer = new EventJournalConsumer<>(hazelcastInstance.getMap(mapName), partitionCount);
+            map = hazelcastInstance.getMap(mapName);
+            consumer = new EventJournalConsumer<>(map, partitionCount);
             thread = new Thread(this::run);
             thread.start();
         }
@@ -207,6 +209,7 @@ public class AsyncTransformTest extends AbstractSoakTest {
                         }
                         if (counter % LOG_COUNTER == 0) {
                             logger.info("counter: " + counter);
+                            map.clear();
                         }
                     }
                     if (queue.size() == QUEUE_SIZE_LIMIT) {

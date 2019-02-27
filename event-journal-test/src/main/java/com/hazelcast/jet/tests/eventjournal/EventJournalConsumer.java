@@ -26,6 +26,7 @@ import com.hazelcast.ringbuffer.ReadResultSet;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
+import java.util.stream.StreamSupport;
 
 
 public class EventJournalConsumer<K, V> {
@@ -50,13 +51,13 @@ public class EventJournalConsumer<K, V> {
         List<ICompletableFuture<ReadResultSet<EventJournalMapEvent<K, V>>>> futureList = new ArrayList<>();
         for (int i = 0; i < partitionCount; i++) {
             ICompletableFuture<ReadResultSet<EventJournalMapEvent<K, V>>> f = proxy.readFromEventJournal(
-                    offsets[i], 0, POLL_COUNT, i, predicate::test, null);
+                    offsets[i], 0, POLL_COUNT, i, null, null);
             futureList.add(f);
         }
         for (int i = 0; i < partitionCount; i++) {
             ICompletableFuture<ReadResultSet<EventJournalMapEvent<K, V>>> future = futureList.get(i);
             ReadResultSet<EventJournalMapEvent<K, V>> resultSet = future.get();
-            resultSet.forEach(consumer);
+            StreamSupport.stream(resultSet.spliterator(), false).filter(predicate).forEach(consumer);
             offsets[i] = offsets[i] + resultSet.readCount();
             isEmpty = isEmpty & resultSet.readCount() == 0;
         }

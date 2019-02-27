@@ -164,6 +164,4 @@ public abstract class AbstractSoakTest implements Serializable {
             throw new AssertionError(message);
         }
     }
-
-
 }

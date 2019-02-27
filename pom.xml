@@ -21,6 +21,7 @@
         <module>rolling-aggregate-test</module>
         <module>snapshot-test</module>
         <module>soak-tests-common</module>
+        <module>large-snapshot-chunk-test</module>
     </modules>
 
     <properties>

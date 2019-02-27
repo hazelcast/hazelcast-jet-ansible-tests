@@ -19,7 +19,7 @@ package com.hazelcast.jet.tests.eventjournal;
 import com.hazelcast.client.proxy.ClientMapProxy;
 import com.hazelcast.core.ICompletableFuture;
 import com.hazelcast.core.IMap;
-import com.hazelcast.jet.function.DistributedPredicate;
+import com.hazelcast.jet.function.PredicateEx;
 import com.hazelcast.map.journal.EventJournalMapEvent;
 import com.hazelcast.ringbuffer.ReadResultSet;
 
@@ -36,9 +36,9 @@ public class EventJournalConsumer<K, V> {
     private final ClientMapProxy<K, V> proxy;
     private final int partitionCount;
     private final long[] offsets;
-    private final DistributedPredicate<EventJournalMapEvent<K, V>> predicate;
+    private final PredicateEx<EventJournalMapEvent<K, V>> predicate;
 
-    public EventJournalConsumer(IMap<K, V> map, DistributedPredicate<EventJournalMapEvent<K, V>> predicate,
+    public EventJournalConsumer(IMap<K, V> map, PredicateEx<EventJournalMapEvent<K, V>> predicate,
                                 int partitionCount) {
         this.proxy = (ClientMapProxy<K, V>) map;
         this.predicate = predicate;

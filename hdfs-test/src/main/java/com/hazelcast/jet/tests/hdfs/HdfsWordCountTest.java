@@ -45,7 +45,7 @@ import java.util.concurrent.Executors;
 
 import static com.hazelcast.jet.aggregate.AggregateOperations.counting;
 import static com.hazelcast.jet.core.processor.Processors.noopP;
-import static com.hazelcast.jet.function.DistributedFunctions.wholeItem;
+import static com.hazelcast.jet.function.Functions.wholeItem;
 import static com.hazelcast.jet.pipeline.Sinks.fromProcessor;
 import static com.hazelcast.jet.pipeline.Sources.batchFromProcessor;
 import static com.hazelcast.jet.tests.hdfs.WordGenerator.wordGenerator;

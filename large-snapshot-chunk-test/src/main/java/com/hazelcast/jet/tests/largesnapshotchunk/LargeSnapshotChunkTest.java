@@ -48,13 +48,14 @@ public class LargeSnapshotChunkTest extends AbstractSoakTest {
     private static final int EVENT_JOURNAL_CAPACITY = 600_000;
     private static final int LARGE_CHUNK_KILOBYTES = AsyncSnapshotWriterImpl.DEFAULT_CHUNK_SIZE / 1024;
     // we need a 1+ lag because the map-journal source doesn't coalesce partitions correctly
-    private static final int LAG = 10;
+    private static final int DEFAULT_LAG = 10;
 
     private static final String SOURCE = LargeSnapshotChunkTest.class.getSimpleName();
 
     private LargeSnapshotChunkProducer producer;
     private long durationInMillis;
     private long snapshotIntervalMs;
+    private int lagMs;
 
     private transient ClientConfig remoteClientConfig;
     private transient JetInstance remoteClient;
@@ -65,6 +66,7 @@ public class LargeSnapshotChunkTest extends AbstractSoakTest {
 
     public void init() throws Exception {
         snapshotIntervalMs = propertyInt("snapshotIntervalMs", DEFAULT_SNAPSHOT_INTERVAL);
+        lagMs = propertyInt("lagMs", DEFAULT_LAG);
         durationInMillis = durationInMillis();
         String remoteClusterXml = property("remoteClusterXml", null);
 
@@ -76,7 +78,7 @@ public class LargeSnapshotChunkTest extends AbstractSoakTest {
 
         p.drawFrom(Sources.<String, int[]>remoteMapJournal(SOURCE, remoteClientConfig,
                 START_FROM_OLDEST))
-         .withTimestamps(e -> e.getValue()[0], LAG)
+         .withTimestamps(e -> e.getValue()[0], lagMs)
                 .setName("Stream from map(" + SOURCE + ")")
          .groupingKey(Entry::getKey)
          .window(WindowDefinition.sliding(LARGE_CHUNK_KILOBYTES, 1))

@@ -50,6 +50,7 @@ import static com.hazelcast.jet.pipeline.JournalInitialPosition.START_FROM_OLDES
 import static com.hazelcast.jet.tests.common.Util.getJobStatus;
 import static com.hazelcast.jet.tests.common.Util.sleepMinutes;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
+import static java.util.concurrent.TimeUnit.MINUTES;
 
 public class AsyncTransformTest extends AbstractSoakTest {
 
@@ -127,6 +128,7 @@ public class AsyncTransformTest extends AbstractSoakTest {
 
         ContextFactory<Scheduler> orderedContextFactory = ContextFactory
                 .withCreateFn(x -> new Scheduler(SCHEDULER_CORE_SIZE, maxSchedulerDelayMillis))
+                .withDestroyFn(Scheduler::shutdown)
                 .withLocalSharing();
         sourceStage.mapUsingContextAsync(orderedContextFactory, Scheduler::schedule)
                    .drainTo(Sinks.remoteMap(ORDERED_SINK, remoteClusterClientConfig));
@@ -163,6 +165,11 @@ public class AsyncTransformTest extends AbstractSoakTest {
             scheduledExecutor.schedule(() -> future.complete(entry(value, -value)),
                     ThreadLocalRandom.current().nextLong(maxSchedulerDelayMillis), MILLISECONDS);
             return future;
+        }
+
+        void shutdown() throws InterruptedException {
+            scheduledExecutor.shutdown();
+            scheduledExecutor.awaitTermination(1, MINUTES);
         }
     }
 

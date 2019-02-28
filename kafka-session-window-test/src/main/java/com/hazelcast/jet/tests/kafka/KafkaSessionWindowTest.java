@@ -115,8 +115,9 @@ public class KafkaSessionWindowTest extends AbstractSoakTest {
     }
 
     public void teardown() {
-        jet.shutdown();
-        producerExecutorService.shutdown();
+        if (producerExecutorService != null) {
+            producerExecutorService.shutdown();
+        }
     }
 
     private Pipeline pipeline() {

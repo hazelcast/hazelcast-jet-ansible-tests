@@ -4,7 +4,7 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <artifactId>job-management-test</artifactId>
+    <artifactId>async-transform-test</artifactId>
 
     <parent>
         <artifactId>hazelcast-jet-ansible-tests</artifactId>
@@ -22,6 +22,11 @@
             <artifactId>soak-tests-common</artifactId>
             <version>${jet.version}</version>
         </dependency>
+        <dependency>
+            <groupId>com.hazelcast.jet.tests</groupId>
+            <artifactId>event-journal-test</artifactId>
+            <version>${jet.version}</version>
+        </dependency>
     </dependencies>
 
     <build>
@@ -32,7 +37,7 @@
                 <configuration>
                     <archive>
                         <manifest>
-                            <mainClass>com.hazelcast.jet.tests.management.JobManagementTest</mainClass>
+                            <mainClass>com.hazelcast.jet.tests.async.AsyncTransformTest</mainClass>
                         </manifest>
                     </archive>
                 </configuration>
@@ -54,7 +59,7 @@
                                 <transformer
                                         implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                                     <manifestEntries>
-                                        <Main-Class>com.hazelcast.jet.tests.management.JobManagementTest</Main-Class>
+                                        <Main-Class>com.hazelcast.jet.tests.async.AsyncTransformTest</Main-Class>
                                     </manifestEntries>
                                 </transformer>
                             </transformers>
@@ -72,7 +77,7 @@
                             <artifactSet>
                                 <includes>
                                     <include>com.hazelcast.jet.tests:*</include>
-                                    <include>com.hazelcast.jet.tests.management:*</include>
+                                    <include>com.hazelcast.jet.tests.async:*</include>
                                 </includes>
                             </artifactSet>
                         </configuration>

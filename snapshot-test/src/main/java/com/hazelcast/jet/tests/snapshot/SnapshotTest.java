@@ -40,7 +40,7 @@ import java.util.concurrent.Executors;
 import static com.hazelcast.jet.aggregate.AggregateOperations.counting;
 import static com.hazelcast.jet.config.ProcessingGuarantee.AT_LEAST_ONCE;
 import static com.hazelcast.jet.config.ProcessingGuarantee.EXACTLY_ONCE;
-import static com.hazelcast.jet.function.DistributedFunctions.wholeItem;
+import static com.hazelcast.jet.function.Functions.wholeItem;
 import static com.hazelcast.jet.pipeline.WindowDefinition.sliding;
 
 public class SnapshotTest extends AbstractSoakTest {
@@ -145,8 +145,9 @@ public class SnapshotTest extends AbstractSoakTest {
     }
 
     public void teardown() {
-        jet.shutdown();
-        producerExecutorService.shutdown();
+        if (producerExecutorService != null) {
+            producerExecutorService.shutdown();
+        }
     }
 
     private Pipeline pipeline(ProcessingGuarantee guarantee, int jobIndex) {

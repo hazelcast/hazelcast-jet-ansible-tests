@@ -19,29 +19,34 @@ package com.hazelcast.jet.tests.eventjournal;
 import com.hazelcast.client.proxy.ClientMapProxy;
 import com.hazelcast.core.ICompletableFuture;
 import com.hazelcast.core.IMap;
+import com.hazelcast.jet.function.PredicateEx;
 import com.hazelcast.map.journal.EventJournalMapEvent;
 import com.hazelcast.ringbuffer.ReadResultSet;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
+import java.util.stream.StreamSupport;
 
 
-class EventJournalConsumer<K, V> {
+public class EventJournalConsumer<K, V> {
 
     private static final int POLL_COUNT = 20;
 
     private final ClientMapProxy<K, V> proxy;
     private final int partitionCount;
     private final long[] offsets;
+    private final PredicateEx<EventJournalMapEvent<K, V>> predicate;
 
-    EventJournalConsumer(IMap<K, V> map, int partitionCount) {
+    public EventJournalConsumer(IMap<K, V> map, PredicateEx<EventJournalMapEvent<K, V>> predicate,
+                                int partitionCount) {
         this.proxy = (ClientMapProxy<K, V>) map;
+        this.predicate = predicate;
         this.partitionCount = partitionCount;
         offsets = new long[partitionCount];
     }
 
-    boolean drain(Consumer<EventJournalMapEvent<K, V>> consumer) throws Exception {
+    public boolean drain(Consumer<EventJournalMapEvent<K, V>> consumer) throws Exception {
         boolean isEmpty = true;
         List<ICompletableFuture<ReadResultSet<EventJournalMapEvent<K, V>>>> futureList = new ArrayList<>();
         for (int i = 0; i < partitionCount; i++) {
@@ -52,7 +57,7 @@ class EventJournalConsumer<K, V> {
         for (int i = 0; i < partitionCount; i++) {
             ICompletableFuture<ReadResultSet<EventJournalMapEvent<K, V>>> future = futureList.get(i);
             ReadResultSet<EventJournalMapEvent<K, V>> resultSet = future.get();
-            resultSet.forEach(consumer);
+            StreamSupport.stream(resultSet.spliterator(), false).filter(predicate).forEach(consumer);
             offsets[i] = offsets[i] + resultSet.readCount();
             isEmpty = isEmpty & resultSet.readCount() == 0;
         }

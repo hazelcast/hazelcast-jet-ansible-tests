@@ -23,7 +23,7 @@ import com.hazelcast.jet.Job;
 import com.hazelcast.jet.JobStateSnapshot;
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.config.ProcessingGuarantee;
-import com.hazelcast.jet.function.DistributedPredicate;
+import com.hazelcast.jet.function.PredicateEx;
 import com.hazelcast.jet.pipeline.ContextFactory;
 import com.hazelcast.jet.pipeline.Pipeline;
 import com.hazelcast.jet.pipeline.Sinks;
@@ -120,9 +120,6 @@ public class JobManagementTest extends AbstractSoakTest {
         if (producer != null) {
             producer.stop();
         }
-        if (jet != null) {
-            jet.shutdown();
-        }
     }
 
     private JobConfig jobConfig(String initialSnapshot) {
@@ -144,8 +141,8 @@ public class JobManagementTest extends AbstractSoakTest {
         return p;
     }
 
-    private static DistributedPredicate<EventJournalMapEvent<Long, Long>> filter(boolean odds) {
-        DistributedPredicate<EventJournalMapEvent<Long, Long>> putEvents = mapPutEvents();
+    private static PredicateEx<EventJournalMapEvent<Long, Long>> filter(boolean odds) {
+        PredicateEx<EventJournalMapEvent<Long, Long>> putEvents = mapPutEvents();
         return e -> putEvents.test(e) && (e.getNewValue() % 2 == (odds ? 1 : 0));
     }
 

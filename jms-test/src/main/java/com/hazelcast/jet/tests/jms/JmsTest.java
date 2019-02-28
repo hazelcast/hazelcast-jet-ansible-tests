@@ -102,9 +102,6 @@ public class JmsTest extends AbstractSoakTest {
     }
 
     public void teardown() {
-        if (jet != null) {
-            jet.shutdown();
-        }
     }
 
     private void assertCount(long expectedTotalCount) throws InterruptedException {

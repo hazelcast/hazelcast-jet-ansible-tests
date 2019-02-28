@@ -22,7 +22,7 @@ import com.hazelcast.jet.core.Processor;
 import com.hazelcast.jet.core.ProcessorMetaSupplier;
 import com.hazelcast.jet.core.ProcessorSupplier;
 import com.hazelcast.jet.core.processor.Processors;
-import com.hazelcast.jet.function.DistributedBiFunction;
+import com.hazelcast.jet.function.BiFunctionEx;
 import com.hazelcast.nio.Address;
 import com.hazelcast.util.ExceptionUtil;
 import org.apache.hadoop.conf.Configuration;
@@ -102,11 +102,11 @@ public final class WordGenerator extends AbstractProcessor {
 
     public static class MetaSupplier implements ProcessorMetaSupplier {
 
-        private final DistributedBiFunction<String, Integer, Processor> processorF;
+        private final BiFunctionEx<String, Integer, Processor> processorF;
 
         private transient Map<Address, String> addressUuidMap;
 
-        MetaSupplier(DistributedBiFunction<String, Integer, Processor> processorF) {
+        MetaSupplier(BiFunctionEx<String, Integer, Processor> processorF) {
             this.processorF = processorF;
         }
 

@@ -18,7 +18,9 @@ package com.hazelcast.jet.tests.largesnapshotchunk;
 
 import com.hazelcast.jet.IMapJet;
 import com.hazelcast.jet.JetInstance;
+import com.hazelcast.jet.impl.util.AsyncSnapshotWriterImpl;
 import com.hazelcast.logging.ILogger;
+import com.hazelcast.nio.Bits;
 
 import java.util.stream.IntStream;
 
@@ -27,18 +29,21 @@ import static com.hazelcast.jet.tests.common.Util.sleepSeconds;
 
 class LargeSnapshotChunkProducer {
 
-    private static final int PRODUCER_SLEEP_MILLIS = 500;
-    private static final int INTS_IN_KILOBYTE = 256;
+    private static final int PRODUCER_SLEEP_MILLIS = 1000;
 
     private final ILogger logger;
     private final String[] keys;
+    private final JetInstance instance;
+    private final int windowSize;
     private final IMapJet<String, int[]> map;
     private final Thread thread;
 
     private volatile boolean shutdown;
 
-    LargeSnapshotChunkProducer(ILogger logger, JetInstance instance, IMapJet<String, int[]> map) {
+    LargeSnapshotChunkProducer(ILogger logger, JetInstance instance, int windowSize, IMapJet<String, int[]> map) {
         this.logger = logger;
+        this.instance = instance;
+        this.windowSize = windowSize;
         this.map = map;
         this.thread = new Thread(this::run);
 
@@ -58,11 +63,16 @@ class LargeSnapshotChunkProducer {
     private void run() {
         for (long time = 0; !shutdown; time++) {
             int intTime = (int) time;
-            int[] value = IntStream.generate(() -> intTime).limit(INTS_IN_KILOBYTE).toArray();
-            value[0] = (int) time;
+            int[] bigValue = IntStream.generate(() -> intTime)
+                                      .limit(AsyncSnapshotWriterImpl.DEFAULT_CHUNK_SIZE / Bits.INT_SIZE_IN_BYTES / windowSize)
+                                      .toArray();
+            int[] smallValue = {bigValue[0]};
             try {
-                for (String key : keys) {
-                    map.set(key, value);
+                for (int i = 0; i < keys.length; i++) {
+                    // Use big value only for the 1st partition. For other partitions use small value to
+                    // not use too much memory. We produce value to all partitions in order to not
+                    // have to wait for idle timeout to have the output.
+                    map.set(keys[i], i == 0 ? bigValue : smallValue);
                 }
             } catch (Exception e) {
                 logger.severe("Exception while producing, time: " + time, e);

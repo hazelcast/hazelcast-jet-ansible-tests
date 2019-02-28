@@ -48,16 +48,15 @@ public final class VerificationProcessor extends AbstractProcessor {
     protected boolean tryProcess(int ordinal, Object item) {
         @SuppressWarnings("unchecked")
         TimestampedEntry<String, List<int[]>> casted = (TimestampedEntry<String, List<int[]>>) item;
-        long expectedNumberOfItems = Math.min(casted.getTimestamp(), windowSize);
-        if (casted.getValue().size() != expectedNumberOfItems) {
-            throw new IllegalArgumentException("Expected " + expectedNumberOfItems + " items, but got "
+        if (casted.getValue().size() != windowSize) {
+            throw new IllegalArgumentException("Expected " + windowSize + " items, but got "
                     + casted.getValue().size());
         }
         Long oldTime = timePerKey.put(casted.getKey(), casted.getTimestamp());
         if (oldTime == null) {
             oldTime = 0L;
         }
-        if (oldTime != casted.getTimestamp() - 1) {
+        if (oldTime != casted.getTimestamp() - windowSize) {
             throw new IllegalArgumentException("Received item for time=" + casted.getTimestamp() + ", but the last " +
                     "received item for this key was with time=" + oldTime);
         }

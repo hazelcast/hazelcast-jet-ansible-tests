@@ -52,7 +52,6 @@ public final class VerificationProcessor extends AbstractProcessor {
             throw new IllegalArgumentException("Expected " + windowSize + " items, but got "
                     + casted.getValue().size());
         }
-        getLogger().info("verified ok, item=" + item);
         Long oldTime = timePerKey.put(casted.getKey(), casted.getTimestamp());
         if (oldTime == null) {
             oldTime = 0L;

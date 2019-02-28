@@ -18,12 +18,12 @@ package com.hazelcast.jet.tests.largesnapshotchunk;
 
 import com.hazelcast.jet.IMapJet;
 import com.hazelcast.jet.JetInstance;
-import com.hazelcast.jet.impl.util.AsyncSnapshotWriterImpl;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.nio.Bits;
 
 import java.util.stream.IntStream;
 
+import static com.hazelcast.jet.impl.util.AsyncSnapshotWriterImpl.DEFAULT_CHUNK_SIZE;
 import static com.hazelcast.jet.tests.common.Util.sleepMillis;
 import static com.hazelcast.jet.tests.common.Util.sleepSeconds;
 
@@ -33,7 +33,6 @@ class LargeSnapshotChunkProducer {
 
     private final ILogger logger;
     private final String[] keys;
-    private final JetInstance instance;
     private final int windowSize;
     private final IMapJet<String, int[]> map;
     private final Thread thread;
@@ -42,7 +41,6 @@ class LargeSnapshotChunkProducer {
 
     LargeSnapshotChunkProducer(ILogger logger, JetInstance instance, int windowSize, IMapJet<String, int[]> map) {
         this.logger = logger;
-        this.instance = instance;
         this.windowSize = windowSize;
         this.map = map;
         this.thread = new Thread(this::run);
@@ -64,7 +62,7 @@ class LargeSnapshotChunkProducer {
         for (long time = 0; !shutdown; time++) {
             int intTime = (int) time;
             int[] bigValue = IntStream.generate(() -> intTime)
-                                      .limit(AsyncSnapshotWriterImpl.DEFAULT_CHUNK_SIZE / Bits.INT_SIZE_IN_BYTES / windowSize)
+                                      .limit(DEFAULT_CHUNK_SIZE / Bits.INT_SIZE_IN_BYTES / windowSize)
                                       .toArray();
             int[] smallValue = {bigValue[0]};
             try {

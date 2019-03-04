@@ -48,12 +48,12 @@ public final class VerificationProcessor extends AbstractProcessor {
             throw new IllegalArgumentException("Expected " + windowSize + " items, but got "
                     + casted.getValue().size());
         }
-        Long oldTime = timePerKey.put(casted.getKey(), casted.start());
+        Long oldTime = timePerKey.put(casted.getKey(), casted.end());
         if (oldTime == null) {
             oldTime = 0L;
         }
-        if (oldTime != casted.start() - windowSize) {
-            throw new IllegalArgumentException("Received item for time=" + casted.start() + ", but the last " +
+        if (oldTime != casted.end() - windowSize) {
+            throw new IllegalArgumentException("Received item for time=" + casted.end() + ", but the last " +
                     "received item for this key was with time=" + oldTime);
         }
         return true;

@@ -62,7 +62,6 @@ public class EventJournalTest extends AbstractSoakTest {
     private static final String MAP_NAME = EventJournalTest.class.getSimpleName();
     private static final String RESULTS_MAP_NAME = MAP_NAME + "-RESULTS";
 
-    private long durationInMillis;
     private int countPerTicker;
     private int snapshotIntervalMs;
     private int lagMs;
@@ -87,7 +86,6 @@ public class EventJournalTest extends AbstractSoakTest {
         windowSize = propertyInt("windowSize", DEFAULT_WINDOW_SIZE);
         slideBy = propertyInt("slideBy", DEFAULT_SLIDE_BY);
         countPerTicker = propertyInt("countPerTicker", DEFAULT_COUNTER_PER_TICKER);
-        durationInMillis = durationInMillis();
 
         remoteClusterClientConfig = remoteClusterClientConfig();
 

@@ -64,7 +64,6 @@ public class AsyncTransformTest extends AbstractSoakTest {
 
     private long snapshotIntervalMs;
     private long maxSchedulerDelayMillis;
-    private long durationInMillis;
 
     private transient ClientConfig remoteClusterClientConfig;
     private transient JetInstance remoteClient;
@@ -78,7 +77,6 @@ public class AsyncTransformTest extends AbstractSoakTest {
     protected void init() throws Exception {
         snapshotIntervalMs = propertyInt("snapshotIntervalMs", DEFAULT_SNAPSHOT_INTERVAL);
         maxSchedulerDelayMillis = propertyInt("maxSchedulerDelayMillis", DEFAULT_MAX_SCHEDULER_DELAY);
-        durationInMillis = durationInMillis();
         remoteClusterClientConfig = remoteClusterClientConfig();
 
         remoteClient = Jet.newJetClient(remoteClusterClientConfig);

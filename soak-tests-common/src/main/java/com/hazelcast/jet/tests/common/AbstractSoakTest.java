@@ -18,12 +18,14 @@ package com.hazelcast.jet.tests.common;
 
 import com.hazelcast.client.config.ClientConfig;
 import com.hazelcast.client.config.XmlClientConfigBuilder;
+import com.hazelcast.jet.Jet;
 import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.server.JetBootstrap;
 import com.hazelcast.logging.ILogger;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.Arrays;
 
 import static com.hazelcast.jet.tests.common.Util.parseArguments;
 import static java.util.concurrent.TimeUnit.MINUTES;
@@ -31,18 +33,27 @@ import static java.util.concurrent.TimeUnit.MINUTES;
 public abstract class AbstractSoakTest implements Serializable {
 
     private static final int DEFAULT_DURATION_MINUTES = 30;
+    private static final boolean DEBUG = true;
 
     protected transient JetInstance jet;
     protected transient ILogger logger;
+    protected long durationInMillis;
 
     protected final void run(String[] args) throws Exception {
         parseArguments(args);
 
-        jet = JetBootstrap.getInstance();
+        JetInstance[] instances = null;
+        if (DEBUG) {
+            instances = new JetInstance[]{Jet.newJetInstance(), Jet.newJetInstance()};
+            jet = Jet.newJetClient();
+        } else {
+            jet = JetBootstrap.getInstance();
+        }
         logger = getLogger(getClass());
 
         logger.info("Initializing...");
         try {
+            durationInMillis = durationInMillis();
             init();
         } catch (Throwable t) {
             t.printStackTrace();
@@ -65,6 +76,9 @@ public abstract class AbstractSoakTest implements Serializable {
         teardown();
         if (jet != null) {
             jet.shutdown();
+        }
+        if (instances != null) {
+            Arrays.stream(instances).forEach(JetInstance::shutdown);
         }
         logger.info("Finished OK");
         System.exit(0);

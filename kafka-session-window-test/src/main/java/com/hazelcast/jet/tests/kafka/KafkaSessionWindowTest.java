@@ -61,7 +61,6 @@ public class KafkaSessionWindowTest extends AbstractSoakTest {
     private String offsetReset;
     private int lagMs;
     private int countPerTicker;
-    private long durationInMillis;
 
     private transient ExecutorService producerExecutorService;
 
@@ -78,7 +77,6 @@ public class KafkaSessionWindowTest extends AbstractSoakTest {
         countPerTicker = propertyInt("countPerTicker", DEFAULT_COUNTER_PER_TICKER);
         sessionTimeout = propertyInt("sessionTimeout", DEFAULT_SESSION_TIMEOUT);
         snapshotIntervalMs = propertyInt("snapshotIntervalMs", DEFAULT_SNAPSHOT_INTERVAL);
-        durationInMillis = durationInMillis();
 
         producerExecutorService.submit(() -> {
             try (TradeProducer tradeProducer = new TradeProducer(brokerUri)) {

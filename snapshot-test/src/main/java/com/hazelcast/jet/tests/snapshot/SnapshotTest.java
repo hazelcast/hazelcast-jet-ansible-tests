@@ -57,7 +57,6 @@ public class SnapshotTest extends AbstractSoakTest {
 
     private String brokerUri;
     private String offsetReset;
-    private long durationInMillis;
     private int countPerTicker;
     private int snapshotIntervalMs;
     private int lagMs;
@@ -80,7 +79,6 @@ public class SnapshotTest extends AbstractSoakTest {
         slideBy = propertyInt("slideBy", DEFAULT_SLIDE_BY);
         jobCount = propertyInt("jobCount", 2);
         countPerTicker = propertyInt("countPerTicker", DEFAULT_COUNTER_PER_TICKER);
-        durationInMillis = durationInMillis();
 
         producerExecutorService.submit(() -> {
             try (SnapshotTradeProducer tradeProducer = new SnapshotTradeProducer(brokerUri)) {

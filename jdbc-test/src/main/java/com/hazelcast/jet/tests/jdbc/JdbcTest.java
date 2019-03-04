@@ -44,7 +44,6 @@ import java.util.Map.Entry;
 
 import static com.hazelcast.jet.core.JobStatus.FAILED;
 import static com.hazelcast.jet.tests.common.Util.entry;
-import static java.util.concurrent.TimeUnit.MINUTES;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
 public class JdbcTest extends AbstractSoakTest {
@@ -55,7 +54,6 @@ public class JdbcTest extends AbstractSoakTest {
     private static final int ASSERTION_RETRY_COUNT = 100;
 
     private String connectionUrl;
-    private long durationInMillis;
 
     public static void main(String[] args) throws Exception {
         new JdbcTest().run(args);
@@ -63,7 +61,6 @@ public class JdbcTest extends AbstractSoakTest {
 
     public void init() throws SQLException {
         connectionUrl = System.getProperty("connectionUrl", "jdbc:mysql://localhost") + DB_AND_USER;
-        durationInMillis = MINUTES.toMillis(Integer.parseInt(System.getProperty("durationInMinutes", "30")));
 
         Config config = jet.getHazelcastInstance().getConfig();
         config.addQueueConfig(new QueueConfig().setName(QUEUE_NAME).setMaxSize(PERSON_COUNT * 2));

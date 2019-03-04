@@ -41,7 +41,6 @@ public class JmsTest extends AbstractSoakTest {
     private JmsMessageProducer producer;
     private JmsMessageConsumer consumer;
     private String brokerURL;
-    private long durationInMillis;
 
     public static void main(String[] args) throws Exception {
         new JmsTest().run(args);
@@ -49,7 +48,6 @@ public class JmsTest extends AbstractSoakTest {
 
     public void init() {
         brokerURL = property("brokerURL", "tcp://localhost:61616");
-        durationInMillis = durationInMillis();
 
         producer = new JmsMessageProducer(brokerURL, SOURCE_QUEUE);
         consumer = new JmsMessageConsumer(brokerURL, SINK_QUEUE);

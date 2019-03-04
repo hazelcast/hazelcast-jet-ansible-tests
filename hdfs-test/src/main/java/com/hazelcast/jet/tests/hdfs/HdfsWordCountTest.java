@@ -65,7 +65,6 @@ public class HdfsWordCountTest extends AbstractSoakTest {
     private int distinct;
     private int total;
     private int threadCount;
-    private long durationInMillis;
     private volatile Exception exception;
 
     public static void main(String[] args) throws Exception {
@@ -80,7 +79,6 @@ public class HdfsWordCountTest extends AbstractSoakTest {
         distinct = propertyInt("hdfs_distinct", DEFAULT_DISTINCT);
         total = propertyInt("hdfs_total", DEFAULT_TOTAL);
         threadCount = propertyInt("hdfs_thread_count", 1);
-        durationInMillis = durationInMillis();
 
         Pipeline pipeline = Pipeline.create();
 

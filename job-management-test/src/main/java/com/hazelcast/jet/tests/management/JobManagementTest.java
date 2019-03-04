@@ -52,7 +52,6 @@ public class JobManagementTest extends AbstractSoakTest {
 
     private Producer producer;
     private int snapshotIntervalMs;
-    private long durationInMillis;
 
     private transient boolean odds;
 
@@ -62,7 +61,6 @@ public class JobManagementTest extends AbstractSoakTest {
 
     public void init() {
         snapshotIntervalMs = propertyInt("snapshotIntervalMs", DEFAULT_SNAPSHOT_INTERVAL);
-        durationInMillis = durationInMillis();
 
         Config config = jet.getHazelcastInstance().getConfig();
         config.addEventJournalConfig(

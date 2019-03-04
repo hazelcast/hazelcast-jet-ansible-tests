@@ -33,7 +33,7 @@ import static java.util.concurrent.TimeUnit.MINUTES;
 public abstract class AbstractSoakTest implements Serializable {
 
     private static final int DEFAULT_DURATION_MINUTES = 30;
-    private static final boolean DEBUG = true;
+    private static final boolean DEBUG = false;
 
     protected transient JetInstance jet;
     protected transient ILogger logger;

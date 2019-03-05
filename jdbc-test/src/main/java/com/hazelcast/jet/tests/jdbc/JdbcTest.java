@@ -44,6 +44,7 @@ import java.util.Map.Entry;
 
 import static com.hazelcast.jet.core.JobStatus.FAILED;
 import static com.hazelcast.jet.tests.common.Util.entry;
+import static com.hazelcast.jet.tests.common.Util.sleepSeconds;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
 public class JdbcTest extends AbstractSoakTest {
@@ -52,6 +53,7 @@ public class JdbcTest extends AbstractSoakTest {
     private static final String QUEUE_NAME = JdbcTest.class.getSimpleName();
     private static final int PERSON_COUNT = 20_000;
     private static final int ASSERTION_RETRY_COUNT = 100;
+    private static final int SLEEP_BETWEEN_TABLE_READS_SECONDS = 5;
 
     private String connectionUrl;
 
@@ -69,41 +71,43 @@ public class JdbcTest extends AbstractSoakTest {
     }
 
     public void test() throws Exception {
-        Sink<String> sink = SinkBuilder
+        Sink<String> queueSink = SinkBuilder
                 .sinkBuilder("queueSink", c -> c.jetInstance().getHazelcastInstance().getQueue(QUEUE_NAME))
                 .<String>receiveFn(IQueue::put)
                 .preferredLocalParallelism(1)
                 .build();
 
-        StreamSource<Entry<Long, String>> source = SourceBuilder
+        StreamSource<Entry<Long, String>> queueSource = SourceBuilder
                 .stream("queueSource", QueueSource::new)
                 .fillBufferFn(QueueSource::addToBuffer)
                 .distributed(1)
                 .build();
 
 
-        Pipeline p1 = Pipeline.create();
-        p1.drawFrom(source).withoutTimestamps()
-          .drainTo(Sinks.jdbc("INSERT INTO PERSON_ALL(id, name) VALUES(?, ?)", connectionUrl,
-                  (stmt, entry) -> {
-                      stmt.setLong(1, entry.getKey());
-                      stmt.setString(2, entry.getValue());
-                  }
-          ));
+        Pipeline writeToDBPipeline = Pipeline.create();
+        writeToDBPipeline.drawFrom(queueSource).withoutTimestamps()
+                         .drainTo(Sinks.jdbc("INSERT INTO PERSON_ALL(id, name) VALUES(?, ?)", connectionUrl,
+                                 (stmt, entry) -> {
+                                     stmt.setLong(1, entry.getKey());
+                                     stmt.setString(2, entry.getValue());
+                                 }
+                         ));
 
-        Pipeline p2 = Pipeline.create();
-        p2.drawFrom(Sources.jdbc(connectionUrl, "select * from PERSON",
+        Pipeline readFromDBPipeline = Pipeline.create();
+        readFromDBPipeline.drawFrom(Sources.jdbc(connectionUrl, "select * from PERSON",
                 resultSet -> resultSet.getString(2)))
-          .drainTo(sink);
+                          .drainTo(queueSink);
 
-        Job streamJob = jet.newJob(p1, new JobConfig().setName("JDBC Test stream queue to table"));
+        Job streamJob = jet.newJob(writeToDBPipeline, new JobConfig().setName("JDBC Test stream queue to table"));
 
         int jobCounter = 0;
         long begin = System.currentTimeMillis();
         while (System.currentTimeMillis() - begin < durationInMillis) {
-            jet.newJob(p2, new JobConfig().setName("JDBC Test read table to queue [" + jobCounter + "]")).join();
+            JobConfig jobConfig = new JobConfig().setName("JDBC Test read table to queue [" + jobCounter + "]");
+            jet.newJob(readFromDBPipeline, jobConfig).join();
             assertNotEquals(FAILED, streamJob.getStatus());
             jobCounter++;
+            sleepSeconds(SLEEP_BETWEEN_TABLE_READS_SECONDS);
         }
 
         assertTableCount(jobCounter * PERSON_COUNT);

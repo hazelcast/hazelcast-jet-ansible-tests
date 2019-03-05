@@ -22,11 +22,6 @@
             <artifactId>soak-tests-common</artifactId>
             <version>${jet.version}</version>
         </dependency>
-        <dependency>
-            <groupId>com.hazelcast.jet.tests</groupId>
-            <artifactId>kafka-session-window-test</artifactId>
-            <version>${jet.version}</version>
-        </dependency>
     </dependencies>
 
     <build>

@@ -27,7 +27,6 @@ import com.hazelcast.jet.pipeline.Sink;
 import com.hazelcast.jet.pipeline.SinkBuilder;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
 import com.hazelcast.util.UuidUtil;
-import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -129,10 +128,10 @@ public class KafkaSessionWindowTest extends AbstractSoakTest {
         Properties kafkaProps = kafkaPropertiesForTrades(brokerUri, offsetReset);
         Properties propsForResult = kafkaPropertiesForResults(brokerUri, offsetReset);
 
-        pipeline.drawFrom(KafkaSources.kafka(kafkaProps, ConsumerRecord<String, Trade>::value, TOPIC))
-                .withTimestamps(Trade::getTime, lagMs)
+        pipeline.drawFrom(KafkaSources.<String, Long>kafka(kafkaProps, TOPIC))
+                .withTimestamps(Map.Entry::getValue, lagMs)
                 .window(session(sessionTimeout))
-                .groupingKey(Trade::getTicker)
+                .groupingKey(Map.Entry::getKey)
                 .aggregate(counting())
                 .drainTo(KafkaSinks.kafka(propsForResult, RESULTS_TOPIC));
 
@@ -163,7 +162,7 @@ public class KafkaSessionWindowTest extends AbstractSoakTest {
         props.setProperty("bootstrap.servers", brokerUrl);
         props.setProperty("group.id", UuidUtil.newUnsecureUuidString());
         props.setProperty("key.deserializer", StringDeserializer.class.getName());
-        props.setProperty("value.deserializer", TradeDeserializer.class.getName());
+        props.setProperty("value.deserializer", LongDeserializer.class.getName());
         props.setProperty("auto.offset.reset", offsetReset);
         props.setProperty("max.poll.records", "32768");
         return props;

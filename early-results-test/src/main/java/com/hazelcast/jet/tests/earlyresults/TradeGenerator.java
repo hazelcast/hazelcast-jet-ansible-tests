@@ -19,13 +19,14 @@ package com.hazelcast.jet.tests.earlyresults;
 import com.hazelcast.jet.pipeline.SourceBuilder;
 import com.hazelcast.jet.pipeline.SourceBuilder.TimestampedSourceBuffer;
 import com.hazelcast.jet.pipeline.StreamSource;
-import com.hazelcast.jet.tests.kafka.Trade;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
+import static com.hazelcast.jet.tests.common.Util.entry;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
 final class TradeGenerator {
@@ -41,10 +42,10 @@ final class TradeGenerator {
         this.produceThreshold = SECONDS.toMillis(1) / tradesPerSec;
     }
 
-    private void generateTrades(TimestampedSourceBuffer<Trade> buf) {
+    private void generateTrades(TimestampedSourceBuffer<Map.Entry<String, Long>> buf) {
         long now = System.currentTimeMillis();
         if (now - lastEmit > produceThreshold) {
-            tickerList.stream().map(ticker -> new Trade(timestamp, ticker)).forEach(trade -> buf.add(trade, timestamp));
+            tickerList.stream().map(ticker -> entry(ticker, timestamp)).forEach(trade -> buf.add(trade, timestamp));
             timestamp++;
             lastEmit = now;
         }
@@ -59,7 +60,7 @@ final class TradeGenerator {
         }
     }
 
-    static StreamSource<Trade> tradeSource(int tradesPerSec) {
+    static StreamSource<Map.Entry<String, Long>> tradeSource(int tradesPerSec) {
         return SourceBuilder
                 .timestampedStream("trade-source", x -> new TradeGenerator(tradesPerSec))
                 .fillBufferFn(TradeGenerator::generateTrades)

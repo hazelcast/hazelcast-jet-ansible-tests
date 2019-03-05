@@ -26,7 +26,6 @@ import com.hazelcast.jet.pipeline.SinkBuilder;
 import com.hazelcast.jet.pipeline.StreamStage;
 import com.hazelcast.jet.pipeline.WindowDefinition;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
-import com.hazelcast.jet.tests.kafka.Trade;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -79,11 +78,11 @@ public class EarlyResultsTest extends AbstractSoakTest {
                 .receiveFn(VerificationContext::verify)
                 .build();
 
-        StreamStage<Trade> sourceStage = p.drawFrom(TradeGenerator.tradeSource(tradePerSecond))
+        StreamStage<Map.Entry<String, Long>> sourceStage = p.drawFrom(TradeGenerator.tradeSource(tradePerSecond))
                                           .withNativeTimestamps(0)
                                           .setName("Stream from EarlyResult-TradeGenerator");
 
-        sourceStage.groupingKey(Trade::getTicker)
+        sourceStage.groupingKey(Map.Entry::getKey)
                    .window(WindowDefinition.tumbling(windowSize).setEarlyResultsPeriod(earlyResultsPeriod))
                    .aggregate(AggregateOperations.counting())
                    .drainTo(verificationSink);

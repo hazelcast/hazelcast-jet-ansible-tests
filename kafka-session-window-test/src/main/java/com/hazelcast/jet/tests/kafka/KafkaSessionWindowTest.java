@@ -37,6 +37,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 import static com.hazelcast.jet.aggregate.AggregateOperations.counting;
 import static com.hazelcast.jet.core.JobStatus.RUNNING;
@@ -63,6 +64,7 @@ public class KafkaSessionWindowTest extends AbstractSoakTest {
     private int countPerTicker;
 
     private transient ExecutorService producerExecutorService;
+    private transient Future<?> producerFuture;
 
     public static void main(String[] args) throws Exception {
         new KafkaSessionWindowTest().run(args);
@@ -78,9 +80,11 @@ public class KafkaSessionWindowTest extends AbstractSoakTest {
         sessionTimeout = propertyInt("sessionTimeout", DEFAULT_SESSION_TIMEOUT);
         snapshotIntervalMs = propertyInt("snapshotIntervalMs", DEFAULT_SNAPSHOT_INTERVAL);
 
-        producerExecutorService.submit(() -> {
+        producerFuture = producerExecutorService.submit(() -> {
             try (TradeProducer tradeProducer = new TradeProducer(brokerUri)) {
                 tradeProducer.produce(TOPIC, countPerTicker);
+            } catch (Exception e) {
+                e.printStackTrace();
             }
         });
     }
@@ -101,6 +105,7 @@ public class KafkaSessionWindowTest extends AbstractSoakTest {
         long begin = System.currentTimeMillis();
         while (System.currentTimeMillis() - begin < durationInMillis) {
             MINUTES.sleep(1);
+            assertFalse(producerFuture.isDone());
             JobStatus status = getJobStatus(verificationJob);
             if (status != STARTING && status != RUNNING) {
                 throw new AssertionError("Job is failed, jobStatus: " + status);

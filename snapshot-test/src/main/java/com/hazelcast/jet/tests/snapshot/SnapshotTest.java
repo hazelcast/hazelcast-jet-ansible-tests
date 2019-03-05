@@ -36,6 +36,7 @@ import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 import static com.hazelcast.jet.aggregate.AggregateOperations.counting;
 import static com.hazelcast.jet.config.ProcessingGuarantee.AT_LEAST_ONCE;
@@ -63,7 +64,9 @@ public class SnapshotTest extends AbstractSoakTest {
     private int windowSize;
     private int slideBy;
     private int jobCount;
-    private ExecutorService producerExecutorService;
+
+    private transient ExecutorService producerExecutorService;
+    private transient Future<?> producerFuture;
 
     public static void main(String[] args) throws Exception {
         new SnapshotTest().run(args);
@@ -80,9 +83,11 @@ public class SnapshotTest extends AbstractSoakTest {
         jobCount = propertyInt("jobCount", 2);
         countPerTicker = propertyInt("countPerTicker", DEFAULT_COUNTER_PER_TICKER);
 
-        producerExecutorService.submit(() -> {
+        producerFuture = producerExecutorService.submit(() -> {
             try (SnapshotTradeProducer tradeProducer = new SnapshotTradeProducer(brokerUri)) {
                 tradeProducer.produce(TOPIC, countPerTicker);
+            } catch (Exception e) {
+                e.printStackTrace();
             }
         });
     }
@@ -126,6 +131,7 @@ public class SnapshotTest extends AbstractSoakTest {
                             }
                         }
                 );
+                assertFalse(producerFuture.isDone());
             }
         } finally {
             logger.info("Cancelling jobs...");

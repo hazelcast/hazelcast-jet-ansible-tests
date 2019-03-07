@@ -54,7 +54,6 @@ public class LargeSnapshotChunkTest extends AbstractSoakTest {
     private static final int WINDOW_SIZE = 8;
 
     private LargeSnapshotChunkProducer producer;
-    private long durationInMillis;
     private long snapshotIntervalMs;
     private int lagMs;
 
@@ -68,7 +67,7 @@ public class LargeSnapshotChunkTest extends AbstractSoakTest {
     public void init() throws Exception {
         snapshotIntervalMs = propertyInt("snapshotIntervalMs", DEFAULT_SNAPSHOT_INTERVAL);
         lagMs = propertyInt("lagMs", DEFAULT_LAG);
-        durationInMillis = durationInMillis();
+
         String remoteClusterXml = property("remoteClusterXml", null);
 
         configureProducer(remoteClusterXml);

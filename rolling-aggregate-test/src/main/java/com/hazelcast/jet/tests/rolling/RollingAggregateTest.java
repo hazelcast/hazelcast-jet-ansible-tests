@@ -43,10 +43,7 @@ public class RollingAggregateTest extends AbstractSoakTest {
     private static final int DEFAULT_SNAPSHOT_INTERVAL = 5000;
     private static final int EVENT_JOURNAL_CAPACITY = 600_000;
 
-
     private long snapshotIntervalMs;
-    private long durationInMillis;
-
 
     private transient ClientConfig remoteClusterClientConfig;
     private transient JetInstance remoteClient;
@@ -58,7 +55,6 @@ public class RollingAggregateTest extends AbstractSoakTest {
 
     public void init() throws Exception {
         snapshotIntervalMs = propertyInt("snapshotIntervalMs", DEFAULT_SNAPSHOT_INTERVAL);
-        durationInMillis = durationInMillis();
         remoteClusterClientConfig = remoteClusterClientConfig();
 
         remoteClient = Jet.newJetClient(remoteClusterClientConfig);

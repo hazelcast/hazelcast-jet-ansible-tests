@@ -27,7 +27,6 @@ import com.hazelcast.jet.pipeline.Sink;
 import com.hazelcast.jet.pipeline.SinkBuilder;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
 import com.hazelcast.util.UuidUtil;
-import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -37,6 +36,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 import static com.hazelcast.jet.aggregate.AggregateOperations.counting;
 import static com.hazelcast.jet.core.JobStatus.RUNNING;
@@ -61,9 +61,9 @@ public class KafkaSessionWindowTest extends AbstractSoakTest {
     private String offsetReset;
     private int lagMs;
     private int countPerTicker;
-    private long durationInMillis;
 
     private transient ExecutorService producerExecutorService;
+    private transient Future<?> producerFuture;
 
     public static void main(String[] args) throws Exception {
         new KafkaSessionWindowTest().run(args);
@@ -78,11 +78,12 @@ public class KafkaSessionWindowTest extends AbstractSoakTest {
         countPerTicker = propertyInt("countPerTicker", DEFAULT_COUNTER_PER_TICKER);
         sessionTimeout = propertyInt("sessionTimeout", DEFAULT_SESSION_TIMEOUT);
         snapshotIntervalMs = propertyInt("snapshotIntervalMs", DEFAULT_SNAPSHOT_INTERVAL);
-        durationInMillis = durationInMillis();
 
-        producerExecutorService.submit(() -> {
+        producerFuture = producerExecutorService.submit(() -> {
             try (TradeProducer tradeProducer = new TradeProducer(brokerUri)) {
                 tradeProducer.produce(TOPIC, countPerTicker);
+            } catch (Exception e) {
+                e.printStackTrace();
             }
         });
     }
@@ -103,6 +104,7 @@ public class KafkaSessionWindowTest extends AbstractSoakTest {
         long begin = System.currentTimeMillis();
         while (System.currentTimeMillis() - begin < durationInMillis) {
             MINUTES.sleep(1);
+            assertFalse(producerFuture.isDone());
             JobStatus status = getJobStatus(verificationJob);
             if (status != STARTING && status != RUNNING) {
                 throw new AssertionError("Job is failed, jobStatus: " + status);
@@ -126,10 +128,10 @@ public class KafkaSessionWindowTest extends AbstractSoakTest {
         Properties kafkaProps = kafkaPropertiesForTrades(brokerUri, offsetReset);
         Properties propsForResult = kafkaPropertiesForResults(brokerUri, offsetReset);
 
-        pipeline.drawFrom(KafkaSources.kafka(kafkaProps, ConsumerRecord<String, Trade>::value, TOPIC))
-                .withTimestamps(Trade::getTime, lagMs)
+        pipeline.drawFrom(KafkaSources.<String, Long>kafka(kafkaProps, TOPIC))
+                .withTimestamps(Map.Entry::getValue, lagMs)
                 .window(session(sessionTimeout))
-                .groupingKey(Trade::getTicker)
+                .groupingKey(Map.Entry::getKey)
                 .aggregate(counting())
                 .drainTo(KafkaSinks.kafka(propsForResult, RESULTS_TOPIC));
 
@@ -160,7 +162,7 @@ public class KafkaSessionWindowTest extends AbstractSoakTest {
         props.setProperty("bootstrap.servers", brokerUrl);
         props.setProperty("group.id", UuidUtil.newUnsecureUuidString());
         props.setProperty("key.deserializer", StringDeserializer.class.getName());
-        props.setProperty("value.deserializer", TradeDeserializer.class.getName());
+        props.setProperty("value.deserializer", LongDeserializer.class.getName());
         props.setProperty("auto.offset.reset", offsetReset);
         props.setProperty("max.poll.records", "32768");
         return props;

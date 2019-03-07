@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.hazelcast.jet.tests.snapshot;
+package com.hazelcast.jet.tests.common;
 
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.logging.LoggingService;

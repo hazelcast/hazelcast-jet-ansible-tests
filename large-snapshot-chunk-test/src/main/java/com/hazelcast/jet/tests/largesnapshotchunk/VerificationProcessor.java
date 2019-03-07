@@ -21,7 +21,7 @@ import com.hazelcast.jet.Traversers;
 import com.hazelcast.jet.core.AbstractProcessor;
 import com.hazelcast.jet.core.ProcessorMetaSupplier;
 import com.hazelcast.jet.core.ProcessorSupplier;
-import com.hazelcast.jet.datamodel.TimestampedEntry;
+import com.hazelcast.jet.datamodel.KeyedWindowResult;
 
 import java.util.HashMap;
 import java.util.List;
@@ -40,24 +40,20 @@ public final class VerificationProcessor extends AbstractProcessor {
         this.windowSize = windowSize;
     }
 
-    static ProcessorMetaSupplier supplier(int windowSize) {
-        return preferLocalParallelismOne(ProcessorSupplier.of(() -> new VerificationProcessor(windowSize)));
-    }
-
     @Override
     protected boolean tryProcess(int ordinal, Object item) {
         @SuppressWarnings("unchecked")
-        TimestampedEntry<String, List<int[]>> casted = (TimestampedEntry<String, List<int[]>>) item;
+        KeyedWindowResult<String, List<int[]>> casted = (KeyedWindowResult<String, List<int[]>>) item;
         if (casted.getValue().size() != windowSize) {
             throw new IllegalArgumentException("Expected " + windowSize + " items, but got "
                     + casted.getValue().size());
         }
-        Long oldTime = timePerKey.put(casted.getKey(), casted.getTimestamp());
+        Long oldTime = timePerKey.put(casted.getKey(), casted.end());
         if (oldTime == null) {
             oldTime = 0L;
         }
-        if (oldTime != casted.getTimestamp() - windowSize) {
-            throw new IllegalArgumentException("Received item for time=" + casted.getTimestamp() + ", but the last " +
+        if (oldTime != casted.end() - windowSize) {
+            throw new IllegalArgumentException("Received item for time=" + casted.end() + ", but the last " +
                     "received item for this key was with time=" + oldTime);
         }
         return true;
@@ -76,5 +72,9 @@ public final class VerificationProcessor extends AbstractProcessor {
     protected void restoreFromSnapshot(Object key, Object value) {
         Long oldValue = timePerKey.put((String) key, (Long) value);
         assert oldValue == null : "Restore called twice for key=" + key;
+    }
+
+    static ProcessorMetaSupplier supplier(int windowSize) {
+        return preferLocalParallelismOne(ProcessorSupplier.of(() -> new VerificationProcessor(windowSize)));
     }
 }

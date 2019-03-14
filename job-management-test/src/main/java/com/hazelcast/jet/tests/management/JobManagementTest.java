@@ -23,16 +23,13 @@ import com.hazelcast.jet.Job;
 import com.hazelcast.jet.JobStateSnapshot;
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.config.ProcessingGuarantee;
-import com.hazelcast.jet.function.PredicateEx;
 import com.hazelcast.jet.pipeline.ContextFactory;
 import com.hazelcast.jet.pipeline.Pipeline;
 import com.hazelcast.jet.pipeline.Sinks;
 import com.hazelcast.jet.pipeline.Sources;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
-import com.hazelcast.map.journal.EventJournalMapEvent;
 
 import static com.hazelcast.jet.Util.mapEventNewValue;
-import static com.hazelcast.jet.Util.mapPutEvents;
 import static com.hazelcast.jet.core.JobStatus.RUNNING;
 import static com.hazelcast.jet.core.JobStatus.SUSPENDED;
 import static com.hazelcast.jet.pipeline.JournalInitialPosition.START_FROM_OLDEST;
@@ -137,11 +134,6 @@ public class JobManagementTest extends AbstractSoakTest {
          .mapUsingContext(ContextFactory.withCreateFn(jet -> null), (c, k, v) -> v)
          .drainTo(Sinks.fromProcessor("sink", VerificationProcessor.supplier(odds)));
         return p;
-    }
-
-    private static PredicateEx<EventJournalMapEvent<Long, Long>> filter(boolean odds) {
-        PredicateEx<EventJournalMapEvent<Long, Long>> putEvents = mapPutEvents();
-        return e -> putEvents.test(e) && (e.getNewValue() % 2 == (odds ? 1 : 0));
     }
 
     static class Producer {

@@ -33,6 +33,7 @@ import java.util.Map;
 import static com.hazelcast.jet.core.JobStatus.FAILED;
 import static com.hazelcast.jet.tests.common.Util.getJobStatus;
 import static com.hazelcast.jet.tests.common.Util.sleepMinutes;
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
 public class EarlyResultsTest extends AbstractSoakTest {
 
@@ -73,8 +74,10 @@ public class EarlyResultsTest extends AbstractSoakTest {
     private Pipeline pipeline() {
         Pipeline p = Pipeline.create();
 
+        long maxNoEarlyResultWindowCount = MILLISECONDS.toMinutes(durationInMillis);
+
         Sink<KeyedWindowResult<String, Long>> verificationSink = SinkBuilder
-                .sinkBuilder("verification", c -> new VerificationContext(windowSize))
+                .sinkBuilder("verification", c -> new VerificationContext(windowSize, maxNoEarlyResultWindowCount))
                 .receiveFn(VerificationContext::verify)
                 .build();
 
@@ -97,34 +100,36 @@ public class EarlyResultsTest extends AbstractSoakTest {
     static class VerificationContext {
 
         private final int windowSize;
-        private Map<String, TickerWindow> tickerMap = new HashMap<>();
+        private final long maxNoEarlyResultWindowCount;
+        private final Map<String, TickerWindow> tickerMap = new HashMap<>();
+        private int noEarlyResultCount;
 
-        VerificationContext(int windowSize) {
+        VerificationContext(int windowSize, long maxNoEarlyResultWindowCount) {
             this.windowSize = windowSize;
+            this.maxNoEarlyResultWindowCount = maxNoEarlyResultWindowCount;
         }
 
         void verify(KeyedWindowResult<String, Long> result) {
-            TickerWindow tickerWindow = tickerMap.computeIfAbsent(result.getKey(), TickerWindow::new);
+            TickerWindow tickerWindow = tickerMap.computeIfAbsent(result.getKey(), key -> new TickerWindow());
             assertEquals(tickerWindow.start, result.start());
             if (result.isEarly()) {
                 assertTrue(windowSize >= result.getValue());
                 tickerWindow.hasEarly = true;
             } else {
+                if (!tickerWindow.hasEarly) {
+                    noEarlyResultCount++;
+                }
                 assertTrue(tickerWindow.hasEarly);
                 assertEquals(windowSize, (long) result.getValue());
                 tickerWindow.advance();
             }
+            assertTrue(noEarlyResultCount < maxNoEarlyResultWindowCount);
         }
 
         class TickerWindow {
 
-            private final String key;
             private long start;
             private boolean hasEarly;
-
-            TickerWindow(String key) {
-                this.key = key;
-            }
 
             void advance() {
                 start += windowSize;

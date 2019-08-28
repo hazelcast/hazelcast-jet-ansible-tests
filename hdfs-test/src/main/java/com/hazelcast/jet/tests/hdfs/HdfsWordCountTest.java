@@ -104,8 +104,8 @@ public class HdfsWordCountTest extends AbstractSoakTest {
                     try {
                         executeJob(threadIndex);
                         verify(threadIndex);
-                    } catch (Exception e) {
-                        exception = e;
+                    } catch (Throwable e) {
+                        exception = new Exception(e);
                     }
                 }
             });

@@ -41,6 +41,7 @@ import java.util.PriorityQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.locks.LockSupport;
 
 import static com.hazelcast.jet.Util.entry;
 import static com.hazelcast.jet.Util.mapEventNewValue;
@@ -109,8 +110,8 @@ public class AsyncTransformTest extends AbstractSoakTest {
             if (getJobStatus(job) == FAILED) {
                 job.join();
             }
-            assertTrue("ordered verifier not running", orderedVerifier.isRunning());
-            assertTrue("unordered verifier not running", unorderedVerifier.isRunning());
+            orderedVerifier.checkStatus();
+            unorderedVerifier.checkStatus();
             sleepMinutes(1);
         }
 
@@ -180,14 +181,13 @@ public class AsyncTransformTest extends AbstractSoakTest {
 
         private final EventJournalConsumer<Long, Long> consumer;
         private final Thread thread;
-        private final PriorityQueue<Long> queue;
         private final IMap<Long, Long> map;
         private final ILogger logger;
 
         private volatile boolean running = true;
+        private volatile Throwable error;
 
         Verifier(JetInstance client, String mapName) {
-            queue = new PriorityQueue<>();
             HazelcastInstance hazelcastInstance = client.getHazelcastInstance();
             logger = hazelcastInstance.getLoggingService().getLogger(Verifier.class.getSimpleName() + "-" + mapName);
             int partitionCount = hazelcastInstance.getPartitionService().getPartitions().size();
@@ -198,46 +198,59 @@ public class AsyncTransformTest extends AbstractSoakTest {
         }
 
         private void run() {
-            long counter = 0;
-            while (running) {
-                try {
+            try {
+                long counter = 0;
+                // PriorityQueue returns the lowest enqueued item first
+                PriorityQueue<Long> queue = new PriorityQueue<>();
+                while (running) {
+                    LockSupport.parkNanos(MILLISECONDS.toNanos(10));
                     consumer.drain(e -> {
                         long key = e.getKey();
                         assertEquals(key, -1 * e.getNewValue());
                         queue.offer(key);
                     });
-                    while (true) {
-                        Long peeked = queue.peek();
-                        if (peeked == null || peeked != counter) {
+                    for (Long peeked; (peeked = queue.peek()) != null; ) {
+                        if (peeked != counter) {
+                            // the item might arrive later
                             break;
                         } else {
-                            queue.poll();
+                            queue.remove();
                             counter++;
                         }
                         if (counter % LOG_COUNTER == 0) {
                             logger.info("counter: " + counter);
+                            // clear the map from time to time, we only need the journal
                             map.clear();
                         }
                     }
-                    if (queue.size() == QUEUE_SIZE_LIMIT) {
-                        logger.severe(String.format("Queue size reached limit (%d), size: %d",
-                                QUEUE_SIZE_LIMIT, queue.size()));
-                        running = false;
+                    if (queue.size() >= QUEUE_SIZE_LIMIT) {
+                        throw new AssertionError(String.format("Queue size exceeded while waiting for the next item. Limit=%d, " +
+                                        "expected next=%d, next in queue: %d, %d, %d, ...",
+                                QUEUE_SIZE_LIMIT, counter, queue.poll(), queue.poll(), queue.poll()));
                     }
-                } catch (Exception e) {
-                    logger.severe("Exception during verification", e);
-                    running = false;
                 }
+            } catch (Throwable e) {
+                error = e;
+            } finally {
+                running = false;
             }
         }
 
-        boolean isRunning() {
-            return running;
+        void checkStatus() {
+            if (!running) {
+                if (error != null) {
+                    throw new RuntimeException(error);
+                }
+                throw new RuntimeException("verifier not running");
+            }
         }
 
         void stop() throws InterruptedException {
             running = false;
             thread.join();
+            if (error != null) {
+                throw new RuntimeException(error);
+            }
         }
     }
 }

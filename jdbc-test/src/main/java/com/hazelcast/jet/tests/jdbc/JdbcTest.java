@@ -105,7 +105,9 @@ public class JdbcTest extends AbstractSoakTest {
         while (System.currentTimeMillis() - begin < durationInMillis) {
             JobConfig jobConfig = new JobConfig().setName("JDBC Test read table to queue [" + jobCounter + "]");
             jet.newJob(readFromDBPipeline, jobConfig).join();
-            assertNotEquals(FAILED, streamJob.getStatus());
+            if (streamJob.getStatus() == FAILED) {
+                streamJob.join();
+            }
             jobCounter++;
             sleepSeconds(SLEEP_BETWEEN_TABLE_READS_SECONDS);
         }

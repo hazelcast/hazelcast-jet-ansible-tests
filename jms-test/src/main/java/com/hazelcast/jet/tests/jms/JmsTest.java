@@ -26,7 +26,6 @@ import org.apache.activemq.ActiveMQConnectionFactory;
 
 import static com.hazelcast.jet.core.JobStatus.FAILED;
 import static com.hazelcast.jet.core.JobStatus.RUNNING;
-import static com.hazelcast.jet.tests.common.Util.getJobStatus;
 import static com.hazelcast.jet.tests.common.Util.sleepMinutes;
 import static com.hazelcast.jet.tests.common.Util.waitForJobStatus;
 import static java.util.concurrent.TimeUnit.SECONDS;
@@ -81,8 +80,12 @@ public class JmsTest extends AbstractSoakTest {
 
         long begin = System.currentTimeMillis();
         while (System.currentTimeMillis() - begin < durationInMillis) {
-            assertNotEquals(FAILED, getJobStatus(job1));
-            assertNotEquals(FAILED, getJobStatus(job2));
+            if (job1.getStatus() == FAILED) {
+                job1.join();
+            }
+            if (job2.getStatus() == FAILED) {
+                job2.join();
+            }
             sleepMinutes(1);
         }
 

@@ -63,7 +63,9 @@ public class EarlyResultsTest extends AbstractSoakTest {
 
         long begin = System.currentTimeMillis();
         while (System.currentTimeMillis() - begin < durationInMillis) {
-            assertNotEquals(getJobStatus(job), FAILED);
+            if (getJobStatus(job) == FAILED) {
+                job.join();
+            }
             sleepMinutes(1);
         }
 

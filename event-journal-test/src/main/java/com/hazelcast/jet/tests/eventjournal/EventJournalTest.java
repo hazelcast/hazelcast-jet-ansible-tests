@@ -118,9 +118,13 @@ public class EventJournalTest extends AbstractSoakTest {
             if (isEmpty) {
                 SECONDS.sleep(1);
             }
-            assertNotEquals(getJobStatus(job), FAILED);
+            if (getJobStatus(job) == FAILED) {
+                job.join();
+            }
         }
-        assertNotEquals(getJobStatus(job), FAILED);
+        if (getJobStatus(job) == FAILED) {
+            job.join();
+        }
         System.out.println("Cancelling jobs..");
         queueVerifier.close();
         job.cancel();

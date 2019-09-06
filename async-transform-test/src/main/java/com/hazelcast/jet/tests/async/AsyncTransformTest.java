@@ -106,9 +106,11 @@ public class AsyncTransformTest extends AbstractSoakTest {
 
         long begin = System.currentTimeMillis();
         while (System.currentTimeMillis() - begin < durationInMillis) {
-            assertNotEquals(getJobStatus(job), FAILED);
-            assertTrue(orderedVerifier.isRunning());
-            assertTrue(unorderedVerifier.isRunning());
+            if (getJobStatus(job) == FAILED) {
+                job.join();
+            }
+            assertTrue("ordered verifier not running", orderedVerifier.isRunning());
+            assertTrue("unordered verifier not running", unorderedVerifier.isRunning());
             sleepMinutes(1);
         }
 
@@ -218,7 +220,7 @@ public class AsyncTransformTest extends AbstractSoakTest {
                         }
                     }
                     if (queue.size() == QUEUE_SIZE_LIMIT) {
-                        logger.severe(String.format("Queue size reached limit(%d), size: %d",
+                        logger.severe(String.format("Queue size reached limit (%d), size: %d",
                                 QUEUE_SIZE_LIMIT, queue.size()));
                         running = false;
                     }

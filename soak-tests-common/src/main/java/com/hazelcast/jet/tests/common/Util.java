@@ -27,7 +27,6 @@ import static com.hazelcast.jet.impl.util.Util.uncheckRun;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.MINUTES;
 import static java.util.concurrent.TimeUnit.SECONDS;
-import static org.junit.Assert.assertNotEquals;
 
 public final class Util {
 
@@ -48,7 +47,9 @@ public final class Util {
     public static void waitForJobStatus(Job job, JobStatus expectedStatus) {
         for (int i = 0; i < JOB_STATUS_RETRY_COUNT; i++) {
             JobStatus currentStatus = getJobStatus(job);
-            assertNotEquals(FAILED, currentStatus);
+            if (currentStatus == FAILED) {
+                job.join();
+            }
             if (currentStatus.equals(expectedStatus)) {
                 return;
             }

@@ -34,7 +34,6 @@ import static com.hazelcast.jet.core.JobStatus.FAILED;
 import static com.hazelcast.jet.function.ComparatorEx.comparing;
 import static com.hazelcast.jet.pipeline.JournalInitialPosition.START_FROM_OLDEST;
 import static com.hazelcast.jet.pipeline.Sinks.fromProcessor;
-import static com.hazelcast.jet.tests.common.Util.getJobStatus;
 import static com.hazelcast.jet.tests.common.Util.sleepMinutes;
 
 public class RollingAggregateTest extends AbstractSoakTest {
@@ -81,7 +80,9 @@ public class RollingAggregateTest extends AbstractSoakTest {
 
         long begin = System.currentTimeMillis();
         while (System.currentTimeMillis() - begin < durationInMillis) {
-            assertNotEquals(FAILED, getJobStatus(job));
+            if (job.getStatus() == FAILED) {
+                job.join();
+            }
             sleepMinutes(1);
         }
 

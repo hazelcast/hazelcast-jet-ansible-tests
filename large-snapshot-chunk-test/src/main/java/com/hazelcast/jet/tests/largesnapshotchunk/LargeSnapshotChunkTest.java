@@ -38,7 +38,6 @@ import static com.hazelcast.jet.config.ProcessingGuarantee.EXACTLY_ONCE;
 import static com.hazelcast.jet.core.JobStatus.FAILED;
 import static com.hazelcast.jet.pipeline.JournalInitialPosition.START_FROM_OLDEST;
 import static com.hazelcast.jet.pipeline.Sinks.fromProcessor;
-import static com.hazelcast.jet.tests.common.Util.getJobStatus;
 import static com.hazelcast.jet.tests.common.Util.sleepMinutes;
 
 public class LargeSnapshotChunkTest extends AbstractSoakTest {
@@ -95,7 +94,9 @@ public class LargeSnapshotChunkTest extends AbstractSoakTest {
 
         long begin = System.currentTimeMillis();
         while (System.currentTimeMillis() - begin < durationInMillis) {
-            assertNotEquals(FAILED, getJobStatus(job));
+            if (job.getStatus() == FAILED) {
+                job.join();
+            }
             sleepMinutes(1);
         }
 

@@ -20,6 +20,7 @@ import com.hazelcast.client.config.ClientConfig;
 import com.hazelcast.client.config.XmlClientConfigBuilder;
 import com.hazelcast.jet.Jet;
 import com.hazelcast.jet.JetInstance;
+import com.hazelcast.jet.config.JetClientConfig;
 import com.hazelcast.jet.function.PredicateEx;
 import com.hazelcast.jet.server.JetBootstrap;
 import com.hazelcast.logging.ILogger;
@@ -36,7 +37,6 @@ import static java.util.concurrent.TimeUnit.MINUTES;
 public abstract class AbstractSoakTest implements Serializable {
 
     private static final int DEFAULT_DURATION_MINUTES = 30;
-    private static final boolean DEBUG = false;
 
     protected transient JetInstance jet;
     protected transient ILogger logger;
@@ -46,7 +46,7 @@ public abstract class AbstractSoakTest implements Serializable {
         parseArguments(args);
 
         JetInstance[] instances = null;
-        if (DEBUG) {
+        if (isRunLocal()) {
             instances = new JetInstance[]{Jet.newJetInstance(), Jet.newJetInstance()};
             jet = Jet.newJetClient();
         } else {
@@ -102,12 +102,19 @@ public abstract class AbstractSoakTest implements Serializable {
     }
 
     protected ClientConfig remoteClusterClientConfig() throws IOException {
+        if (isRunLocal()) {
+            return new JetClientConfig();
+        }
         String remoteClusterXml = property("remoteClusterXml", null);
         if (remoteClusterXml == null) {
             throw new IllegalArgumentException("Remote cluster xml should be set");
         }
 
         return new XmlClientConfigBuilder(remoteClusterXml).build();
+    }
+
+    private boolean isRunLocal() {
+        return System.getProperty("runLocal") != null;
     }
 
     protected int propertyInt(String name, int defaultValue) {

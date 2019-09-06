@@ -86,7 +86,7 @@ public final class VerificationProcessor extends AbstractProcessor {
         if ((odds && !isOdd(counter)) || (!odds && isOdd(counter))) {
             counter++;
         }
-        queue.removeIf(v -> (odds && !isOdd(v)) || (!odds && isOdd(v)));
+        queue.removeIf(v -> odds != isOdd(v));
     }
 
     private void consumeQueue() {

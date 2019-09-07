@@ -178,6 +178,7 @@ public class AsyncTransformTest extends AbstractSoakTest {
 
         private static final int QUEUE_SIZE_LIMIT = 10_000;
         private static final int LOG_COUNTER = 10_000;
+        private static final int PARK_MS = 10;
 
         private final EventJournalConsumer<Long, Long> consumer;
         private final Thread thread;
@@ -203,7 +204,7 @@ public class AsyncTransformTest extends AbstractSoakTest {
                 // PriorityQueue returns the lowest enqueued item first
                 PriorityQueue<Long> queue = new PriorityQueue<>();
                 while (running) {
-                    LockSupport.parkNanos(MILLISECONDS.toNanos(10));
+                    LockSupport.parkNanos(MILLISECONDS.toNanos(PARK_MS));
                     consumer.drain(e -> {
                         long key = e.getKey();
                         assertEquals(key, -1 * e.getNewValue());
@@ -224,8 +225,8 @@ public class AsyncTransformTest extends AbstractSoakTest {
                         }
                     }
                     if (queue.size() >= QUEUE_SIZE_LIMIT) {
-                        throw new AssertionError(String.format("Queue size exceeded while waiting for the next item. Limit=%d, " +
-                                        "expected next=%d, next in queue: %d, %d, %d, ...",
+                        throw new AssertionError(String.format("Queue size exceeded while waiting for the next item. "
+                                + "Limit=%d, expected next=%d, next in queue: %d, %d, %d, ...",
                                 QUEUE_SIZE_LIMIT, counter, queue.poll(), queue.poll(), queue.poll()));
                     }
                 }

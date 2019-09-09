@@ -27,13 +27,14 @@ import com.hazelcast.jet.pipeline.Sources;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
 import com.hazelcast.projection.Projections;
 
+import javax.cache.Cache;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.function.Consumer;
-import javax.cache.Cache;
 
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.MINUTES;
@@ -60,8 +61,9 @@ public class CooperativeMapCacheSourceTest extends AbstractSoakTest {
 
     private int threadCount;
     /**
-     * I'm deliberately use only one instance of Exception instead of something like Exception per source type. <br/>
-     * We will stop all tests once when any Exception occurs.
+     * I deliberately use only one instance of Exception instead of something like Exception per source type.
+     * <br/>
+     * We will stop all tests when any exception occurs.
      */
     private volatile Exception exception;
 
@@ -324,9 +326,13 @@ public class CooperativeMapCacheSourceTest extends AbstractSoakTest {
 
     private void initializeSourceCache() {
         Cache<Integer, String> cache = jet.getCacheManager().getCache(SOURCE_CACHE);
+        logger.info("Populating cache " + cache.getName() + "...");
+        Map<Integer, String> tmpMap = new HashMap<>();
         for (int i = 0; i < SOURCE_MAP_ITEMS; i++) {
-            cache.put(i, Integer.toString(i));
+            tmpMap.put(i, Integer.toString(i));
         }
+        cache.putAll(tmpMap);
+        logger.info("Cache " + cache.getName() + " populated.");
     }
 
 }

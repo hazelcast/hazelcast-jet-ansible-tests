@@ -18,25 +18,27 @@ package com.hazelcast.jet.tests.common;
 
 import com.hazelcast.client.config.ClientConfig;
 import com.hazelcast.client.config.XmlClientConfigBuilder;
+import com.hazelcast.config.CacheSimpleConfig;
 import com.hazelcast.jet.Jet;
 import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.config.JetClientConfig;
+import com.hazelcast.jet.config.JetConfig;
 import com.hazelcast.jet.function.PredicateEx;
 import com.hazelcast.jet.server.JetBootstrap;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.map.journal.EventJournalMapEvent;
 
 import java.io.IOException;
-import java.io.Serializable;
 import java.util.Arrays;
 
 import static com.hazelcast.jet.Util.mapPutEvents;
 import static com.hazelcast.jet.tests.common.Util.parseArguments;
 import static java.util.concurrent.TimeUnit.MINUTES;
 
-public abstract class AbstractSoakTest implements Serializable {
+public abstract class AbstractSoakTest {
 
     private static final int DEFAULT_DURATION_MINUTES = 30;
+    private static final int CACHE_EVICTION_SIZE = 2000000;
 
     protected transient JetInstance jet;
     protected transient ILogger logger;
@@ -47,7 +49,13 @@ public abstract class AbstractSoakTest implements Serializable {
 
         JetInstance[] instances = null;
         if (isRunLocal()) {
-            instances = new JetInstance[]{Jet.newJetInstance(), Jet.newJetInstance()};
+            JetConfig config = new JetConfig();
+            CacheSimpleConfig cacheConfig = new CacheSimpleConfig()
+                    .setName("CooperativeMapCacheSourceTest_SourceCache");
+            cacheConfig.getEvictionConfig().setSize(CACHE_EVICTION_SIZE);
+            config.getHazelcastConfig().addCacheConfig(cacheConfig);
+
+            instances = new JetInstance[]{Jet.newJetInstance(config), Jet.newJetInstance(config)};
             jet = Jet.newJetClient();
         } else {
             jet = JetBootstrap.getInstance();
@@ -107,7 +115,7 @@ public abstract class AbstractSoakTest implements Serializable {
         }
         String remoteClusterXml = property("remoteClusterXml", null);
         if (remoteClusterXml == null) {
-            throw new IllegalArgumentException("Remote cluster xml should be set");
+            throw new IllegalArgumentException("Remote cluster xml should be set, use -DremoteClusterXml to specify it");
         }
 
         return new XmlClientConfigBuilder(remoteClusterXml).build();

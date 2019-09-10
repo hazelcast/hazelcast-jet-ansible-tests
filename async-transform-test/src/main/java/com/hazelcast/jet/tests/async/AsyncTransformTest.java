@@ -127,8 +127,9 @@ public class AsyncTransformTest extends AbstractSoakTest {
                 remoteClusterClientConfig, mapPutEvents(), mapEventNewValue(), START_FROM_OLDEST))
                                          .withoutTimestamps().setName("Stream from map(" + SOURCE + ")");
 
+        long maxSchedulerDelayMillisLocal = maxSchedulerDelayMillis;
         ContextFactory<Scheduler> orderedContextFactory = ContextFactory
-                .withCreateFn(x -> new Scheduler(SCHEDULER_CORE_SIZE, maxSchedulerDelayMillis))
+                .withCreateFn(x -> new Scheduler(SCHEDULER_CORE_SIZE, maxSchedulerDelayMillisLocal))
                 .withDestroyFn(Scheduler::shutdown)
                 .withLocalSharing();
         sourceStage.mapUsingContextAsync(orderedContextFactory, Scheduler::schedule)

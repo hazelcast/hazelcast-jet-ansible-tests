@@ -160,9 +160,10 @@ public class CooperativeMapCacheSourceTest extends AbstractSoakTest {
 
     private void executeLocalMapJob(int threadIndex) {
         Pipeline pipeline = Pipeline.create();
+        int sequence = localMapSequence[threadIndex];
         pipeline.drawFrom(Sources.map(SOURCE_MAP))
                 .map((t) -> {
-                    t.setValue(t.getValue() + "_" + localMapSequence[threadIndex]);
+                    t.setValue(t.getValue() + "_" + sequence);
                     return t;
                 })
                 .drainTo(Sinks.map(SINK_LOCAL_MAP + threadIndex));
@@ -174,9 +175,10 @@ public class CooperativeMapCacheSourceTest extends AbstractSoakTest {
 
     private void executeRemoteMapJob(int threadIndex) {
         Pipeline pipeline = Pipeline.create();
+        int sequence = remoteMapSequence[threadIndex];
         pipeline.drawFrom(Sources.remoteMap(SOURCE_MAP, wrappedRemoteClusterClientConfig()))
                 .map((t) -> {
-                    t.setValue(t.getValue() + "_" + remoteMapSequence[threadIndex]);
+                    t.setValue(t.getValue() + "_" + sequence);
                     return t;
                 })
                 .drainTo(Sinks.map(SINK_REMOTE_MAP + threadIndex));
@@ -193,9 +195,10 @@ public class CooperativeMapCacheSourceTest extends AbstractSoakTest {
                         SOURCE_MAP,
                         GenericPredicates.greaterEqual("__key", PREDICATE_FROM),
                         Projections.identity());
+        int sequence = queryLocalMapSequence[threadIndex];
         pipeline.drawFrom(source)
                 .map((t) -> {
-                    t.setValue(t.getValue() + "_" + queryLocalMapSequence[threadIndex]);
+                    t.setValue(t.getValue() + "_" + sequence);
                     return t;
                 })
                 .drainTo(Sinks.map(SINK_QUERY_LOCAL_MAP + threadIndex));
@@ -213,9 +216,10 @@ public class CooperativeMapCacheSourceTest extends AbstractSoakTest {
                         wrappedRemoteClusterClientConfig(),
                         GenericPredicates.greaterEqual("__key", PREDICATE_FROM),
                         Projections.identity());
+        int sequence = queryRemoteMapSequence[threadIndex];
         pipeline.drawFrom(source)
                 .map((t) -> {
-                    t.setValue(t.getValue() + "_" + queryRemoteMapSequence[threadIndex]);
+                    t.setValue(t.getValue() + "_" + sequence);
                     return t;
                 })
                 .drainTo(Sinks.map(SINK_QUERY_REMOTE_MAP + threadIndex));
@@ -227,9 +231,10 @@ public class CooperativeMapCacheSourceTest extends AbstractSoakTest {
 
     private void executeLocalCacheJob(int threadIndex) {
         Pipeline pipeline = Pipeline.create();
+        int sequence = localCacheSequence[threadIndex];
         pipeline.drawFrom(Sources.cache(SOURCE_CACHE))
                 .map((t) -> {
-                    t.setValue(t.getValue() + "_" + localCacheSequence[threadIndex]);
+                    t.setValue(t.getValue() + "_" + sequence);
                     return t;
                 })
                 .drainTo(Sinks.map(SINK_LOCAL_CACHE + threadIndex));
@@ -241,9 +246,10 @@ public class CooperativeMapCacheSourceTest extends AbstractSoakTest {
 
     private void executeRemoteCacheJob(int threadIndex) {
         Pipeline pipeline = Pipeline.create();
+        int sequence = remoteCacheSequence[threadIndex];
         pipeline.drawFrom(Sources.remoteCache(SOURCE_CACHE, wrappedRemoteClusterClientConfig()))
                 .map((t) -> {
-                    t.setValue(t.getValue() + "_" + remoteCacheSequence[threadIndex]);
+                    t.setValue(t.getValue() + "_" + sequence);
                     return t;
                 })
                 .drainTo(Sinks.map(SINK_REMOTE_CACHE + threadIndex));

@@ -75,8 +75,9 @@ public class EarlyResultsTest extends AbstractSoakTest {
     private Pipeline pipeline() {
         Pipeline p = Pipeline.create();
 
+        int windowSizeLocal = windowSize;
         Sink<KeyedWindowResult<String, Long>> verificationSink = SinkBuilder
-                .sinkBuilder("verification", c -> new VerificationContext(windowSize))
+                .sinkBuilder("verification", c -> new VerificationContext(windowSizeLocal))
                 .receiveFn(VerificationContext::verify)
                 .build();
 

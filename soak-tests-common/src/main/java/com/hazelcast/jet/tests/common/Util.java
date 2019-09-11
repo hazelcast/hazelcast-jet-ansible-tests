@@ -35,18 +35,18 @@ public final class Util {
     private Util() {
     }
 
-    public static JobStatus getJobStatus(Job job) {
+    public static JobStatus getJobStatusWithRetry(Job job) {
         try {
             return job.getStatus();
         } catch (Exception e) {
             uncheckRun(() -> sleepSeconds(1));
-            return getJobStatus(job);
+            return getJobStatusWithRetry(job);
         }
     }
 
     public static void waitForJobStatus(Job job, JobStatus expectedStatus) {
         for (int i = 0; i < JOB_STATUS_RETRY_COUNT; i++) {
-            JobStatus currentStatus = getJobStatus(job);
+            JobStatus currentStatus = getJobStatusWithRetry(job);
             if (currentStatus == FAILED) {
                 job.join();
             }

@@ -42,7 +42,7 @@ import static com.hazelcast.jet.aggregate.AggregateOperations.counting;
 import static com.hazelcast.jet.core.JobStatus.RUNNING;
 import static com.hazelcast.jet.core.JobStatus.STARTING;
 import static com.hazelcast.jet.pipeline.WindowDefinition.session;
-import static com.hazelcast.jet.tests.common.Util.getJobStatus;
+import static com.hazelcast.jet.tests.common.Util.getJobStatusWithRetry;
 import static java.util.concurrent.TimeUnit.MINUTES;
 
 public class KafkaSessionWindowTest extends AbstractSoakTest {
@@ -105,7 +105,7 @@ public class KafkaSessionWindowTest extends AbstractSoakTest {
         while (System.currentTimeMillis() - begin < durationInMillis) {
             MINUTES.sleep(1);
             assertFalse(producerFuture.isDone());
-            JobStatus status = getJobStatus(verificationJob);
+            JobStatus status = getJobStatusWithRetry(verificationJob);
             if (status != STARTING && status != RUNNING) {
                 throw new AssertionError("Job is failed, jobStatus: " + status);
             }

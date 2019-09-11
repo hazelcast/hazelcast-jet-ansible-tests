@@ -45,7 +45,7 @@ import static com.hazelcast.jet.core.JobStatus.FAILED;
 import static com.hazelcast.jet.function.Functions.wholeItem;
 import static com.hazelcast.jet.pipeline.JournalInitialPosition.START_FROM_OLDEST;
 import static com.hazelcast.jet.pipeline.WindowDefinition.sliding;
-import static com.hazelcast.jet.tests.common.Util.getJobStatus;
+import static com.hazelcast.jet.tests.common.Util.getJobStatusWithRetry;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
 public class EventJournalTest extends AbstractSoakTest {
@@ -118,11 +118,11 @@ public class EventJournalTest extends AbstractSoakTest {
             if (isEmpty) {
                 SECONDS.sleep(1);
             }
-            if (getJobStatus(job) == FAILED) {
+            if (getJobStatusWithRetry(job) == FAILED) {
                 job.join();
             }
         }
-        if (getJobStatus(job) == FAILED) {
+        if (getJobStatusWithRetry(job) == FAILED) {
             job.join();
         }
         System.out.println("Cancelling jobs..");

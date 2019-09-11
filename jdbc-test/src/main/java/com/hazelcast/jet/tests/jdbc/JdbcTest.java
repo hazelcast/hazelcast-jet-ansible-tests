@@ -44,6 +44,7 @@ import java.util.Map.Entry;
 
 import static com.hazelcast.jet.core.JobStatus.FAILED;
 import static com.hazelcast.jet.tests.common.Util.entry;
+import static com.hazelcast.jet.tests.common.Util.getJobStatusWithRetry;
 import static com.hazelcast.jet.tests.common.Util.sleepSeconds;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
@@ -105,7 +106,7 @@ public class JdbcTest extends AbstractSoakTest {
         while (System.currentTimeMillis() - begin < durationInMillis) {
             JobConfig jobConfig = new JobConfig().setName("JDBC Test read table to queue [" + jobCounter + "]");
             jet.newJob(readFromDBPipeline, jobConfig).join();
-            if (streamJob.getStatus() == FAILED) {
+            if (getJobStatusWithRetry(streamJob) == FAILED) {
                 streamJob.join();
             }
             jobCounter++;

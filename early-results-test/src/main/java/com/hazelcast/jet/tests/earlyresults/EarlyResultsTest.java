@@ -31,7 +31,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static com.hazelcast.jet.core.JobStatus.FAILED;
-import static com.hazelcast.jet.tests.common.Util.getJobStatus;
+import static com.hazelcast.jet.tests.common.Util.getJobStatusWithRetry;
 import static com.hazelcast.jet.tests.common.Util.sleepMinutes;
 
 public class EarlyResultsTest extends AbstractSoakTest {
@@ -63,7 +63,7 @@ public class EarlyResultsTest extends AbstractSoakTest {
 
         long begin = System.currentTimeMillis();
         while (System.currentTimeMillis() - begin < durationInMillis) {
-            if (getJobStatus(job) == FAILED) {
+            if (getJobStatusWithRetry(job) == FAILED) {
                 job.join();
             }
             sleepMinutes(1);

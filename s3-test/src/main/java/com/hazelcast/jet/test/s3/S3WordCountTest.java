@@ -61,9 +61,9 @@ public class S3WordCountTest extends AbstractSoakTest {
 
     @Override
     protected void init() {
-        bucketName = property("bucket_name", DEFAULT_BUCKET_NAME);
-        distinct = propertyInt("distinct_words", DEFAULT_DISTINCT);
-        totalWordCount = propertyInt("total_word_count", DEFAULT_TOTAL);
+        bucketName = property("bucketName", DEFAULT_BUCKET_NAME);
+        distinct = propertyInt("distinctWords", DEFAULT_DISTINCT);
+        totalWordCount = propertyInt("totalWordCount", DEFAULT_TOTAL);
 
         s3Client = clientSupplier().get();
         deleteBucket();

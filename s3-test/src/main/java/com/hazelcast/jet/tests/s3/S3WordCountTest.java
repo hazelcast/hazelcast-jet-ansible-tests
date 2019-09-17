@@ -140,11 +140,15 @@ public class S3WordCountTest extends AbstractSoakTest {
     }
 
     private SupplierEx<S3Client> clientSupplier() {
-        AwsBasicCredentials credentials = AwsBasicCredentials.create(accessKey, secretKey);
-        return () -> S3Client.builder()
-                             .credentialsProvider(StaticCredentialsProvider.create(credentials))
-                             .region(US_EAST_1)
-                             .build();
+        String localAccessKey = accessKey;
+        String localSecretKey = secretKey;
+        return () -> {
+            AwsBasicCredentials credentials = AwsBasicCredentials.create(localAccessKey, localSecretKey);
+            return S3Client.builder()
+                           .credentialsProvider(StaticCredentialsProvider.create(credentials))
+                           .region(US_EAST_1)
+                           .build();
+        };
     }
 
     private void createBucket() {

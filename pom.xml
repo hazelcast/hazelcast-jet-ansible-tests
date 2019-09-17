@@ -11,6 +11,7 @@
     <description>Soak Tests for Hazelcast Jet</description>
     <modules>
         <module>async-transform-test</module>
+        <module>cooperative-map-cache-source-test</module>
         <module>early-results-test</module>
         <module>event-journal-test</module>
         <module>hdfs-test</module>
@@ -18,12 +19,12 @@
         <module>jms-test</module>
         <module>job-management-test</module>
         <module>kafka-session-window-test</module>
+        <module>large-snapshot-chunk-test</module>
         <module>remote-controller-client</module>
         <module>rolling-aggregate-test</module>
         <module>snapshot-test</module>
         <module>soak-tests-common</module>
-        <module>large-snapshot-chunk-test</module>
-        <module>cooperative-map-cache-source-test</module>
+        <module>s3-test</module>
     </modules>
 
     <properties>

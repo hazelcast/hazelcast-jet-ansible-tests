@@ -55,7 +55,6 @@ public class S3WordCountTest extends AbstractSoakTest {
     private int totalWordCount;
 
     public static void main(String[] args) throws Exception {
-        System.setProperty("runLocal", "true");
         new S3WordCountTest().run(args);
     }
 

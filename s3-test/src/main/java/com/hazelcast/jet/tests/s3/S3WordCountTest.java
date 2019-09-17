@@ -22,6 +22,8 @@ import com.hazelcast.jet.pipeline.Pipeline;
 import com.hazelcast.jet.s3.S3Sinks;
 import com.hazelcast.jet.s3.S3Sources;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.core.ResponseInputStream;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
@@ -51,6 +53,8 @@ public class S3WordCountTest extends AbstractSoakTest {
 
     private S3Client s3Client;
     private String bucketName;
+    private String accessKey;
+    private String secretKey;
     private int distinct;
     private int totalWordCount;
 
@@ -61,6 +65,8 @@ public class S3WordCountTest extends AbstractSoakTest {
     @Override
     protected void init() {
         bucketName = property("bucketName", DEFAULT_BUCKET_NAME);
+        accessKey = property("accessKey", null);
+        secretKey = property("secretKey", null);
         distinct = propertyInt("distinctWords", DEFAULT_DISTINCT);
         totalWordCount = propertyInt("totalWordCount", DEFAULT_TOTAL);
 
@@ -134,7 +140,11 @@ public class S3WordCountTest extends AbstractSoakTest {
     }
 
     private SupplierEx<S3Client> clientSupplier() {
-        return () -> S3Client.builder().region(US_EAST_1).build();
+        AwsBasicCredentials credentials = AwsBasicCredentials.create(accessKey, secretKey);
+        return () -> S3Client.builder()
+                             .credentialsProvider(StaticCredentialsProvider.create(credentials))
+                             .region(US_EAST_1)
+                             .build();
     }
 
     private void createBucket() {

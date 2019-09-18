@@ -27,12 +27,15 @@ import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.core.ResponseInputStream;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
+import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import software.amazon.awssdk.services.s3.model.S3Object;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.util.Iterator;
 import java.util.StringTokenizer;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.LockSupport;
 
 import static com.hazelcast.jet.aggregate.AggregateOperations.counting;
 import static com.hazelcast.jet.function.Functions.wholeItem;
@@ -43,10 +46,15 @@ import static software.amazon.awssdk.regions.Region.US_EAST_1;
 
 public class S3WordCountTest extends AbstractSoakTest {
 
+
+    private static final int GET_OBJECT_RETRY_COUNT = 10;
+    private static final long GET_OBJECT_RETRY_WAIT_TIME = TimeUnit.MILLISECONDS.toNanos(250);
+
     private static final String DEFAULT_BUCKET_NAME = "jet-soak-tests-bucket";
     private static final String RESULTS_PREFIX = "results/";
     private static final int DEFAULT_TOTAL = 400000;
     private static final int DEFAULT_DISTINCT = 50000;
+
 
     private S3Client s3Client;
     private String bucketName;
@@ -112,8 +120,7 @@ public class S3WordCountTest extends AbstractSoakTest {
         while (iterator.hasNext()) {
             S3Object s3Object = iterator.next();
             logger.info("Verify object: " + s3Object.key());
-            try (ResponseInputStream<GetObjectResponse> response =
-                         s3Client.getObject(b -> b.bucket(bucketName).key(s3Object.key()))) {
+            try (ResponseInputStream<GetObjectResponse> response = getObjectWithRetry(s3Object)) {
                 BufferedReader reader = new BufferedReader(new InputStreamReader(response));
                 String line = reader.readLine();
                 while (line != null) {
@@ -132,6 +139,23 @@ public class S3WordCountTest extends AbstractSoakTest {
         s3Client.listObjectsV2Paginator(b -> b.bucket(bucketName).prefix(RESULTS_PREFIX))
                 .contents()
                 .forEach(s3Object -> s3Client.deleteObject(b -> b.bucket(bucketName).key(s3Object.key())));
+    }
+
+    /**
+     * Retries the getObject call due to eventual consistency model of S3
+     */
+    private ResponseInputStream<GetObjectResponse> getObjectWithRetry(S3Object s3Object) {
+        NoSuchKeyException exception = null;
+        for (int i = 0; i < GET_OBJECT_RETRY_COUNT; i++) {
+            try {
+                return s3Client.getObject(b -> b.bucket(bucketName).key(s3Object.key()));
+            } catch (NoSuchKeyException e) {
+                exception = e;
+                logger.warning("Exception while retrieving the object: " + s3Object.key());
+                LockSupport.parkNanos(GET_OBJECT_RETRY_WAIT_TIME);
+            }
+        }
+        throw exception;
     }
 
 

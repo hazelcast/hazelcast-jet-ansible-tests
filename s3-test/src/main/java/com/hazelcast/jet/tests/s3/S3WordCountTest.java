@@ -47,7 +47,7 @@ import static software.amazon.awssdk.regions.Region.US_EAST_1;
 public class S3WordCountTest extends AbstractSoakTest {
 
 
-    private static final int GET_OBJECT_RETRY_COUNT = 20;
+    private static final int GET_OBJECT_RETRY_COUNT = 30;
     private static final long GET_OBJECT_RETRY_WAIT_TIME = TimeUnit.SECONDS.toNanos(1);
 
     private static final String DEFAULT_BUCKET_NAME = "jet-soak-tests-bucket";

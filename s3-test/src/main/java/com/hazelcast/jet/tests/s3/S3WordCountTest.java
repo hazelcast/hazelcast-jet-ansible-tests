@@ -125,10 +125,13 @@ public class S3WordCountTest extends AbstractSoakTest {
                 logger.severe("Exception while verifying object: " + s3Object.key());
                 throw ExceptionUtil.rethrow(e);
             }
-            s3Client.deleteObject(b -> b.bucket(bucketName).key(s3Object.key()));
         }
         assertEquals(distinct, wordNumber);
         assertEquals(totalWordCount, totalNumber);
+
+        s3Client.listObjectsV2Paginator(b -> b.bucket(bucketName).prefix(RESULTS_PREFIX))
+                .contents()
+                .forEach(s3Object -> s3Client.deleteObject(b -> b.bucket(bucketName).key(s3Object.key())));
     }
 
 

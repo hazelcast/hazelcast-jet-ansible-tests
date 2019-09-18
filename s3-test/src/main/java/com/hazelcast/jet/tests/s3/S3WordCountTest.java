@@ -27,7 +27,6 @@ import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.core.ResponseInputStream;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
-import software.amazon.awssdk.services.s3.model.NoSuchBucketException;
 import software.amazon.awssdk.services.s3.model.S3Object;
 
 import java.io.BufferedReader;
@@ -157,8 +156,12 @@ public class S3WordCountTest extends AbstractSoakTest {
 
     private void deleteBucket() {
         try {
+            s3Client.listObjectsV2Paginator(b -> b.bucket(bucketName))
+                    .contents()
+                    .forEach(s3Object -> s3Client.deleteObject(b -> b.bucket(bucketName).key(s3Object.key())));
             s3Client.deleteBucket(b -> b.bucket(bucketName));
-        } catch (NoSuchBucketException ignored) {
+        } catch (Exception e) {
+            getLogger(S3WordCountTest.class).warning("Exception while deleting bucket", e);
         }
     }
 }

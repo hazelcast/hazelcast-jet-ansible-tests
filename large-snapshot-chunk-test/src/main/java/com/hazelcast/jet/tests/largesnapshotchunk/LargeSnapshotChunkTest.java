@@ -105,7 +105,7 @@ public class LargeSnapshotChunkTest extends AbstractSoakTest {
         job.cancel();
     }
 
-    public void teardown() throws Exception {
+    protected void teardown(Throwable t) throws Exception {
         if (producer != null) {
             producer.stop();
         }

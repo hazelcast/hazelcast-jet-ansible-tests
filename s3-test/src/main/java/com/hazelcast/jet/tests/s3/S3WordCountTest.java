@@ -136,8 +136,10 @@ public class S3WordCountTest extends AbstractSoakTest {
 
 
     @Override
-    protected void teardown() {
-        deleteBucketContents();
+    protected void teardown(Throwable t) throws Exception {
+        if (t != null) {
+            deleteBucketContents();
+        }
     }
 
     private SupplierEx<S3Client> clientSupplier() {

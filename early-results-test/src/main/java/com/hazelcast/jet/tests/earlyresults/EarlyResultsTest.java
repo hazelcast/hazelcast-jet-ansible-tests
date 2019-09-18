@@ -94,7 +94,7 @@ public class EarlyResultsTest extends AbstractSoakTest {
     }
 
     @Override
-    protected void teardown() {
+    protected void teardown(Throwable t) throws Exception {
     }
 
     static class VerificationContext {

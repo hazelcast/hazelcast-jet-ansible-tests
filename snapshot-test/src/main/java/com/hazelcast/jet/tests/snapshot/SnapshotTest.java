@@ -149,7 +149,7 @@ public class SnapshotTest extends AbstractSoakTest {
         }
     }
 
-    public void teardown() {
+    protected void teardown(Throwable t) throws Exception {
         if (producerExecutorService != null) {
             producerExecutorService.shutdown();
         }

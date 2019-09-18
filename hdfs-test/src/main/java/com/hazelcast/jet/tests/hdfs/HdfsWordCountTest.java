@@ -117,7 +117,7 @@ public class HdfsWordCountTest extends AbstractSoakTest {
         }
     }
 
-    public void teardown() {
+    protected void teardown(Throwable t) throws Exception {
     }
 
     private void executeJob(int threadIndex) {

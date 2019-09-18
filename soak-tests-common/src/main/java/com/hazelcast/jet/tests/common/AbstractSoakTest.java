@@ -69,7 +69,7 @@ public abstract class AbstractSoakTest {
         } catch (Throwable t) {
             t.printStackTrace();
             logger.severe(t);
-            teardown();
+            teardown(t);
             logger.info("Finished with failure at init");
             System.exit(1);
         }
@@ -79,12 +79,12 @@ public abstract class AbstractSoakTest {
         } catch (Throwable t) {
             t.printStackTrace();
             logger.severe(t);
-            teardown();
+            teardown(t);
             logger.info("Finished with failure at test");
             System.exit(1);
         }
         logger.info("Teardown...");
-        teardown();
+        teardown(null);
         if (jet != null) {
             jet.shutdown();
         }
@@ -99,7 +99,7 @@ public abstract class AbstractSoakTest {
 
     protected abstract void test() throws Exception;
 
-    protected abstract void teardown() throws Exception;
+    protected abstract void teardown(Throwable t) throws Exception;
 
     protected String property(String name, String defaultValue) {
         return System.getProperty(name, defaultValue);

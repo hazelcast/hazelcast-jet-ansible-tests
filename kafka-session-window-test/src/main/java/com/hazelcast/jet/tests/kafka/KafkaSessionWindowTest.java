@@ -116,7 +116,7 @@ public class KafkaSessionWindowTest extends AbstractSoakTest {
         verificationJob.cancel();
     }
 
-    public void teardown() {
+    protected void teardown(Throwable t) throws Exception {
         if (producerExecutorService != null) {
             producerExecutorService.shutdown();
         }

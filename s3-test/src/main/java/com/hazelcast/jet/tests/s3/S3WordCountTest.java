@@ -16,6 +16,7 @@
 
 package com.hazelcast.jet.tests.s3;
 
+import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.function.SupplierEx;
 import com.hazelcast.jet.impl.util.ExceptionUtil;
 import com.hazelcast.jet.pipeline.Pipeline;
@@ -89,9 +90,13 @@ public class S3WordCountTest extends AbstractSoakTest {
     @Override
     protected void test() {
         long begin = System.currentTimeMillis();
+        int jobNumber = 0;
         while ((System.currentTimeMillis() - begin) < durationInMillis) {
-            jet.newJob(pipeline()).join();
-            verify();
+            JobConfig jobConfig = new JobConfig();
+            jobConfig.setName("s3-test-" + jobNumber);
+            jet.newJob(pipeline(), jobConfig).join();
+            verify(jobNumber);
+            jobNumber++;
         }
     }
 
@@ -111,7 +116,7 @@ public class S3WordCountTest extends AbstractSoakTest {
         return pipeline;
     }
 
-    private void verify() {
+    private void verify(int jobNumber) {
         Iterator<S3Object> iterator = s3Client.listObjectsV2Paginator(
                 b -> b.bucket(bucketName).prefix(RESULTS_PREFIX)).contents().iterator();
 
@@ -119,8 +124,8 @@ public class S3WordCountTest extends AbstractSoakTest {
         int totalNumber = 0;
         while (iterator.hasNext()) {
             S3Object s3Object = iterator.next();
-            logger.info("Verify object: " + s3Object.key());
-            try (ResponseInputStream<GetObjectResponse> response = getObjectWithRetry(s3Object)) {
+            logger.info(String.format("Verify for job: %d, object: %s", jobNumber, s3Object.key()));
+            try (ResponseInputStream<GetObjectResponse> response = getObjectWithRetry(jobNumber, s3Object)) {
                 BufferedReader reader = new BufferedReader(new InputStreamReader(response));
                 String line = reader.readLine();
                 while (line != null) {
@@ -129,7 +134,7 @@ public class S3WordCountTest extends AbstractSoakTest {
                     line = reader.readLine();
                 }
             } catch (Exception e) {
-                logger.severe("Exception while verifying object: " + s3Object.key());
+                logger.severe(String.format("Verification failed for job: %d, object: %s", jobNumber, s3Object.key()), e);
                 throw ExceptionUtil.rethrow(e);
             }
         }
@@ -144,14 +149,14 @@ public class S3WordCountTest extends AbstractSoakTest {
     /**
      * Retries the getObject call due to eventual consistency model of S3
      */
-    private ResponseInputStream<GetObjectResponse> getObjectWithRetry(S3Object s3Object) {
+    private ResponseInputStream<GetObjectResponse> getObjectWithRetry(int jobNumber, S3Object s3Object) {
         NoSuchKeyException exception = null;
         for (int i = 0; i < GET_OBJECT_RETRY_COUNT; i++) {
             try {
                 return s3Client.getObject(b -> b.bucket(bucketName).key(s3Object.key()));
             } catch (NoSuchKeyException e) {
                 exception = e;
-                logger.warning("Exception while retrieving the object: " + s3Object.key());
+                logger.warning(String.format("GetObject failed for job: %d, object: %s", jobNumber, s3Object.key()));
                 LockSupport.parkNanos(GET_OBJECT_RETRY_WAIT_TIME);
             }
         }

@@ -96,6 +96,7 @@ public class S3WordCountTest extends AbstractSoakTest {
             jobConfig.setName("s3-test-" + jobNumber);
             jet.newJob(pipeline(), jobConfig).join();
             verify(jobNumber);
+            logger.info(String.format("Job %d finished", jobNumber));
             jobNumber++;
         }
     }
@@ -124,7 +125,6 @@ public class S3WordCountTest extends AbstractSoakTest {
         int totalNumber = 0;
         while (iterator.hasNext()) {
             S3Object s3Object = iterator.next();
-            logger.info(String.format("Verify for job: %d, object: %s", jobNumber, s3Object.key()));
             try (ResponseInputStream<GetObjectResponse> response = getObjectWithRetry(jobNumber, s3Object)) {
                 BufferedReader reader = new BufferedReader(new InputStreamReader(response));
                 String line = reader.readLine();

@@ -30,7 +30,6 @@ import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 import software.amazon.awssdk.services.s3.model.S3Object;
 
 import java.io.BufferedReader;
-import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.Iterator;
 import java.util.StringTokenizer;
@@ -48,7 +47,6 @@ public class S3WordCountTest extends AbstractSoakTest {
     private static final String RESULTS_PREFIX = "results/";
     private static final int DEFAULT_TOTAL = 400000;
     private static final int DEFAULT_DISTINCT = 50000;
-
 
     private S3Client s3Client;
     private String bucketName;
@@ -114,6 +112,7 @@ public class S3WordCountTest extends AbstractSoakTest {
         int totalNumber = 0;
         while (iterator.hasNext()) {
             S3Object s3Object = iterator.next();
+            logger.info("Verify object: " + s3Object.key());
             try (ResponseInputStream<GetObjectResponse> response =
                          s3Client.getObject(b -> b.bucket(bucketName).key(s3Object.key()))) {
                 BufferedReader reader = new BufferedReader(new InputStreamReader(response));
@@ -123,7 +122,8 @@ public class S3WordCountTest extends AbstractSoakTest {
                     totalNumber += Integer.parseInt(line.split(" ")[1]);
                     line = reader.readLine();
                 }
-            } catch (IOException e) {
+            } catch (Exception e) {
+                logger.severe("Exception while verifying object: " + s3Object.key());
                 throw ExceptionUtil.rethrow(e);
             }
             s3Client.deleteObject(b -> b.bucket(bucketName).key(s3Object.key()));
@@ -161,7 +161,7 @@ public class S3WordCountTest extends AbstractSoakTest {
                     .forEach(s3Object -> s3Client.deleteObject(b -> b.bucket(bucketName).key(s3Object.key())));
             s3Client.deleteBucket(b -> b.bucket(bucketName));
         } catch (Exception e) {
-            getLogger(S3WordCountTest.class).warning("Exception while deleting bucket", e);
+            logger.warning("Exception while deleting bucket", e);
         }
     }
 }

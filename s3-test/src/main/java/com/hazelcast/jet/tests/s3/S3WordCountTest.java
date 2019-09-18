@@ -43,7 +43,7 @@ import static software.amazon.awssdk.regions.Region.US_EAST_1;
 
 public class S3WordCountTest extends AbstractSoakTest {
 
-    private static final String DEFAULT_BUCKET_NAME = "jet-soak-tests-source-bucket";
+    private static final String DEFAULT_BUCKET_NAME = "jet-soak-tests-bucket";
     private static final String RESULTS_PREFIX = "results/";
     private static final int DEFAULT_TOTAL = 400000;
     private static final int DEFAULT_DISTINCT = 50000;
@@ -68,8 +68,7 @@ public class S3WordCountTest extends AbstractSoakTest {
         totalWordCount = propertyInt("totalWordCount", DEFAULT_TOTAL);
 
         s3Client = clientSupplier().get();
-        deleteBucket();
-        createBucket();
+        deleteBucketContents();
 
         Pipeline p = Pipeline.create();
         p.drawFrom(batchFromProcessor("s3-word-generator",
@@ -135,7 +134,7 @@ public class S3WordCountTest extends AbstractSoakTest {
 
     @Override
     protected void teardown() {
-        deleteBucket();
+        deleteBucketContents();
     }
 
     private SupplierEx<S3Client> clientSupplier() {
@@ -150,18 +149,14 @@ public class S3WordCountTest extends AbstractSoakTest {
         };
     }
 
-    private void createBucket() {
-        s3Client.createBucket(b -> b.bucket(bucketName));
-    }
-
-    private void deleteBucket() {
+    private void deleteBucketContents() {
         try {
             s3Client.listObjectsV2Paginator(b -> b.bucket(bucketName))
                     .contents()
                     .forEach(s3Object -> s3Client.deleteObject(b -> b.bucket(bucketName).key(s3Object.key())));
-            s3Client.deleteBucket(b -> b.bucket(bucketName));
         } catch (Exception e) {
-            logger.warning("Exception while deleting bucket", e);
+            logger.warning("Exception while deleting bucket contents", e);
+            throw ExceptionUtil.rethrow(e);
         }
     }
 }

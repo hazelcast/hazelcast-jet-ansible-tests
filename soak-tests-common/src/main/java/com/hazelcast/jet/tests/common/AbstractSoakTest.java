@@ -29,7 +29,6 @@ import com.hazelcast.logging.ILogger;
 import com.hazelcast.map.journal.EventJournalMapEvent;
 
 import java.io.IOException;
-import java.util.Arrays;
 
 import static com.hazelcast.jet.Util.mapPutEvents;
 import static com.hazelcast.jet.tests.common.Util.parseArguments;
@@ -89,7 +88,7 @@ public abstract class AbstractSoakTest {
             jet.shutdown();
         }
         if (instances != null) {
-            Arrays.stream(instances).forEach(JetInstance::shutdown);
+            Jet.shutdownAll();
         }
         logger.info("Finished OK");
         System.exit(0);

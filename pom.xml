@@ -24,6 +24,7 @@
         <module>rolling-aggregate-test</module>
         <module>snapshot-test</module>
         <module>soak-tests-common</module>
+        <module>stateful-map-test</module>
         <module>s3-test</module>
     </modules>
 

@@ -102,7 +102,7 @@ public class JmsTest extends AbstractSoakTest {
         System.out.println("Job1 completed");
     }
 
-    public void teardown() {
+    protected void teardown(Throwable t) throws Exception {
     }
 
     private void assertCount(long expectedTotalCount) throws InterruptedException {

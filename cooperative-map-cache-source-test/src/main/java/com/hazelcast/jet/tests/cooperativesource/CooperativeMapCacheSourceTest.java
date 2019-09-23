@@ -133,7 +133,7 @@ public class CooperativeMapCacheSourceTest extends AbstractSoakTest {
     }
 
     @Override
-    public void teardown() {
+    protected void teardown(Throwable t) throws Exception {
     }
 
     private ExecutorService runTestInExecutorService(Consumer<Integer> executeJob, Consumer<Integer> verify,

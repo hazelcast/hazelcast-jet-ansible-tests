@@ -119,7 +119,7 @@ public class JdbcTest extends AbstractSoakTest {
 
     }
 
-    public void teardown() {
+    protected void teardown(Throwable t) throws Exception {
     }
 
     private void assertTableCount(long expectedTableCount) throws SQLException, InterruptedException {

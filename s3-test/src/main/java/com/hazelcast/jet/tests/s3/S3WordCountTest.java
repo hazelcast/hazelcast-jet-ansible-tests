@@ -16,6 +16,7 @@
 
 package com.hazelcast.jet.tests.s3;
 
+import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.function.SupplierEx;
 import com.hazelcast.jet.impl.util.ExceptionUtil;
 import com.hazelcast.jet.pipeline.Pipeline;
@@ -27,14 +28,15 @@ import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.core.ResponseInputStream;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
-import software.amazon.awssdk.services.s3.model.NoSuchBucketException;
+import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import software.amazon.awssdk.services.s3.model.S3Object;
 
 import java.io.BufferedReader;
-import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.Iterator;
 import java.util.StringTokenizer;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.LockSupport;
 
 import static com.hazelcast.jet.aggregate.AggregateOperations.counting;
 import static com.hazelcast.jet.function.Functions.wholeItem;
@@ -45,7 +47,11 @@ import static software.amazon.awssdk.regions.Region.US_EAST_1;
 
 public class S3WordCountTest extends AbstractSoakTest {
 
-    private static final String DEFAULT_BUCKET_NAME = "jet-soak-tests-source-bucket";
+
+    private static final int GET_OBJECT_RETRY_COUNT = 30;
+    private static final long GET_OBJECT_RETRY_WAIT_TIME = TimeUnit.SECONDS.toNanos(1);
+
+    private static final String DEFAULT_BUCKET_NAME = "jet-soak-tests-bucket";
     private static final String RESULTS_PREFIX = "results/";
     private static final int DEFAULT_TOTAL = 400000;
     private static final int DEFAULT_DISTINCT = 50000;
@@ -71,8 +77,7 @@ public class S3WordCountTest extends AbstractSoakTest {
         totalWordCount = propertyInt("totalWordCount", DEFAULT_TOTAL);
 
         s3Client = clientSupplier().get();
-        deleteBucket();
-        createBucket();
+        deleteBucketContents();
 
         Pipeline p = Pipeline.create();
         p.drawFrom(batchFromProcessor("s3-word-generator",
@@ -85,9 +90,14 @@ public class S3WordCountTest extends AbstractSoakTest {
     @Override
     protected void test() {
         long begin = System.currentTimeMillis();
+        int jobNumber = 0;
         while ((System.currentTimeMillis() - begin) < durationInMillis) {
-            jet.newJob(pipeline()).join();
-            verify();
+            JobConfig jobConfig = new JobConfig();
+            jobConfig.setName("s3-test-" + jobNumber);
+            jet.newJob(pipeline(), jobConfig).join();
+            verify(jobNumber);
+            logger.info(String.format("Job %d finished", jobNumber));
+            jobNumber++;
         }
     }
 
@@ -107,7 +117,7 @@ public class S3WordCountTest extends AbstractSoakTest {
         return pipeline;
     }
 
-    private void verify() {
+    private void verify(int jobNumber) {
         Iterator<S3Object> iterator = s3Client.listObjectsV2Paginator(
                 b -> b.bucket(bucketName).prefix(RESULTS_PREFIX)).contents().iterator();
 
@@ -115,8 +125,7 @@ public class S3WordCountTest extends AbstractSoakTest {
         int totalNumber = 0;
         while (iterator.hasNext()) {
             S3Object s3Object = iterator.next();
-            try (ResponseInputStream<GetObjectResponse> response =
-                         s3Client.getObject(b -> b.bucket(bucketName).key(s3Object.key()))) {
+            try (ResponseInputStream<GetObjectResponse> response = getObjectWithRetry(jobNumber, s3Object)) {
                 BufferedReader reader = new BufferedReader(new InputStreamReader(response));
                 String line = reader.readLine();
                 while (line != null) {
@@ -124,19 +133,42 @@ public class S3WordCountTest extends AbstractSoakTest {
                     totalNumber += Integer.parseInt(line.split(" ")[1]);
                     line = reader.readLine();
                 }
-            } catch (IOException e) {
+            } catch (Exception e) {
+                logger.severe(String.format("Verification failed for job: %d, object: %s", jobNumber, s3Object.key()), e);
                 throw ExceptionUtil.rethrow(e);
             }
-            s3Client.deleteObject(b -> b.bucket(bucketName).key(s3Object.key()));
         }
         assertEquals(distinct, wordNumber);
         assertEquals(totalWordCount, totalNumber);
+
+        s3Client.listObjectsV2Paginator(b -> b.bucket(bucketName).prefix(RESULTS_PREFIX))
+                .contents()
+                .forEach(s3Object -> s3Client.deleteObject(b -> b.bucket(bucketName).key(s3Object.key())));
+    }
+
+    /**
+     * Retries the getObject call due to eventual consistency model of S3
+     */
+    private ResponseInputStream<GetObjectResponse> getObjectWithRetry(int jobNumber, S3Object s3Object) {
+        NoSuchKeyException exception = null;
+        for (int i = 0; i < GET_OBJECT_RETRY_COUNT; i++) {
+            try {
+                return s3Client.getObject(b -> b.bucket(bucketName).key(s3Object.key()));
+            } catch (NoSuchKeyException e) {
+                exception = e;
+                logger.warning(String.format("GetObject failed for job: %d, object: %s", jobNumber, s3Object.key()));
+                LockSupport.parkNanos(GET_OBJECT_RETRY_WAIT_TIME);
+            }
+        }
+        throw exception;
     }
 
 
     @Override
-    protected void teardown() {
-        deleteBucket();
+    protected void teardown(Throwable t) throws Exception {
+        if (t != null) {
+            deleteBucketContents();
+        }
     }
 
     private SupplierEx<S3Client> clientSupplier() {
@@ -151,14 +183,14 @@ public class S3WordCountTest extends AbstractSoakTest {
         };
     }
 
-    private void createBucket() {
-        s3Client.createBucket(b -> b.bucket(bucketName));
-    }
-
-    private void deleteBucket() {
+    private void deleteBucketContents() {
         try {
-            s3Client.deleteBucket(b -> b.bucket(bucketName));
-        } catch (NoSuchBucketException ignored) {
+            s3Client.listObjectsV2Paginator(b -> b.bucket(bucketName))
+                    .contents()
+                    .forEach(s3Object -> s3Client.deleteObject(b -> b.bucket(bucketName).key(s3Object.key())));
+        } catch (Exception e) {
+            logger.warning("Exception while deleting bucket contents", e);
+            throw ExceptionUtil.rethrow(e);
         }
     }
 }

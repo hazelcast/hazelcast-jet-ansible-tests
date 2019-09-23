@@ -143,7 +143,7 @@ public class AsyncTransformTest extends AbstractSoakTest {
     }
 
     @Override
-    protected void teardown() throws Exception {
+    protected void teardown(Throwable t) throws Exception {
         if (producer != null) {
             producer.stop();
         }

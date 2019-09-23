@@ -130,7 +130,7 @@ public class EventJournalTest extends AbstractSoakTest {
         job.cancel();
     }
 
-    public void teardown() throws Exception {
+    protected void teardown(Throwable t) throws Exception {
         if (tradeProducer != null) {
             tradeProducer.close();
         }

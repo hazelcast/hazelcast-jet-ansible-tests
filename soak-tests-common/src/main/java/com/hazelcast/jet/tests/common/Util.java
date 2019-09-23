@@ -21,6 +21,7 @@ import com.hazelcast.jet.core.JobStatus;
 
 import java.util.AbstractMap;
 import java.util.Map;
+import java.util.concurrent.CancellationException;
 
 import static com.hazelcast.jet.core.JobStatus.FAILED;
 import static com.hazelcast.jet.impl.util.Util.uncheckRun;
@@ -57,6 +58,14 @@ public final class Util {
         }
         throw new IllegalStateException(String.format("Wait for status[%s] timed out. current status: %s",
                 expectedStatus, job.getStatus()));
+    }
+
+    public static void cancelJobAndJoin(Job job) {
+        job.cancel();
+        try {
+            job.join();
+        } catch (CancellationException ignored) {
+        }
     }
 
     public static <K, V> Map.Entry<K, V> entry(K key, V value) {

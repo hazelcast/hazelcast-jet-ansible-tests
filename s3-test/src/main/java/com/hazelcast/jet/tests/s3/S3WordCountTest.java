@@ -96,9 +96,9 @@ public class S3WordCountTest extends AbstractSoakTest {
             jobConfig.setName("s3-test-" + jobNumber);
             jet.newJob(pipeline(), jobConfig).join();
             verify(jobNumber);
-            logger.info(String.format("Job %d finished", jobNumber));
             jobNumber++;
         }
+        logger.info(String.format("Total number of jobs finished %d", jobNumber));
     }
 
     private Pipeline pipeline() {

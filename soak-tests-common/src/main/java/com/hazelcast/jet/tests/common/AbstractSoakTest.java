@@ -96,7 +96,7 @@ public abstract class AbstractSoakTest {
 
     protected abstract void init() throws Exception;
 
-    protected abstract void test() throws Exception;
+    protected abstract void test() throws Throwable;
 
     protected abstract void teardown(Throwable t) throws Exception;
 

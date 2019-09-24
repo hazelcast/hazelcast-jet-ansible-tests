@@ -16,6 +16,7 @@
 
 package com.hazelcast.jet.tests.common;
 
+import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.core.JobStatus;
 
@@ -37,11 +38,17 @@ public final class Util {
     }
 
     public static JobStatus getJobStatusWithRetry(Job job) {
-        try {
-            return job.getStatus();
-        } catch (Exception e) {
-            uncheckRun(() -> sleepSeconds(1));
-            return getJobStatusWithRetry(job);
+        final int numRetries = 16;
+        for (int count = 1; ; count++) {
+            try {
+                return job.getStatus();
+            } catch (Exception e) {
+                if (count == numRetries) {
+                    throw new RuntimeException("job.getStatus() tried " + numRetries + " times and failed. " +
+                            "Last failure: " + e, e);
+                }
+                uncheckRun(() -> sleepSeconds(1));
+            }
         }
     }
 
@@ -60,10 +67,12 @@ public final class Util {
                 expectedStatus, job.getStatus()));
     }
 
-    public static void cancelJobAndJoin(Job job) {
-        job.cancel();
+    public static void cancelJobAndJoin(JetInstance jet, Job job) {
+        // workaround, it should be fixed in Jet 3.2.1
+        Job jobForCancelling = jet.getJob(job.getName());
+        jobForCancelling.cancel();
         try {
-            job.join();
+            jobForCancelling.join();
         } catch (CancellationException ignored) {
         }
     }

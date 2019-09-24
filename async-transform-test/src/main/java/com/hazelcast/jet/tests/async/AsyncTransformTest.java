@@ -212,10 +212,14 @@ public class AsyncTransformTest extends AbstractSoakTest {
                         queue.offer(key);
                     });
                     for (Long peeked; (peeked = queue.peek()) != null; ) {
-                        if (peeked != counter) {
+                        if (peeked < counter) {
+                            // duplicate key
+                            queue.remove();
+                            continue;
+                        } else if (peeked > counter) {
                             // the item might arrive later
                             break;
-                        } else {
+                        } else if (peeked == counter) {
                             queue.remove();
                             counter++;
                         }
@@ -227,11 +231,12 @@ public class AsyncTransformTest extends AbstractSoakTest {
                     }
                     if (queue.size() >= QUEUE_SIZE_LIMIT) {
                         throw new AssertionError(String.format("Queue size exceeded while waiting for the next item. "
-                                + "Limit=%d, expected next=%d, next in queue: %d, %d, %d, ...",
-                                QUEUE_SIZE_LIMIT, counter, queue.poll(), queue.poll(), queue.poll()));
+                                        + "Limit=%d, expected next=%d, next in queue: %d, %d, %d, %d, ...",
+                                QUEUE_SIZE_LIMIT, counter, queue.poll(), queue.poll(), queue.poll(), queue.poll()));
                     }
                 }
             } catch (Throwable e) {
+                logger.severe("Exception thrown for verifier using " + map.getName(), e);
                 error = e;
             } finally {
                 running = false;

@@ -113,9 +113,11 @@ public class StatefulMapTest extends AbstractSoakTest {
         executorService.awaitTermination(durationInMillis + extraDuration, MILLISECONDS);
 
         if (exceptions[0] != null) {
+            logger.severe("Exception in Dynamic cluster test", exceptions[0]);
             throw exceptions[0];
         }
         if (exceptions[1] != null) {
+            logger.severe("Exception in Stable cluster test", exceptions[1]);
             throw exceptions[1];
         }
     }
@@ -140,7 +142,11 @@ public class StatefulMapTest extends AbstractSoakTest {
             assertNotEquals(name, FAILED, jobStatus);
             sleepSeconds(DELAY_BETWEEN_STATUS_CHECKS);
 
-            totalTxNumber += completedTxCount(txMap, logger, replicatedMap.get(CURRENT_TX_ID));
+            Long currentTxId = replicatedMap.get(CURRENT_TX_ID);
+            if (currentTxId == null) {
+                continue;
+            }
+            totalTxNumber += completedTxCount(txMap, logger, currentTxId);
         }
         replicatedMap.put(STOP_GENERATION_MESSAGE, 1L);
         sleepSeconds(2 * txTimeoutSeconds);

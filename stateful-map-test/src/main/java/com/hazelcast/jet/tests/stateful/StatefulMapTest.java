@@ -93,7 +93,7 @@ public class StatefulMapTest extends AbstractSoakTest {
     @Override
     protected void test() throws Throwable {
         Throwable[] exceptions = new Throwable[2];
-        ExecutorService executorService = Executors.newFixedThreadPool(1);
+        ExecutorService executorService = Executors.newFixedThreadPool(2);
         executorService.execute(() -> {
             try {
                 testInternal(jet, "Dynamic-StatefulMapTest");

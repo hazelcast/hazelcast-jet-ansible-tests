@@ -21,7 +21,11 @@ import com.hazelcast.jet.core.Processor.Context;
 import com.hazelcast.jet.pipeline.SourceBuilder;
 import com.hazelcast.jet.pipeline.StreamSource;
 import com.hazelcast.jet.tests.stateful.TransactionEvent.Type;
+import com.hazelcast.logging.ILogger;
 
+import java.util.List;
+
+import static com.hazelcast.jet.tests.stateful.StatefulMapTest.CURRENT_TX_ID;
 import static com.hazelcast.jet.tests.stateful.StatefulMapTest.REPLICATED_MAP;
 import static com.hazelcast.jet.tests.stateful.StatefulMapTest.STOP_GENERATION_MESSAGE;
 import static com.hazelcast.jet.tests.stateful.StatefulMapTest.TOTAL_KEY_COUNT;
@@ -45,12 +49,14 @@ public final class TransactionGenerator {
     private final ReplicatedMap<String, Long> replicatedMap;
     private final long nanosBetweenEvents;
     private final int batchCount;
+    private final ILogger logger;
 
     private long txId;
     private boolean start = true;
 
     private TransactionGenerator(Context context, int txPerSeconds, int batchCount) {
-        this.replicatedMap = context.jetInstance().getHazelcastInstance().getReplicatedMap(REPLICATED_MAP);
+        logger = context.jetInstance().getHazelcastInstance().getLoggingService().getLogger(getClass());
+        this.replicatedMap = context.jetInstance().getReplicatedMap(REPLICATED_MAP);
         this.nanosBetweenEvents = SECONDS.toNanos(1) / txPerSeconds;
         this.batchCount = batchCount;
     }
@@ -59,6 +65,8 @@ public final class TransactionGenerator {
         return SourceBuilder
                 .stream("tx-generator", c -> new TransactionGenerator(c, txPerSeconds, batchCount))
                 .fillBufferFn(TransactionGenerator::generateTrades)
+                .createSnapshotFn(TransactionGenerator::createSnapshot)
+                .restoreSnapshotFn(TransactionGenerator::restoreSnapshot)
                 .destroyFn(TransactionGenerator::close)
                 .build();
     }
@@ -66,7 +74,8 @@ public final class TransactionGenerator {
     private void generateTrades(SourceBuilder.SourceBuffer<TransactionEvent> buf) {
         if (start && replicatedMap.get(STOP_GENERATION_MESSAGE) != null) {
             //this is to advance wm and eventually evict expired transactions
-            buf.add(new TransactionEvent(null, Long.MAX_VALUE, Long.MAX_VALUE));
+            buf.add(new TransactionEvent(null, Long.MAX_VALUE, System.currentTimeMillis()));
+            parkNanos(nanosBetweenEvents);
             return;
         }
         Type type = start ? Type.START : Type.END;
@@ -80,12 +89,27 @@ public final class TransactionGenerator {
         //Eventually the transaction will be evicted and marked as timeout
         //a single tx is produced per batch and txId<0
         if (start) {
-            System.out.println("qwe gen txId: -" + txId);
             buf.add(new TransactionEvent(Type.START, -txId, System.currentTimeMillis()));
+            replicatedMap.put(CURRENT_TX_ID, txId);
         }
     }
 
+    private Object[] createSnapshot() {
+        logger.finest(String.format("Create snapshot txId: %d, isStart: %b", txId, start));
+        return new Object[]{txId, start};
+    }
+
+    private void restoreSnapshot(List<Object[]> list) {
+        Object[] pair = list.get(0);
+        txId = (Long) pair[0];
+        start = (Boolean) pair[1];
+        logger.finest(String.format("Restore snapshot txId: %d, isStart: %b", txId, start));
+    }
+
     private void close() {
-        replicatedMap.put(TOTAL_KEY_COUNT, txId);
+        //put the result to map only if we get the stop message
+        if (replicatedMap.get(STOP_GENERATION_MESSAGE) != null) {
+            replicatedMap.put(TOTAL_KEY_COUNT, txId);
+        }
     }
 }

@@ -36,7 +36,7 @@ import static java.util.concurrent.TimeUnit.MINUTES;
 
 public abstract class AbstractSoakTest {
 
-    private static final int DEFAULT_DURATION_MINUTES = 30;
+    private static final int DEFAULT_DURATION_MINUTES = 5;
     private static final int CACHE_EVICTION_SIZE = 2000000;
 
     protected transient JetInstance jet;
@@ -96,7 +96,7 @@ public abstract class AbstractSoakTest {
 
     protected abstract void init() throws Exception;
 
-    protected abstract void test() throws Exception;
+    protected abstract void test() throws Throwable;
 
     protected abstract void teardown(Throwable t) throws Exception;
 

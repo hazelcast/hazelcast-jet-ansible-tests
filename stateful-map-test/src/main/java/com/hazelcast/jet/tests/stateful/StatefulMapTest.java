@@ -75,7 +75,6 @@ public class StatefulMapTest extends AbstractSoakTest {
 
 
     public static void main(String[] args) throws Exception {
-        System.setProperty("runLocal", "true");
         new StatefulMapTest().run(args);
     }
 

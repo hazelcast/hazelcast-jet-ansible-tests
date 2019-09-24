@@ -215,11 +215,13 @@ public class StatefulMapTest extends AbstractSoakTest {
                  );
         streamStage
                 .filter(e -> e.getKey() < 0)
-                .drainTo(Sinks.map(TIMEOUT_TX_MAP));
+                .drainTo(Sinks.mapWithMerging(TIMEOUT_TX_MAP, (oldValue, newValue) ->
+                        (newValue == PENDING_CODE && oldValue == TIMED_OUT_CODE) ? oldValue : newValue));
 
         streamStage
                 .filter(e -> e.getKey() >= 0)
-                .drainTo(Sinks.map(TX_MAP));
+                .drainTo(Sinks.mapWithMerging(TX_MAP, (oldValue, newValue) ->
+                        (newValue == PENDING_CODE && oldValue >= 0) ? oldValue : newValue));
         return p;
     }
 

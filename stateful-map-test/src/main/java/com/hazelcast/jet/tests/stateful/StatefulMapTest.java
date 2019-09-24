@@ -137,7 +137,7 @@ public class StatefulMapTest extends AbstractSoakTest {
         long begin = System.currentTimeMillis();
         while (System.currentTimeMillis() - begin < durationInMillis) {
             JobStatus jobStatus = getJobStatusWithRetry(job);
-            assertNotEquals(FAILED, jobStatus);
+            assertNotEquals(name, FAILED, jobStatus);
             sleepSeconds(DELAY_BETWEEN_STATUS_CHECKS);
 
             totalTxNumber += completedTxCount(txMap, logger, replicatedMap.get(CURRENT_TX_ID));
@@ -149,16 +149,11 @@ public class StatefulMapTest extends AbstractSoakTest {
 
         long expectedTotalKeyCount = replicatedMap.remove(TOTAL_KEY_COUNT);
         totalTxNumber += completedTxCount(txMap, logger, Long.MAX_VALUE);
-        assertEquals(expectedTotalKeyCount, totalTxNumber);
+        assertEquals(name, expectedTotalKeyCount, totalTxNumber);
 
         Set<Long> keySet = timeoutTxMap.keySet(mapEntry -> ((long) mapEntry.getValue()) != TIMED_OUT_CODE);
-        if (keySet.size() != 0) {
-            for (Long aLong : keySet) {
-                System.out.println("key: " + aLong + "\t" + timeoutTxMap.get(aLong));
-            }
-        }
-        assertEquals(0, keySet.size());
-        assertEquals(expectedTotalKeyCount / generatorBatchCount, timeoutTxMap.size());
+        assertEquals(name, 0, keySet.size());
+        assertEquals(name, expectedTotalKeyCount / generatorBatchCount, timeoutTxMap.size());
     }
 
     private long completedTxCount(IMapJet<Long, Long> txMap, ILogger logger, long currentTxId) {

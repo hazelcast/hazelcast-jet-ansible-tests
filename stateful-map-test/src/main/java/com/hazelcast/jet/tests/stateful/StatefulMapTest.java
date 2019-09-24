@@ -16,6 +16,7 @@
 
 package com.hazelcast.jet.tests.stateful;
 
+import com.hazelcast.client.config.ClientConfig;
 import com.hazelcast.core.ReplicatedMap;
 import com.hazelcast.jet.IMapJet;
 import com.hazelcast.jet.Jet;
@@ -41,6 +42,7 @@ import static com.hazelcast.jet.config.ProcessingGuarantee.NONE;
 import static com.hazelcast.jet.core.JobStatus.FAILED;
 import static com.hazelcast.jet.tests.common.Util.cancelJobAndJoin;
 import static com.hazelcast.jet.tests.common.Util.getJobStatusWithRetry;
+import static com.hazelcast.jet.tests.common.Util.sleepMillis;
 import static com.hazelcast.jet.tests.common.Util.sleepSeconds;
 import static com.hazelcast.jet.tests.stateful.TransactionGenerator.transactionEventSource;
 import static com.hazelcast.jet.tests.stateful.VerificationEntryProcessor.predicate;
@@ -54,20 +56,23 @@ public class StatefulMapTest extends AbstractSoakTest {
     static final String TOTAL_KEY_COUNT = "total-key-count";
     static final String STOP_GENERATION_MESSAGE = "stop-generation";
     static final String CURRENT_TX_ID = "current-tx-id";
-    static final long TIMED_OUT_CODE = -2;
+    static final long TIMED_OUT_CODE = -1;
 
-    private static final String TX_MAP = "total-key-count-map";
-    private static final String TIMEOUT_TX_MAP = "timeout-key-count-verification";
-    private static final long PENDING_CODE = -1;
-    private static final int DEFAULT_TX_TIMEOUT = 10;
+    private static final String TX_MAP_STABLE = "total-key-count-map-stable";
+    private static final String TIMEOUT_TX_MAP_STABLE = "timeout-key-count-map-stable";
+    private static final String TX_MAP_DYNAMIC = "total-key-count-map-dynamic";
+    private static final String TIMEOUT_TX_MAP_DYNAMIC = "timeout-key-count-map-dynamic";
+    private static final int DEFAULT_TX_TIMEOUT = 5000;
     private static final int DEFAULT_GENERATOR_BATCH_COUNT = 100;
     private static final int DEFAULT_TX_PER_SECOND = 1000;
     private static final int DELAY_BETWEEN_STATUS_CHECKS = 30;
     private static final int DEFAULT_VERIFICATION_GAP_MINUTES = 1;
     private static final int DEFAULT_SNAPSHOT_INTERVAL_MILLIS = 5000;
+    private static final int WAIT_TX_TIMEOUT_FACTOR = 4;
 
+    private ClientConfig stableClusterClientConfig;
     private JetInstance stableClusterClient;
-    private int txTimeoutSeconds;
+    private int txTimeout;
     private int txPerSecond;
     private int generatorBatchCount;
     private int snapshotIntervalMillis;
@@ -80,14 +85,15 @@ public class StatefulMapTest extends AbstractSoakTest {
 
     @Override
     protected void init() throws Exception {
-        txTimeoutSeconds = propertyInt("txTimeoutSeconds", DEFAULT_TX_TIMEOUT);
+        txTimeout = propertyInt("txTimeout", DEFAULT_TX_TIMEOUT);
         txPerSecond = propertyInt("txPerSecond", DEFAULT_TX_PER_SECOND);
         generatorBatchCount = propertyInt("generatorBatchCount", DEFAULT_GENERATOR_BATCH_COUNT);
         snapshotIntervalMillis = propertyInt("snapshotIntervalMillis", DEFAULT_SNAPSHOT_INTERVAL_MILLIS);
         int verificationGapMinutes = propertyInt("verificationGapMinutes", DEFAULT_VERIFICATION_GAP_MINUTES);
         estimatedTxIdGap = MINUTES.toSeconds(verificationGapMinutes) * txPerSecond / 2;
 
-        stableClusterClient = Jet.newJetClient(remoteClusterClientConfig());
+        stableClusterClientConfig = remoteClusterClientConfig();
+        stableClusterClient = Jet.newJetClient(stableClusterClientConfig);
     }
 
     @Override
@@ -98,6 +104,7 @@ public class StatefulMapTest extends AbstractSoakTest {
             try {
                 testInternal(jet, "Dynamic-StatefulMapTest");
             } catch (Throwable t) {
+                logger.severe("Exception in Dynamic cluster test", t);
                 exceptions[0] = t;
             }
         });
@@ -105,11 +112,12 @@ public class StatefulMapTest extends AbstractSoakTest {
             try {
                 testInternal(stableClusterClient, "Stable-StatefulMapTest");
             } catch (Throwable t) {
+                logger.severe("Exception in Stable cluster test", t);
                 exceptions[1] = t;
             }
         });
         executorService.shutdown();
-        long extraDuration = 2 * SECONDS.toMillis(txTimeoutSeconds + DELAY_BETWEEN_STATUS_CHECKS);
+        long extraDuration = WAIT_TX_TIMEOUT_FACTOR * (SECONDS.toMillis(DELAY_BETWEEN_STATUS_CHECKS) + txTimeout);
         executorService.awaitTermination(durationInMillis + extraDuration, MILLISECONDS);
 
         if (exceptions[0] != null) {
@@ -124,8 +132,11 @@ public class StatefulMapTest extends AbstractSoakTest {
 
     private void testInternal(JetInstance client, String name) {
         ReplicatedMap<String, Long> replicatedMap = client.getReplicatedMap(REPLICATED_MAP);
-        IMapJet<Long, Long> txMap = client.getMap(TX_MAP);
-        IMapJet<Long, Long> timeoutTxMap = client.getMap(TIMEOUT_TX_MAP);
+        String txMapName = name.startsWith("Stable") ? TX_MAP_STABLE : TX_MAP_DYNAMIC;
+        String timeoutMapName = name.startsWith("Stable") ? TIMEOUT_TX_MAP_STABLE : TIMEOUT_TX_MAP_DYNAMIC;
+        IMapJet<Long, Long> txMap = stableClusterClient.getMap(txMapName);
+        IMapJet<Long, Long> timeoutTxMap = stableClusterClient.getMap(timeoutMapName);
+
         ILogger logger = client.getHazelcastInstance().getLoggingService().getLogger(name);
 
         JobConfig jobConfig = new JobConfig()
@@ -133,7 +144,7 @@ public class StatefulMapTest extends AbstractSoakTest {
                 .setProcessingGuarantee(name.startsWith("Dynamic") ? EXACTLY_ONCE : NONE)
                 .setSnapshotIntervalMillis(snapshotIntervalMillis);
 
-        Job job = client.newJob(buildPipeline(), jobConfig);
+        Job job = client.newJob(buildPipeline(txMapName, timeoutMapName), jobConfig);
 
         long totalTxNumber = 0;
         long begin = System.currentTimeMillis();
@@ -149,8 +160,8 @@ public class StatefulMapTest extends AbstractSoakTest {
             totalTxNumber += completedTxCount(txMap, logger, currentTxId);
         }
         replicatedMap.put(STOP_GENERATION_MESSAGE, 1L);
-        sleepSeconds(2 * txTimeoutSeconds);
-        cancelJobAndJoin(job);
+        sleepMillis(WAIT_TX_TIMEOUT_FACTOR * txTimeout);
+        cancelJobAndJoin(client, job);
         sleepSeconds(DELAY_BETWEEN_STATUS_CHECKS);
 
         long expectedTotalKeyCount = replicatedMap.remove(TOTAL_KEY_COUNT);
@@ -167,24 +178,23 @@ public class StatefulMapTest extends AbstractSoakTest {
                 new VerificationEntryProcessor(),
                 predicate(currentTxId - estimatedTxIdGap)
         );
-        long pendingTxs = verifiedTxs
-                .values().stream()
-                .mapToInt(o -> (int) o)
-                .filter(i -> i == 0)
-                .count();
-        long completedTxs = verifiedTxs
-                .values().stream()
-                .mapToInt(o -> (int) o)
-                .filter(i -> i == 1)
+        long timeoutTxs = verifiedTxs
+                .entrySet().stream()
+                .filter(e -> e.getValue().equals(0))
+                .peek(e -> logger.severe("Timeout for txId: " + e.getKey()))
                 .count();
 
-        logger.info(String.format("CurrentTxId: %d, currentMapSize: %d, pendingCount: %d, completedCount: %d",
-                currentTxId, txMap.size(), pendingTxs, completedTxs));
+        long completedTxs = verifiedTxs.size() - timeoutTxs;
+
+        logger.info(String.format("CurrentTxId: %d, currentMapSize: %d, timeoutCount: %d, completedCount: %d",
+                currentTxId, txMap.size(), timeoutTxs, completedTxs));
+
+        assertEquals(0, timeoutTxs);
 
         return completedTxs;
     }
 
-    private Pipeline buildPipeline() {
+    private Pipeline buildPipeline(String txMapName, String timeoutMapName) {
         Pipeline p = Pipeline.create();
         StreamSource<TransactionEvent> source = transactionEventSource(txPerSecond, generatorBatchCount);
 
@@ -192,7 +202,7 @@ public class StatefulMapTest extends AbstractSoakTest {
                 p.drawFrom(source).withTimestamps(TransactionEvent::timestamp, 0)
                  .groupingKey(TransactionEvent::transactionId)
                  .mapStateful(
-                         SECONDS.toMillis(txTimeoutSeconds),
+                         txTimeout,
                          () -> new TransactionEvent[2],
                          (startEnd, transactionId, transactionEvent) -> {
                              if (transactionId == Long.MAX_VALUE) {
@@ -213,21 +223,43 @@ public class StatefulMapTest extends AbstractSoakTest {
                              TransactionEvent startEvent = startEnd[0];
                              TransactionEvent endEvent = startEnd[1];
                              return (startEvent != null && endEvent != null) ?
-                                     entry(transactionId, endEvent.timestamp() - startEvent.timestamp())
-                                     : (startEvent != null) ? entry(transactionId, PENDING_CODE) : null;
+                                     entry(transactionId, endEvent.timestamp() - startEvent.timestamp()) : null;
                          },
-                         (startEnd, transactionId, wm) -> (startEnd[0] != null && startEnd[1] == null) ?
-                                 entry(transactionId, TIMED_OUT_CODE) : null
+                         (startEnd, transactionId, wm) -> {
+                             if (startEnd[0] != null && startEnd[1] == null) {
+                                 if (transactionId > 0) {
+                                     System.out.println("StatefulMapTest Timeout for txId: " + transactionId);
+                                 }
+                                 return entry(transactionId, TIMED_OUT_CODE);
+                             }
+                             return null;
+                         }
                  );
         streamStage
                 .filter(e -> e.getKey() < 0)
-                .drainTo(Sinks.mapWithMerging(TIMEOUT_TX_MAP, (oldValue, newValue) ->
-                        (newValue == PENDING_CODE && oldValue == TIMED_OUT_CODE) ? oldValue : newValue));
+                .drainTo(Sinks.remoteMapWithMerging(
+                        timeoutMapName,
+                        stableClusterClientConfig,
+                        (oldValue, newValue) -> {
+                            if (oldValue != null && !oldValue.equals(newValue)) {
+                                System.out.println("StatefulMapTest timeoutMap duplicate old: "
+                                        + oldValue + ", new: " + newValue);
+                            }
+                            return newValue;
+                        }));
 
         streamStage
                 .filter(e -> e.getKey() >= 0)
-                .drainTo(Sinks.mapWithMerging(TX_MAP, (oldValue, newValue) ->
-                        (newValue == PENDING_CODE && oldValue >= 0) ? oldValue : newValue));
+                .drainTo(Sinks.remoteMapWithMerging(
+                        txMapName,
+                        stableClusterClientConfig,
+                        (oldValue, newValue) -> {
+                            if (oldValue != null && !oldValue.equals(newValue)) {
+                                System.out.println("StatefulMapTest txMap duplicate old: "
+                                        + oldValue + ", new: " + newValue);
+                            }
+                            return newValue;
+                        }));
         return p;
     }
 

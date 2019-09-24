@@ -16,6 +16,7 @@
 
 package com.hazelcast.jet.tests.common;
 
+import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.core.JobStatus;
 
@@ -66,10 +67,12 @@ public final class Util {
                 expectedStatus, job.getStatus()));
     }
 
-    public static void cancelJobAndJoin(Job job) {
-        job.cancel();
+    public static void cancelJobAndJoin(JetInstance jet, Job job) {
+        // workaround, it should be fixed in Jet 3.2.1
+        Job jobForCancelling = jet.getJob(job.getName());
+        jobForCancelling.cancel();
         try {
-            job.join();
+            jobForCancelling.join();
         } catch (CancellationException ignored) {
         }
     }

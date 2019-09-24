@@ -24,6 +24,7 @@ import com.hazelcast.jet.kafka.KafkaSources;
 import com.hazelcast.jet.pipeline.Pipeline;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
 import com.hazelcast.jet.tests.common.QueueVerifier;
+import com.hazelcast.logging.ILogger;
 import com.hazelcast.logging.LoggingService;
 import com.hazelcast.util.UuidUtil;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -84,8 +85,9 @@ public class SnapshotTest extends AbstractSoakTest {
         jobCount = propertyInt("jobCount", 2);
         countPerTicker = propertyInt("countPerTicker", DEFAULT_COUNTER_PER_TICKER);
 
+        ILogger producerLogger = getLogger(SnapshotTradeProducer.class);
         producerFuture = producerExecutorService.submit(() -> {
-            try (SnapshotTradeProducer tradeProducer = new SnapshotTradeProducer(brokerUri)) {
+            try (SnapshotTradeProducer tradeProducer = new SnapshotTradeProducer(brokerUri, producerLogger)) {
                 tradeProducer.produce(TOPIC, countPerTicker);
             } catch (Exception e) {
                 e.printStackTrace();

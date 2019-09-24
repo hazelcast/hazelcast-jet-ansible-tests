@@ -34,7 +34,7 @@ public final class VerificationProcessor extends AbstractProcessor {
 
     private boolean processed;
     private long counter;
-    private PriorityQueue<Long> queue = new PriorityQueue<>();
+    private final PriorityQueue<Long> queue = new PriorityQueue<>();
     private ILogger logger;
 
     private VerificationProcessor(boolean odds) {
@@ -78,7 +78,7 @@ public final class VerificationProcessor extends AbstractProcessor {
     @Override
     protected void restoreFromSnapshot(Object key, Object value) {
         counter = (Long) ((BroadcastKey) key).key();
-        queue = (PriorityQueue<Long>) value;
+        queue.addAll((PriorityQueue<Long>) value);
 
         logger.info(String.format("restoreFromSnapshot odd: %b, counter: %d, size: %d, peek: %d",
                 odds, counter, queue.size(), queue.peek()));

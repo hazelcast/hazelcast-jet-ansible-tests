@@ -16,6 +16,7 @@
 
 package com.hazelcast.jet.tests.s3;
 
+import com.hazelcast.client.UndefinedErrorCodeException;
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.function.SupplierEx;
 import com.hazelcast.jet.impl.util.ExceptionUtil;
@@ -26,6 +27,7 @@ import com.hazelcast.jet.tests.common.AbstractSoakTest;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.core.ResponseInputStream;
+import software.amazon.awssdk.http.apache.ApacheHttpClient;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
@@ -33,6 +35,9 @@ import software.amazon.awssdk.services.s3.model.S3Object;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
+import java.net.SocketException;
+import java.net.SocketTimeoutException;
+import java.time.Duration;
 import java.util.Iterator;
 import java.util.StringTokenizer;
 import java.util.concurrent.TimeUnit;
@@ -41,6 +46,7 @@ import java.util.concurrent.locks.LockSupport;
 import static com.hazelcast.jet.aggregate.AggregateOperations.counting;
 import static com.hazelcast.jet.function.Functions.wholeItem;
 import static com.hazelcast.jet.pipeline.Sources.batchFromProcessor;
+import static com.hazelcast.jet.tests.common.Util.sleepSeconds;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Collections.singletonList;
 import static software.amazon.awssdk.regions.Region.US_EAST_1;
@@ -50,11 +56,14 @@ public class S3WordCountTest extends AbstractSoakTest {
 
     private static final int GET_OBJECT_RETRY_COUNT = 30;
     private static final long GET_OBJECT_RETRY_WAIT_TIME = TimeUnit.SECONDS.toNanos(1);
+    private static final int S3_CLIENT_CONNECTION_TIMEOUT_SECONDS = 10;
+    private static final int S3_CLIENT_SOCKET_TIMEOUT_MINUTES = 5;
 
     private static final String DEFAULT_BUCKET_NAME = "jet-soak-tests-bucket";
     private static final String RESULTS_PREFIX = "results/";
     private static final int DEFAULT_TOTAL = 400000;
     private static final int DEFAULT_DISTINCT = 50000;
+    private static final int DEFAULT_SLEEP_SECONDS = 4;
 
 
     private S3Client s3Client;
@@ -63,6 +72,7 @@ public class S3WordCountTest extends AbstractSoakTest {
     private String secretKey;
     private int distinct;
     private int totalWordCount;
+    private int sleepSeconds;
 
     public static void main(String[] args) throws Exception {
         new S3WordCountTest().run(args);
@@ -75,6 +85,7 @@ public class S3WordCountTest extends AbstractSoakTest {
         secretKey = property("secretKey", null);
         distinct = propertyInt("distinctWords", DEFAULT_DISTINCT);
         totalWordCount = propertyInt("totalWordCount", DEFAULT_TOTAL);
+        sleepSeconds = propertyInt("sleepSecondsBetweenJobs", DEFAULT_SLEEP_SECONDS);
 
         s3Client = clientSupplier().get();
         deleteBucketContents();
@@ -87,18 +98,33 @@ public class S3WordCountTest extends AbstractSoakTest {
         jet.newJob(p).join();
     }
 
+
     @Override
     protected void test() {
         long begin = System.currentTimeMillis();
         int jobNumber = 0;
+        int socketTimeoutNumber = 0;
         while ((System.currentTimeMillis() - begin) < durationInMillis) {
-            JobConfig jobConfig = new JobConfig();
-            jobConfig.setName("s3-test-" + jobNumber);
-            jet.newJob(pipeline(), jobConfig).join();
-            verify(jobNumber);
+            try {
+                JobConfig jobConfig = new JobConfig();
+                jobConfig.setName("s3-test-" + jobNumber);
+                jet.newJob(pipeline(), jobConfig).join();
+                verify(jobNumber);
+                sleepSeconds(sleepSeconds);
+            } catch (Throwable e) {
+                if (isSocketRelatedException(e)) {
+                    logger.warning("Socket timeout ", e);
+                    socketTimeoutNumber++;
+                    reInitClient();
+                } else {
+                    throw ExceptionUtil.rethrow(e);
+                }
+            }
             jobNumber++;
         }
-        logger.info(String.format("Total number of jobs finished %d", jobNumber));
+        long thresholdForSocketTimeout = TimeUnit.MILLISECONDS.toHours(durationInMillis) + 1;
+        logger.info(String.format("Total number of jobs finished: %d, socketTimeout: %d", jobNumber, socketTimeoutNumber));
+        assertTrue("Socket timeout number is too big", thresholdForSocketTimeout > socketTimeoutNumber);
     }
 
     private Pipeline pipeline() {
@@ -118,8 +144,9 @@ public class S3WordCountTest extends AbstractSoakTest {
     }
 
     private void verify(int jobNumber) {
-        Iterator<S3Object> iterator = s3Client.listObjectsV2Paginator(
-                b -> b.bucket(bucketName).prefix(RESULTS_PREFIX)).contents().iterator();
+        Iterator<S3Object> iterator = listObjectsV2PaginatorWithRetry(jobNumber);
+        assertTrue(iterator != null);
+        assertTrue(iterator.hasNext());
 
         int wordNumber = 0;
         int totalNumber = 0;
@@ -141,9 +168,7 @@ public class S3WordCountTest extends AbstractSoakTest {
         assertEquals(distinct, wordNumber);
         assertEquals(totalWordCount, totalNumber);
 
-        s3Client.listObjectsV2Paginator(b -> b.bucket(bucketName).prefix(RESULTS_PREFIX))
-                .contents()
-                .forEach(s3Object -> s3Client.deleteObject(b -> b.bucket(bucketName).key(s3Object.key())));
+        deleteResults();
     }
 
     /**
@@ -163,13 +188,48 @@ public class S3WordCountTest extends AbstractSoakTest {
         throw exception;
     }
 
+    private Iterator<S3Object> listObjectsV2PaginatorWithRetry(int jobNumber) {
+        Iterator<S3Object> iterator = null;
+        for (int i = 0; i < GET_OBJECT_RETRY_COUNT; i++) {
+            iterator = s3Client.listObjectsV2Paginator(
+                    b -> b.bucket(bucketName).prefix(RESULTS_PREFIX)).contents().iterator();
+            if (iterator != null && iterator.hasNext()) {
+                return iterator;
+            }
+            logger.warning(String.format("listObjectsV2Paginator failed for job: %d", jobNumber));
+            LockSupport.parkNanos(GET_OBJECT_RETRY_WAIT_TIME);
+        }
+        return iterator;
+    }
 
     @Override
     protected void teardown(Throwable t) throws Exception {
-        if (t != null) {
+        if (t == null && s3Client != null) {
             deleteBucketContents();
         }
+        if (s3Client != null) {
+            s3Client.close();
+        }
     }
+
+    private void deleteResults() {
+        s3Client.listObjectsV2Paginator(b -> b.bucket(bucketName).prefix(RESULTS_PREFIX))
+                .contents()
+                .forEach(s3Object -> s3Client.deleteObject(b -> b.bucket(bucketName).key(s3Object.key())));
+    }
+
+    private void reInitClient() {
+        if (s3Client != null) {
+            try {
+                s3Client.close();
+            } catch (Exception e) {
+                logger.warning("Exception while closing s3Client for re-initialization");
+            }
+        }
+        s3Client = clientSupplier().get();
+        deleteResults();
+    }
+
 
     private SupplierEx<S3Client> clientSupplier() {
         String localAccessKey = accessKey;
@@ -179,8 +239,31 @@ public class S3WordCountTest extends AbstractSoakTest {
             return S3Client.builder()
                            .credentialsProvider(StaticCredentialsProvider.create(credentials))
                            .region(US_EAST_1)
+                           .httpClientBuilder(
+                                   ApacheHttpClient
+                                           .builder()
+                                           .connectionTimeout(Duration.ofSeconds(S3_CLIENT_CONNECTION_TIMEOUT_SECONDS))
+                                           .socketTimeout(Duration.ofMinutes(S3_CLIENT_SOCKET_TIMEOUT_MINUTES))
+
+                           )
                            .build();
         };
+    }
+
+    private boolean isSocketRelatedException(Throwable e) {
+        if (e instanceof SocketTimeoutException || e instanceof SocketException) {
+            return true;
+        }
+        if (e instanceof UndefinedErrorCodeException) {
+            String originClassName = ((UndefinedErrorCodeException) e).getOriginClassName();
+            return originClassName.equals(SocketTimeoutException.class.getName())
+                    || originClassName.equals(SocketException.class.getName());
+        }
+        Throwable cause = e.getCause();
+        if (cause != null) {
+            return isSocketRelatedException(cause);
+        }
+        return false;
     }
 
     private void deleteBucketContents() {

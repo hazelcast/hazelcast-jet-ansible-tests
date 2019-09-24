@@ -26,6 +26,7 @@ import com.hazelcast.jet.pipeline.SinkBuilder;
 import com.hazelcast.jet.pipeline.StreamStage;
 import com.hazelcast.jet.pipeline.WindowDefinition;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
+import com.hazelcast.logging.ILogger;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -77,7 +78,7 @@ public class EarlyResultsTest extends AbstractSoakTest {
 
         int windowSizeLocal = windowSize;
         Sink<KeyedWindowResult<String, Long>> verificationSink = SinkBuilder
-                .sinkBuilder("verification", c -> new VerificationContext(windowSizeLocal))
+                .sinkBuilder("verification", c -> new VerificationContext(c.logger(), windowSizeLocal))
                 .receiveFn(VerificationContext::verify)
                 .build();
 
@@ -100,20 +101,32 @@ public class EarlyResultsTest extends AbstractSoakTest {
     static class VerificationContext {
 
         private final int windowSize;
-        private Map<String, TickerWindow> tickerMap = new HashMap<>();
+        private final ILogger logger;
+        private final Map<String, TickerWindow> tickerMap;
 
-        VerificationContext(int windowSize) {
+        VerificationContext(ILogger logger, int windowSize) {
+            this.logger = logger;
             this.windowSize = windowSize;
+            this.tickerMap = new HashMap<>();
         }
 
         void verify(KeyedWindowResult<String, Long> result) {
             TickerWindow tickerWindow = tickerMap.computeIfAbsent(result.getKey(), TickerWindow::new);
+            // we have a result after the window advanced
+            // ignore if it is an early result, fail otherwise
+            if (result.start() < tickerWindow.start) {
+                logger.warning("Received a result after window advanced: " + result);
+                assertTrue(result.isEarly());
+                return;
+            }
             assertEquals(tickerWindow.start, result.start());
             if (result.isEarly()) {
                 assertTrue(windowSize >= result.getValue());
                 tickerWindow.hasEarly = true;
             } else {
-                assertTrue(tickerWindow.hasEarly);
+                if (!tickerWindow.hasEarly) {
+                    logger.warning("Not received any early-result for the final-result: " + result);
+                }
                 assertEquals(windowSize, (long) result.getValue());
                 tickerWindow.advance();
             }

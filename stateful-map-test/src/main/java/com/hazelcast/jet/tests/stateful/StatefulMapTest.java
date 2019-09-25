@@ -114,10 +114,14 @@ public class StatefulMapTest extends AbstractSoakTest {
 
         if (exceptions[0] != null) {
             logger.severe("Exception in Dynamic cluster test", exceptions[0]);
-            throw exceptions[0];
         }
         if (exceptions[1] != null) {
             logger.severe("Exception in Stable cluster test", exceptions[1]);
+        }
+        if (exceptions[0] != null) {
+            throw exceptions[0];
+        }
+        if (exceptions[1] != null) {
             throw exceptions[1];
         }
     }

@@ -250,7 +250,7 @@ public class StatefulMapTest extends AbstractSoakTest {
         MapConfig txMapConfig = new MapConfig(TX_MAP);
         txMapConfig.getHotRestartConfig().setEnabled(true);
 
-        MapConfig timeoutMapConfig = new MapConfig(TX_MAP);
+        MapConfig timeoutMapConfig = new MapConfig(TIMEOUT_TX_MAP);
         timeoutMapConfig.getHotRestartConfig().setEnabled(true);
 
         Config config = jet.getHazelcastInstance().getConfig();

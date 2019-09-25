@@ -16,6 +16,8 @@
 
 package com.hazelcast.jet.tests.stateful;
 
+import com.hazelcast.config.Config;
+import com.hazelcast.config.MapConfig;
 import com.hazelcast.core.ReplicatedMap;
 import com.hazelcast.jet.IMapJet;
 import com.hazelcast.jet.Jet;
@@ -57,7 +59,7 @@ public class StatefulMapTest extends AbstractSoakTest {
     static final long TIMED_OUT_CODE = -2;
 
     private static final String TX_MAP = "total-key-count-map";
-    private static final String TIMEOUT_TX_MAP = "timeout-key-count-verification";
+    private static final String TIMEOUT_TX_MAP = "timeout-key-count-map";
     private static final long PENDING_CODE = -1;
     private static final int DEFAULT_TX_TIMEOUT = 10;
     private static final int DEFAULT_GENERATOR_BATCH_COUNT = 100;
@@ -86,6 +88,8 @@ public class StatefulMapTest extends AbstractSoakTest {
         snapshotIntervalMillis = propertyInt("snapshotIntervalMillis", DEFAULT_SNAPSHOT_INTERVAL_MILLIS);
         int verificationGapMinutes = propertyInt("verificationGapMinutes", DEFAULT_VERIFICATION_GAP_MINUTES);
         estimatedTxIdGap = MINUTES.toSeconds(verificationGapMinutes) * txPerSecond / 2;
+
+        configureMapsWithHotRestart();
 
         stableClusterClient = Jet.newJetClient(remoteClusterClientConfig());
     }
@@ -240,5 +244,16 @@ public class StatefulMapTest extends AbstractSoakTest {
         if (stableClusterClient != null) {
             stableClusterClient.shutdown();
         }
+    }
+
+    private void configureMapsWithHotRestart() {
+        MapConfig txMapConfig = new MapConfig(TX_MAP);
+        txMapConfig.getHotRestartConfig().setEnabled(true);
+
+        MapConfig timeoutMapConfig = new MapConfig(TIMEOUT_TX_MAP);
+        timeoutMapConfig.getHotRestartConfig().setEnabled(true);
+
+        Config config = jet.getHazelcastInstance().getConfig();
+        config.addMapConfig(txMapConfig).addMapConfig(timeoutMapConfig);
     }
 }

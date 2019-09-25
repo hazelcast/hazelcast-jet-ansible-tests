@@ -102,6 +102,7 @@ public class StatefulMapTest extends AbstractSoakTest {
             try {
                 testInternal(jet, "Dynamic-StatefulMapTest");
             } catch (Throwable t) {
+                logger.severe("Exception in Dynamic cluster test", t);
                 exceptions[0] = t;
             }
         });
@@ -109,19 +110,14 @@ public class StatefulMapTest extends AbstractSoakTest {
             try {
                 testInternal(stableClusterClient, "Stable-StatefulMapTest");
             } catch (Throwable t) {
+                logger.severe("Exception in Stable cluster test", t);
                 exceptions[1] = t;
             }
         });
         executorService.shutdown();
         long extraDuration = 2 * SECONDS.toMillis(txTimeoutSeconds + DELAY_BETWEEN_STATUS_CHECKS);
         executorService.awaitTermination(durationInMillis + extraDuration, MILLISECONDS);
-
-        if (exceptions[0] != null) {
-            logger.severe("Exception in Dynamic cluster test", exceptions[0]);
-        }
-        if (exceptions[1] != null) {
-            logger.severe("Exception in Stable cluster test", exceptions[1]);
-        }
+        
         if (exceptions[0] != null) {
             throw exceptions[0];
         }

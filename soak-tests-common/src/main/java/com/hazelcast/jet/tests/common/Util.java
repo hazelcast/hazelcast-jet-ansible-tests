@@ -18,6 +18,7 @@ package com.hazelcast.jet.tests.common;
 
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.core.JobStatus;
+import com.hazelcast.logging.ILogger;
 
 import java.util.AbstractMap;
 import java.util.Map;
@@ -60,10 +61,13 @@ public final class Util {
                 expectedStatus, job.getStatus()));
     }
 
-    public static void cancelJobAndJoin(Job job) {
+    public static void cancelJobAndJoin(Job job, ILogger logger) {
+        logger.info("STARTING CANCELLATION FOR JOB " + job.getName() + " " + job.getIdString());
         job.cancel();
         try {
+            logger.info("TRY TO CALL JOIN FOR JOB " + job.getName() + " " + job.getIdString());
             job.join();
+            logger.info("JOIN FINISHED FOR JOB " + job.getName() + " " + job.getIdString());
         } catch (CancellationException ignored) {
         }
     }

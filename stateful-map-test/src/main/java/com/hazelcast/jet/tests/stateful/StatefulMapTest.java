@@ -155,7 +155,7 @@ public class StatefulMapTest extends AbstractSoakTest {
         }
         replicatedMap.put(STOP_GENERATION_MESSAGE, 1L);
         sleepMillis(WAIT_TX_TIMEOUT_FACTOR * txTimeout);
-        cancelJobAndJoin(job);
+        cancelJobAndJoin(job, logger);
         sleepSeconds(DELAY_BETWEEN_STATUS_CHECKS);
 
         long expectedTotalKeyCount = replicatedMap.remove(TOTAL_KEY_COUNT);

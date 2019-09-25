@@ -116,7 +116,7 @@ public class StatefulMapTest extends AbstractSoakTest {
         executorService.shutdown();
         long extraDuration = 2 * SECONDS.toMillis(txTimeoutSeconds + DELAY_BETWEEN_STATUS_CHECKS);
         executorService.awaitTermination(durationInMillis + extraDuration, MILLISECONDS);
-        
+
         if (exceptions[0] != null) {
             throw exceptions[0];
         }

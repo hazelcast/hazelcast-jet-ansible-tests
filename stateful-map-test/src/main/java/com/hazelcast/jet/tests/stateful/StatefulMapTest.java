@@ -67,6 +67,7 @@ public class StatefulMapTest extends AbstractSoakTest {
     private static final int DELAY_BETWEEN_STATUS_CHECKS = 30;
     private static final int DEFAULT_VERIFICATION_GAP_MINUTES = 1;
     private static final int DEFAULT_SNAPSHOT_INTERVAL_MILLIS = 5000;
+    private static final int WAIT_TX_TIMEOUT_FACTOR = 4;
 
     private JetInstance stableClusterClient;
     private int txTimeout;
@@ -115,7 +116,7 @@ public class StatefulMapTest extends AbstractSoakTest {
             }
         });
         executorService.shutdown();
-        long extraDuration = 4 * (SECONDS.toMillis(DELAY_BETWEEN_STATUS_CHECKS) + txTimeout);
+        long extraDuration = WAIT_TX_TIMEOUT_FACTOR * (SECONDS.toMillis(DELAY_BETWEEN_STATUS_CHECKS) + txTimeout);
         executorService.awaitTermination(durationInMillis + extraDuration, MILLISECONDS);
 
         if (exceptions[0] != null) {
@@ -153,7 +154,7 @@ public class StatefulMapTest extends AbstractSoakTest {
             totalTxNumber += completedTxCount(txMap, logger, currentTxId);
         }
         replicatedMap.put(STOP_GENERATION_MESSAGE, 1L);
-        sleepMillis(4 * txTimeout);
+        sleepMillis(WAIT_TX_TIMEOUT_FACTOR * txTimeout);
         cancelJobAndJoin(job);
         sleepSeconds(DELAY_BETWEEN_STATUS_CHECKS);
 

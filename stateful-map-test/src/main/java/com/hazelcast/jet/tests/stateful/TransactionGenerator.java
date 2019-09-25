@@ -74,7 +74,7 @@ public final class TransactionGenerator {
     private void generateTrades(SourceBuilder.SourceBuffer<TransactionEvent> buf) {
         if (start && replicatedMap.get(STOP_GENERATION_MESSAGE) != null) {
             //this is to advance wm and eventually evict expired transactions
-            buf.add(new TransactionEvent(null, Long.MAX_VALUE, Long.MAX_VALUE-1));
+            buf.add(new TransactionEvent(null, Long.MAX_VALUE, Long.MAX_VALUE - 1));
             parkNanos(nanosBetweenEvents);
             return;
         }

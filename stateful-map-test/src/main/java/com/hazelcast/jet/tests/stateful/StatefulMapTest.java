@@ -56,11 +56,10 @@ public class StatefulMapTest extends AbstractSoakTest {
     static final String TOTAL_KEY_COUNT = "total-key-count";
     static final String STOP_GENERATION_MESSAGE = "stop-generation";
     static final String CURRENT_TX_ID = "current-tx-id";
-    static final long TIMED_OUT_CODE = -2;
+    static final long TIMED_OUT_CODE = -1;
 
     private static final String TX_MAP = "total-key-count-map";
     private static final String TIMEOUT_TX_MAP = "timeout-key-count-map";
-    private static final long PENDING_CODE = -1;
     private static final int DEFAULT_TX_TIMEOUT = 10;
     private static final int DEFAULT_GENERATOR_BATCH_COUNT = 100;
     private static final int DEFAULT_TX_PER_SECOND = 1000;
@@ -171,19 +170,18 @@ public class StatefulMapTest extends AbstractSoakTest {
                 new VerificationEntryProcessor(),
                 predicate(currentTxId - estimatedTxIdGap)
         );
-        long pendingTxs = verifiedTxs
-                .values().stream()
-                .mapToInt(o -> (int) o)
-                .filter(i -> i == 0)
-                .count();
-        long completedTxs = verifiedTxs
-                .values().stream()
-                .mapToInt(o -> (int) o)
-                .filter(i -> i == 1)
+        long timeoutTxs = verifiedTxs
+                .entrySet().stream()
+                .filter(e -> e.getValue().equals(0))
+                .peek(e -> logger.severe("Timeout for txId: " + e.getKey()))
                 .count();
 
-        logger.info(String.format("CurrentTxId: %d, currentMapSize: %d, pendingCount: %d, completedCount: %d",
-                currentTxId, txMap.size(), pendingTxs, completedTxs));
+        long completedTxs = verifiedTxs.size() - timeoutTxs;
+
+        logger.info(String.format("CurrentTxId: %d, currentMapSize: %d, timeoutCount: %d, completedCount: %d",
+                currentTxId, txMap.size(), timeoutTxs, completedTxs));
+
+        assertEquals(0, timeoutTxs);
 
         return completedTxs;
     }
@@ -217,21 +215,35 @@ public class StatefulMapTest extends AbstractSoakTest {
                              TransactionEvent startEvent = startEnd[0];
                              TransactionEvent endEvent = startEnd[1];
                              return (startEvent != null && endEvent != null) ?
-                                     entry(transactionId, endEvent.timestamp() - startEvent.timestamp())
-                                     : (startEvent != null) ? entry(transactionId, PENDING_CODE) : null;
+                                     entry(transactionId, endEvent.timestamp() - startEvent.timestamp()) : null;
                          },
-                         (startEnd, transactionId, wm) -> (startEnd[0] != null && startEnd[1] == null) ?
-                                 entry(transactionId, TIMED_OUT_CODE) : null
+                         (startEnd, transactionId, wm) -> {
+                             if (startEnd[0] != null && startEnd[1] == null) {
+                                 if (transactionId > 0) {
+                                     System.out.println("StatefulMapTest Timeout for txId: " + transactionId);
+                                 }
+                                 return entry(transactionId, TIMED_OUT_CODE);
+                             }
+                             return null;
+                         }
                  );
         streamStage
                 .filter(e -> e.getKey() < 0)
-                .drainTo(Sinks.mapWithMerging(TIMEOUT_TX_MAP, (oldValue, newValue) ->
-                        (newValue == PENDING_CODE && oldValue == TIMED_OUT_CODE) ? oldValue : newValue));
+                .drainTo(Sinks.mapWithMerging(TIMEOUT_TX_MAP, (oldValue, newValue) -> {
+                    if (oldValue != null && !oldValue.equals(newValue)) {
+                        System.out.println("StatefulMapTest timeoutMap duplicate old: " + oldValue + ", new: " + newValue);
+                    }
+                    return newValue;
+                }));
 
         streamStage
                 .filter(e -> e.getKey() >= 0)
-                .drainTo(Sinks.mapWithMerging(TX_MAP, (oldValue, newValue) ->
-                        (newValue == PENDING_CODE && oldValue >= 0) ? oldValue : newValue));
+                .drainTo(Sinks.mapWithMerging(TX_MAP, (oldValue, newValue) -> {
+                    if (oldValue != null && !oldValue.equals(newValue)) {
+                        System.out.println("StatefulMapTest txMap duplicate old: " + oldValue + ", new: " + newValue);
+                    }
+                    return newValue;
+                }));
         return p;
     }
 

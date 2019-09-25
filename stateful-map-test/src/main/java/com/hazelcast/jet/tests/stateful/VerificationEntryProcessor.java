@@ -24,14 +24,9 @@ import java.util.Map;
 public class VerificationEntryProcessor extends AbstractEntryProcessor<Long, Long> {
     @Override
     public Integer process(Map.Entry<Long, Long> entry) {
-        if (entry.getValue() == StatefulMapTest.TIMED_OUT_CODE) {
-            throw new IllegalArgumentException(String.format("Transaction[%d} timeout", entry.getKey()));
-        }
-        if (entry.getValue() >= 0) {
-            entry.setValue(null);
-            return 1;
-        }
-        return 0;
+        Long value = entry.getValue();
+        entry.setValue(null);
+        return value == StatefulMapTest.TIMED_OUT_CODE ? 0 : 1;
     }
 
     static Predicate<Long, Long> predicate(long maxKey) {

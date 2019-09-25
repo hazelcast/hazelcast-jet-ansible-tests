@@ -43,6 +43,7 @@ import static com.hazelcast.jet.config.ProcessingGuarantee.NONE;
 import static com.hazelcast.jet.core.JobStatus.FAILED;
 import static com.hazelcast.jet.tests.common.Util.cancelJobAndJoin;
 import static com.hazelcast.jet.tests.common.Util.getJobStatusWithRetry;
+import static com.hazelcast.jet.tests.common.Util.sleepMillis;
 import static com.hazelcast.jet.tests.common.Util.sleepSeconds;
 import static com.hazelcast.jet.tests.stateful.TransactionGenerator.transactionEventSource;
 import static com.hazelcast.jet.tests.stateful.VerificationEntryProcessor.predicate;
@@ -60,7 +61,7 @@ public class StatefulMapTest extends AbstractSoakTest {
 
     private static final String TX_MAP = "total-key-count-map";
     private static final String TIMEOUT_TX_MAP = "timeout-key-count-map";
-    private static final int DEFAULT_TX_TIMEOUT = 10;
+    private static final int DEFAULT_TX_TIMEOUT = 5000;
     private static final int DEFAULT_GENERATOR_BATCH_COUNT = 100;
     private static final int DEFAULT_TX_PER_SECOND = 1000;
     private static final int DELAY_BETWEEN_STATUS_CHECKS = 30;
@@ -68,7 +69,7 @@ public class StatefulMapTest extends AbstractSoakTest {
     private static final int DEFAULT_SNAPSHOT_INTERVAL_MILLIS = 5000;
 
     private JetInstance stableClusterClient;
-    private int txTimeoutSeconds;
+    private int txTimeout;
     private int txPerSecond;
     private int generatorBatchCount;
     private int snapshotIntervalMillis;
@@ -81,7 +82,7 @@ public class StatefulMapTest extends AbstractSoakTest {
 
     @Override
     protected void init() throws Exception {
-        txTimeoutSeconds = propertyInt("txTimeoutSeconds", DEFAULT_TX_TIMEOUT);
+        txTimeout = propertyInt("txTimeout", DEFAULT_TX_TIMEOUT);
         txPerSecond = propertyInt("txPerSecond", DEFAULT_TX_PER_SECOND);
         generatorBatchCount = propertyInt("generatorBatchCount", DEFAULT_GENERATOR_BATCH_COUNT);
         snapshotIntervalMillis = propertyInt("snapshotIntervalMillis", DEFAULT_SNAPSHOT_INTERVAL_MILLIS);
@@ -114,7 +115,7 @@ public class StatefulMapTest extends AbstractSoakTest {
             }
         });
         executorService.shutdown();
-        long extraDuration = 2 * SECONDS.toMillis(txTimeoutSeconds + DELAY_BETWEEN_STATUS_CHECKS);
+        long extraDuration = 4 * (SECONDS.toMillis(DELAY_BETWEEN_STATUS_CHECKS) + txTimeout);
         executorService.awaitTermination(durationInMillis + extraDuration, MILLISECONDS);
 
         if (exceptions[0] != null) {
@@ -152,7 +153,7 @@ public class StatefulMapTest extends AbstractSoakTest {
             totalTxNumber += completedTxCount(txMap, logger, currentTxId);
         }
         replicatedMap.put(STOP_GENERATION_MESSAGE, 1L);
-        sleepSeconds(2 * txTimeoutSeconds);
+        sleepMillis(4 * txTimeout);
         cancelJobAndJoin(job);
         sleepSeconds(DELAY_BETWEEN_STATUS_CHECKS);
 
@@ -194,7 +195,7 @@ public class StatefulMapTest extends AbstractSoakTest {
                 p.drawFrom(source).withTimestamps(TransactionEvent::timestamp, 0)
                  .groupingKey(TransactionEvent::transactionId)
                  .mapStateful(
-                         SECONDS.toMillis(txTimeoutSeconds),
+                         txTimeout,
                          () -> new TransactionEvent[2],
                          (startEnd, transactionId, transactionEvent) -> {
                              if (transactionId == Long.MAX_VALUE) {

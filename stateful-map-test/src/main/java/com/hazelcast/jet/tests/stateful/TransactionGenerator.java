@@ -74,13 +74,14 @@ public final class TransactionGenerator {
     private void generateTrades(SourceBuilder.SourceBuffer<TransactionEvent> buf) {
         if (start && replicatedMap.get(STOP_GENERATION_MESSAGE) != null) {
             //this is to advance wm and eventually evict expired transactions
-            buf.add(new TransactionEvent(null, Long.MAX_VALUE, System.currentTimeMillis()));
+            buf.add(new TransactionEvent(null, Long.MAX_VALUE, Long.MAX_VALUE-1));
             parkNanos(nanosBetweenEvents);
             return;
         }
         Type type = start ? Type.START : Type.END;
         for (int i = 0; i < batchCount; i++) {
-            buf.add(new TransactionEvent(type, txId + i, System.currentTimeMillis()));
+            long id = txId + i;
+            buf.add(new TransactionEvent(type, id, id));
             parkNanos(nanosBetweenEvents);
         }
         start = !start;
@@ -89,7 +90,7 @@ public final class TransactionGenerator {
         //Eventually the transaction will be evicted and marked as timeout
         //a single tx is produced per batch and txId<0
         if (start) {
-            buf.add(new TransactionEvent(Type.START, -txId, System.currentTimeMillis()));
+            buf.add(new TransactionEvent(Type.START, -txId, txId));
             replicatedMap.put(CURRENT_TX_ID, txId);
         }
     }

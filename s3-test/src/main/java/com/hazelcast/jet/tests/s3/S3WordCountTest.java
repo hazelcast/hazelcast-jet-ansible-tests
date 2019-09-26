@@ -26,6 +26,7 @@ import com.hazelcast.jet.tests.common.AbstractSoakTest;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.core.ResponseInputStream;
+import software.amazon.awssdk.http.apache.ApacheHttpClient;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
@@ -51,6 +52,8 @@ public class S3WordCountTest extends AbstractSoakTest {
 
     private static final int GET_OBJECT_RETRY_COUNT = 30;
     private static final long GET_OBJECT_RETRY_WAIT_TIME = TimeUnit.SECONDS.toNanos(1);
+    private static final int S3_CLIENT_CONNECTION_TIMEOUT_SECONDS = 10;
+    private static final int S3_CLIENT_SOCKET_TIMEOUT_MINUTES = 2;
 
     private static final String DEFAULT_BUCKET_NAME = "jet-soak-tests-bucket";
     private static final String RESULTS_PREFIX = "results/";
@@ -178,12 +181,16 @@ public class S3WordCountTest extends AbstractSoakTest {
         return () -> {
             AwsBasicCredentials credentials = AwsBasicCredentials.create(localAccessKey, localSecretKey);
             return S3Client.builder()
-                    .credentialsProvider(StaticCredentialsProvider.create(credentials))
-                    .region(US_EAST_1)
-                    .overrideConfiguration(b
-                            -> b.apiCallTimeout(Duration.ofMinutes(2))
-                            .apiCallAttemptTimeout(Duration.ofMinutes(2)))
-                    .build();
+                           .credentialsProvider(StaticCredentialsProvider.create(credentials))
+                           .region(US_EAST_1)
+                           .httpClientBuilder(
+                                   ApacheHttpClient
+                                           .builder()
+                                           .connectionTimeout(Duration.ofSeconds(S3_CLIENT_CONNECTION_TIMEOUT_SECONDS))
+                                           .socketTimeout(Duration.ofMinutes(S3_CLIENT_SOCKET_TIMEOUT_MINUTES))
+
+                           )
+                           .build();
         };
     }
 

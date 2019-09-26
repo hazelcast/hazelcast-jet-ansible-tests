@@ -33,6 +33,7 @@ import software.amazon.awssdk.services.s3.model.S3Object;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
+import java.time.Duration;
 import java.util.Iterator;
 import java.util.StringTokenizer;
 import java.util.concurrent.TimeUnit;
@@ -177,9 +178,12 @@ public class S3WordCountTest extends AbstractSoakTest {
         return () -> {
             AwsBasicCredentials credentials = AwsBasicCredentials.create(localAccessKey, localSecretKey);
             return S3Client.builder()
-                           .credentialsProvider(StaticCredentialsProvider.create(credentials))
-                           .region(US_EAST_1)
-                           .build();
+                    .credentialsProvider(StaticCredentialsProvider.create(credentials))
+                    .region(US_EAST_1)
+                    .overrideConfiguration(b
+                            -> b.apiCallTimeout(Duration.ofMinutes(2))
+                            .apiCallAttemptTimeout(Duration.ofMinutes(2)))
+                    .build();
         };
     }
 

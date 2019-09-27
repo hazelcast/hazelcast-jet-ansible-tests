@@ -236,7 +236,7 @@ public class StatefulMapTest extends AbstractSoakTest {
         streamStage
                 .filter(e -> e.getKey() < 0)
                 .drainTo(Sinks.remoteMapWithMerging(
-                        txMapName,
+                        timeoutMapName,
                         stableClusterClientConfig,
                         (oldValue, newValue) -> {
                             if (oldValue != null && !oldValue.equals(newValue)) {
@@ -249,7 +249,7 @@ public class StatefulMapTest extends AbstractSoakTest {
         streamStage
                 .filter(e -> e.getKey() >= 0)
                 .drainTo(Sinks.remoteMapWithMerging(
-                        timeoutMapName,
+                        txMapName,
                         stableClusterClientConfig,
                         (oldValue, newValue) -> {
                             if (oldValue != null && !oldValue.equals(newValue)) {

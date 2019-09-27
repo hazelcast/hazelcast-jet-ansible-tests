@@ -34,6 +34,7 @@ import software.amazon.awssdk.services.s3.model.S3Object;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
+import java.net.SocketTimeoutException;
 import java.time.Duration;
 import java.util.Iterator;
 import java.util.StringTokenizer;
@@ -53,7 +54,7 @@ public class S3WordCountTest extends AbstractSoakTest {
     private static final int GET_OBJECT_RETRY_COUNT = 30;
     private static final long GET_OBJECT_RETRY_WAIT_TIME = TimeUnit.SECONDS.toNanos(1);
     private static final int S3_CLIENT_CONNECTION_TIMEOUT_SECONDS = 10;
-    private static final int S3_CLIENT_SOCKET_TIMEOUT_MINUTES = 2;
+    private static final int S3_CLIENT_SOCKET_TIMEOUT_MINUTES = 5;
 
     private static final String DEFAULT_BUCKET_NAME = "jet-soak-tests-bucket";
     private static final String RESULTS_PREFIX = "results/";
@@ -95,14 +96,37 @@ public class S3WordCountTest extends AbstractSoakTest {
     protected void test() {
         long begin = System.currentTimeMillis();
         int jobNumber = 0;
+        int socketTimeoutNumber = 0;
         while ((System.currentTimeMillis() - begin) < durationInMillis) {
-            JobConfig jobConfig = new JobConfig();
-            jobConfig.setName("s3-test-" + jobNumber);
-            jet.newJob(pipeline(), jobConfig).join();
-            verify(jobNumber);
-            jobNumber++;
+            try {
+                JobConfig jobConfig = new JobConfig();
+                jobConfig.setName("s3-test-" + jobNumber);
+                jet.newJob(pipeline(), jobConfig).join();
+                verify(jobNumber);
+                jobNumber++;
+            } catch (Throwable e) {
+                if (isSocketTimeoutException(e)) {
+                    logger.warning("Socket timeout ", e);
+                    socketTimeoutNumber++;
+                } else {
+                    throw ExceptionUtil.rethrow(e);
+                }
+            }
         }
-        logger.info(String.format("Total number of jobs finished %d", jobNumber));
+        long thresholdForSocketTimeout = TimeUnit.MILLISECONDS.toHours(durationInMillis) + 1;
+        assertTrue("Socket timeout number is too big",thresholdForSocketTimeout > socketTimeoutNumber);
+        logger.info(String.format("Total number of jobs finished: %d, socketTimeout: %d", jobNumber, socketTimeoutNumber));
+    }
+
+    boolean isSocketTimeoutException(Throwable e) {
+        if (e instanceof SocketTimeoutException) {
+            return true;
+        }
+        Throwable cause = e.getCause();
+        if (cause != null) {
+            return isSocketTimeoutException(cause);
+        }
+        return false;
     }
 
     private Pipeline pipeline() {

@@ -16,6 +16,7 @@
 
 package com.hazelcast.jet.tests.s3;
 
+import com.hazelcast.client.UndefinedErrorCodeException;
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.function.SupplierEx;
 import com.hazelcast.jet.impl.util.ExceptionUtil;
@@ -118,9 +119,12 @@ public class S3WordCountTest extends AbstractSoakTest {
         logger.info(String.format("Total number of jobs finished: %d, socketTimeout: %d", jobNumber, socketTimeoutNumber));
     }
 
-    boolean isSocketTimeoutException(Throwable e) {
+    private boolean isSocketTimeoutException(Throwable e) {
         if (e instanceof SocketTimeoutException) {
             return true;
+        }
+        if (e instanceof UndefinedErrorCodeException) {
+            return ((UndefinedErrorCodeException) e).getOriginClassName().equals(SocketTimeoutException.class.getName());
         }
         Throwable cause = e.getCause();
         if (cause != null) {

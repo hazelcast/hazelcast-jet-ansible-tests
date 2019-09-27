@@ -16,8 +16,7 @@
 
 package com.hazelcast.jet.tests.stateful;
 
-import com.hazelcast.config.Config;
-import com.hazelcast.config.MapConfig;
+import com.hazelcast.client.config.ClientConfig;
 import com.hazelcast.core.ReplicatedMap;
 import com.hazelcast.jet.IMapJet;
 import com.hazelcast.jet.Jet;
@@ -59,8 +58,10 @@ public class StatefulMapTest extends AbstractSoakTest {
     static final String CURRENT_TX_ID = "current-tx-id";
     static final long TIMED_OUT_CODE = -1;
 
-    private static final String TX_MAP = "total-key-count-map";
-    private static final String TIMEOUT_TX_MAP = "timeout-key-count-map";
+    private static final String TX_MAP_STABLE = "total-key-count-map-stable";
+    private static final String TIMEOUT_TX_MAP_STABLE = "timeout-key-count-map-stable";
+    private static final String TX_MAP_DYNAMIC = "total-key-count-map-dynamic";
+    private static final String TIMEOUT_TX_MAP_DYNAMIC = "timeout-key-count-map-dynamic";
     private static final int DEFAULT_TX_TIMEOUT = 5000;
     private static final int DEFAULT_GENERATOR_BATCH_COUNT = 100;
     private static final int DEFAULT_TX_PER_SECOND = 1000;
@@ -69,6 +70,7 @@ public class StatefulMapTest extends AbstractSoakTest {
     private static final int DEFAULT_SNAPSHOT_INTERVAL_MILLIS = 5000;
     private static final int WAIT_TX_TIMEOUT_FACTOR = 4;
 
+    private ClientConfig stableClusterClientConfig;
     private JetInstance stableClusterClient;
     private int txTimeout;
     private int txPerSecond;
@@ -90,9 +92,8 @@ public class StatefulMapTest extends AbstractSoakTest {
         int verificationGapMinutes = propertyInt("verificationGapMinutes", DEFAULT_VERIFICATION_GAP_MINUTES);
         estimatedTxIdGap = MINUTES.toSeconds(verificationGapMinutes) * txPerSecond / 2;
 
-        configureMapsWithHotRestart();
-
-        stableClusterClient = Jet.newJetClient(remoteClusterClientConfig());
+        stableClusterClientConfig = remoteClusterClientConfig();
+        stableClusterClient = Jet.newJetClient(stableClusterClientConfig);
     }
 
     @Override
@@ -129,8 +130,11 @@ public class StatefulMapTest extends AbstractSoakTest {
 
     private void testInternal(JetInstance client, String name) {
         ReplicatedMap<String, Long> replicatedMap = client.getReplicatedMap(REPLICATED_MAP);
-        IMapJet<Long, Long> txMap = client.getMap(TX_MAP);
-        IMapJet<Long, Long> timeoutTxMap = client.getMap(TIMEOUT_TX_MAP);
+        String txMapName = name.startsWith("Stable") ? TX_MAP_STABLE : TX_MAP_DYNAMIC;
+        String timeoutMapName = name.startsWith("Stable") ? TIMEOUT_TX_MAP_STABLE : TIMEOUT_TX_MAP_DYNAMIC;
+        IMapJet<Long, Long> txMap = stableClusterClient.getMap(txMapName);
+        IMapJet<Long, Long> timeoutTxMap = stableClusterClient.getMap(timeoutMapName);
+
         ILogger logger = client.getHazelcastInstance().getLoggingService().getLogger(name);
 
         JobConfig jobConfig = new JobConfig()
@@ -138,7 +142,7 @@ public class StatefulMapTest extends AbstractSoakTest {
                 .setProcessingGuarantee(name.startsWith("Dynamic") ? EXACTLY_ONCE : NONE)
                 .setSnapshotIntervalMillis(snapshotIntervalMillis);
 
-        Job job = client.newJob(buildPipeline(), jobConfig);
+        Job job = client.newJob(buildPipeline(txMapName, timeoutMapName), jobConfig);
 
         long totalTxNumber = 0;
         long begin = System.currentTimeMillis();
@@ -188,7 +192,7 @@ public class StatefulMapTest extends AbstractSoakTest {
         return completedTxs;
     }
 
-    private Pipeline buildPipeline() {
+    private Pipeline buildPipeline(String txMapName, String timeoutMapName) {
         Pipeline p = Pipeline.create();
         StreamSource<TransactionEvent> source = transactionEventSource(txPerSecond, generatorBatchCount);
 
@@ -231,21 +235,29 @@ public class StatefulMapTest extends AbstractSoakTest {
                  );
         streamStage
                 .filter(e -> e.getKey() < 0)
-                .drainTo(Sinks.mapWithMerging(TIMEOUT_TX_MAP, (oldValue, newValue) -> {
-                    if (oldValue != null && !oldValue.equals(newValue)) {
-                        System.out.println("StatefulMapTest timeoutMap duplicate old: " + oldValue + ", new: " + newValue);
-                    }
-                    return newValue;
-                }));
+                .drainTo(Sinks.remoteMapWithMerging(
+                        txMapName,
+                        stableClusterClientConfig,
+                        (oldValue, newValue) -> {
+                            if (oldValue != null && !oldValue.equals(newValue)) {
+                                System.out.println("StatefulMapTest timeoutMap duplicate old: "
+                                        + oldValue + ", new: " + newValue);
+                            }
+                            return newValue;
+                        }));
 
         streamStage
                 .filter(e -> e.getKey() >= 0)
-                .drainTo(Sinks.mapWithMerging(TX_MAP, (oldValue, newValue) -> {
-                    if (oldValue != null && !oldValue.equals(newValue)) {
-                        System.out.println("StatefulMapTest txMap duplicate old: " + oldValue + ", new: " + newValue);
-                    }
-                    return newValue;
-                }));
+                .drainTo(Sinks.remoteMapWithMerging(
+                        timeoutMapName,
+                        stableClusterClientConfig,
+                        (oldValue, newValue) -> {
+                            if (oldValue != null && !oldValue.equals(newValue)) {
+                                System.out.println("StatefulMapTest txMap duplicate old: "
+                                        + oldValue + ", new: " + newValue);
+                            }
+                            return newValue;
+                        }));
         return p;
     }
 
@@ -254,16 +266,5 @@ public class StatefulMapTest extends AbstractSoakTest {
         if (stableClusterClient != null) {
             stableClusterClient.shutdown();
         }
-    }
-
-    private void configureMapsWithHotRestart() {
-        MapConfig txMapConfig = new MapConfig(TX_MAP);
-        txMapConfig.getHotRestartConfig().setEnabled(true);
-
-        MapConfig timeoutMapConfig = new MapConfig(TIMEOUT_TX_MAP);
-        timeoutMapConfig.getHotRestartConfig().setEnabled(true);
-
-        Config config = jet.getHazelcastInstance().getConfig();
-        config.addMapConfig(txMapConfig).addMapConfig(timeoutMapConfig);
     }
 }

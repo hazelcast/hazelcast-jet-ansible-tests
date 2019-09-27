@@ -115,7 +115,7 @@ public class S3WordCountTest extends AbstractSoakTest {
             }
         }
         long thresholdForSocketTimeout = TimeUnit.MILLISECONDS.toHours(durationInMillis) + 1;
-        assertTrue("Socket timeout number is too big",thresholdForSocketTimeout > socketTimeoutNumber);
+        assertTrue("Socket timeout number is too big", thresholdForSocketTimeout > socketTimeoutNumber);
         logger.info(String.format("Total number of jobs finished: %d, socketTimeout: %d", jobNumber, socketTimeoutNumber));
     }
 

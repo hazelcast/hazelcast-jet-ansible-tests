@@ -35,6 +35,7 @@ import software.amazon.awssdk.services.s3.model.S3Object;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
+import java.net.SocketException;
 import java.net.SocketTimeoutException;
 import java.time.Duration;
 import java.util.Iterator;
@@ -104,15 +105,15 @@ public class S3WordCountTest extends AbstractSoakTest {
                 jobConfig.setName("s3-test-" + jobNumber);
                 jet.newJob(pipeline(), jobConfig).join();
                 verify(jobNumber);
-                jobNumber++;
             } catch (Throwable e) {
-                if (isSocketTimeoutException(e)) {
+                if (isSocketTimeoutException(e) || isSocketException(e)) {
                     logger.warning("Socket timeout ", e);
                     socketTimeoutNumber++;
                 } else {
                     throw ExceptionUtil.rethrow(e);
                 }
             }
+            jobNumber++;
         }
         long thresholdForSocketTimeout = TimeUnit.MILLISECONDS.toHours(durationInMillis) + 1;
         assertTrue("Socket timeout number is too big", thresholdForSocketTimeout > socketTimeoutNumber);
@@ -129,6 +130,20 @@ public class S3WordCountTest extends AbstractSoakTest {
         Throwable cause = e.getCause();
         if (cause != null) {
             return isSocketTimeoutException(cause);
+        }
+        return false;
+    }
+
+    private boolean isSocketException(Throwable e) {
+        if (e instanceof SocketException) {
+            return true;
+        }
+        if (e instanceof UndefinedErrorCodeException) {
+            return ((UndefinedErrorCodeException) e).getOriginClassName().equals(SocketException.class.getName());
+        }
+        Throwable cause = e.getCause();
+        if (cause != null) {
+            return isSocketException(cause);
         }
         return false;
     }

@@ -106,7 +106,7 @@ public class S3WordCountTest extends AbstractSoakTest {
                 jet.newJob(pipeline(), jobConfig).join();
                 verify(jobNumber);
             } catch (Throwable e) {
-                if (isSocketTimeoutException(e) || isSocketException(e)) {
+                if (isSocketRelatedException(e)) {
                     logger.warning("Socket timeout ", e);
                     socketTimeoutNumber++;
                 } else {
@@ -120,30 +120,18 @@ public class S3WordCountTest extends AbstractSoakTest {
         logger.info(String.format("Total number of jobs finished: %d, socketTimeout: %d", jobNumber, socketTimeoutNumber));
     }
 
-    private boolean isSocketTimeoutException(Throwable e) {
-        if (e instanceof SocketTimeoutException) {
+    private boolean isSocketRelatedException(Throwable e) {
+        if (e instanceof SocketTimeoutException || e instanceof SocketException) {
             return true;
         }
         if (e instanceof UndefinedErrorCodeException) {
-            return ((UndefinedErrorCodeException) e).getOriginClassName().equals(SocketTimeoutException.class.getName());
+            String originClassName = ((UndefinedErrorCodeException) e).getOriginClassName();
+            return originClassName.equals(SocketTimeoutException.class.getName())
+                    || originClassName.equals(SocketException.class.getName());
         }
         Throwable cause = e.getCause();
         if (cause != null) {
-            return isSocketTimeoutException(cause);
-        }
-        return false;
-    }
-
-    private boolean isSocketException(Throwable e) {
-        if (e instanceof SocketException) {
-            return true;
-        }
-        if (e instanceof UndefinedErrorCodeException) {
-            return ((UndefinedErrorCodeException) e).getOriginClassName().equals(SocketException.class.getName());
-        }
-        Throwable cause = e.getCause();
-        if (cause != null) {
-            return isSocketException(cause);
+            return isSocketRelatedException(cause);
         }
         return false;
     }

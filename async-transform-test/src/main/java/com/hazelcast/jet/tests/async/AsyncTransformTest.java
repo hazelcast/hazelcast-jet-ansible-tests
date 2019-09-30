@@ -232,6 +232,7 @@ public class AsyncTransformTest extends AbstractSoakTest {
                     }
                 }
             } catch (Throwable e) {
+                logger.severe("Exception thrown for verifier using " + map.getName(), e);
                 error = e;
             } finally {
                 running = false;

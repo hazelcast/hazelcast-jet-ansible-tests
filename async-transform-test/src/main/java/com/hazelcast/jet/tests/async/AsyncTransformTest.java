@@ -215,6 +215,10 @@ public class AsyncTransformTest extends AbstractSoakTest {
                         if (peeked < counter) {
                             // duplicate key
                             queue.remove();
+                            continue;
+                        } else if (peeked > counter) {
+                            // the item might arrive later
+                            break;
                         } else if (peeked == counter) {
                             queue.remove();
                             counter++;

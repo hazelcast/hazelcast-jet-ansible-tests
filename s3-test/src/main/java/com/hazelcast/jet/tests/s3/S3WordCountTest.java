@@ -94,6 +94,7 @@ public class S3WordCountTest extends AbstractSoakTest {
         jet.newJob(p).join();
     }
 
+
     @Override
     protected void test() {
         long begin = System.currentTimeMillis();
@@ -109,6 +110,7 @@ public class S3WordCountTest extends AbstractSoakTest {
                 if (isSocketRelatedException(e)) {
                     logger.warning("Socket timeout ", e);
                     socketTimeoutNumber++;
+                    reInitClient();
                 } else {
                     throw ExceptionUtil.rethrow(e);
                 }
@@ -116,24 +118,8 @@ public class S3WordCountTest extends AbstractSoakTest {
             jobNumber++;
         }
         long thresholdForSocketTimeout = TimeUnit.MILLISECONDS.toHours(durationInMillis) + 1;
-        assertTrue("Socket timeout number is too big", thresholdForSocketTimeout > socketTimeoutNumber);
         logger.info(String.format("Total number of jobs finished: %d, socketTimeout: %d", jobNumber, socketTimeoutNumber));
-    }
-
-    private boolean isSocketRelatedException(Throwable e) {
-        if (e instanceof SocketTimeoutException || e instanceof SocketException) {
-            return true;
-        }
-        if (e instanceof UndefinedErrorCodeException) {
-            String originClassName = ((UndefinedErrorCodeException) e).getOriginClassName();
-            return originClassName.equals(SocketTimeoutException.class.getName())
-                    || originClassName.equals(SocketException.class.getName());
-        }
-        Throwable cause = e.getCause();
-        if (cause != null) {
-            return isSocketRelatedException(cause);
-        }
-        return false;
+        assertTrue("Socket timeout number is too big", thresholdForSocketTimeout > socketTimeoutNumber);
     }
 
     private Pipeline pipeline() {
@@ -176,9 +162,7 @@ public class S3WordCountTest extends AbstractSoakTest {
         assertEquals(distinct, wordNumber);
         assertEquals(totalWordCount, totalNumber);
 
-        s3Client.listObjectsV2Paginator(b -> b.bucket(bucketName).prefix(RESULTS_PREFIX))
-                .contents()
-                .forEach(s3Object -> s3Client.deleteObject(b -> b.bucket(bucketName).key(s3Object.key())));
+        deleteResults();
     }
 
     /**
@@ -201,10 +185,32 @@ public class S3WordCountTest extends AbstractSoakTest {
 
     @Override
     protected void teardown(Throwable t) throws Exception {
-        if (t != null) {
+        if (t != null && s3Client != null) {
             deleteBucketContents();
         }
+        if (s3Client != null) {
+            s3Client.close();
+        }
     }
+
+    private void deleteResults() {
+        s3Client.listObjectsV2Paginator(b -> b.bucket(bucketName).prefix(RESULTS_PREFIX))
+                .contents()
+                .forEach(s3Object -> s3Client.deleteObject(b -> b.bucket(bucketName).key(s3Object.key())));
+    }
+
+    private void reInitClient() {
+        if (s3Client != null) {
+            try {
+                s3Client.close();
+            } catch (Exception e) {
+                logger.warning("Exception while closing s3Client for re-initialization");
+            }
+        }
+        s3Client = clientSupplier().get();
+        deleteResults();
+    }
+
 
     private SupplierEx<S3Client> clientSupplier() {
         String localAccessKey = accessKey;
@@ -223,6 +229,22 @@ public class S3WordCountTest extends AbstractSoakTest {
                            )
                            .build();
         };
+    }
+
+    private boolean isSocketRelatedException(Throwable e) {
+        if (e instanceof SocketTimeoutException || e instanceof SocketException) {
+            return true;
+        }
+        if (e instanceof UndefinedErrorCodeException) {
+            String originClassName = ((UndefinedErrorCodeException) e).getOriginClassName();
+            return originClassName.equals(SocketTimeoutException.class.getName())
+                    || originClassName.equals(SocketException.class.getName());
+        }
+        Throwable cause = e.getCause();
+        if (cause != null) {
+            return isSocketRelatedException(cause);
+        }
+        return false;
     }
 
     private void deleteBucketContents() {

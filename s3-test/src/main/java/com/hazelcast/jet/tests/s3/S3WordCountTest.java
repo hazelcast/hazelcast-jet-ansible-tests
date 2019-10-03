@@ -46,6 +46,7 @@ import java.util.concurrent.locks.LockSupport;
 import static com.hazelcast.jet.aggregate.AggregateOperations.counting;
 import static com.hazelcast.jet.function.Functions.wholeItem;
 import static com.hazelcast.jet.pipeline.Sources.batchFromProcessor;
+import static com.hazelcast.jet.tests.common.Util.sleepSeconds;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Collections.singletonList;
 import static software.amazon.awssdk.regions.Region.US_EAST_1;
@@ -62,6 +63,7 @@ public class S3WordCountTest extends AbstractSoakTest {
     private static final String RESULTS_PREFIX = "results/";
     private static final int DEFAULT_TOTAL = 400000;
     private static final int DEFAULT_DISTINCT = 50000;
+    private static final int DEFAULT_SLEEP_SECONDS = 4;
 
 
     private S3Client s3Client;
@@ -70,6 +72,7 @@ public class S3WordCountTest extends AbstractSoakTest {
     private String secretKey;
     private int distinct;
     private int totalWordCount;
+    private int sleepSeconds;
 
     public static void main(String[] args) throws Exception {
         new S3WordCountTest().run(args);
@@ -82,6 +85,7 @@ public class S3WordCountTest extends AbstractSoakTest {
         secretKey = property("secretKey", null);
         distinct = propertyInt("distinctWords", DEFAULT_DISTINCT);
         totalWordCount = propertyInt("totalWordCount", DEFAULT_TOTAL);
+        sleepSeconds = propertyInt("sleepSecondsBetweenJobs", DEFAULT_SLEEP_SECONDS);
 
         s3Client = clientSupplier().get();
         deleteBucketContents();
@@ -106,6 +110,7 @@ public class S3WordCountTest extends AbstractSoakTest {
                 jobConfig.setName("s3-test-" + jobNumber);
                 jet.newJob(pipeline(), jobConfig).join();
                 verify(jobNumber);
+                sleepSeconds(sleepSeconds);
             } catch (Throwable e) {
                 if (isSocketRelatedException(e)) {
                     logger.warning("Socket timeout ", e);

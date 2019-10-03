@@ -37,11 +37,17 @@ public final class Util {
     }
 
     public static JobStatus getJobStatusWithRetry(Job job) {
-        try {
-            return job.getStatus();
-        } catch (Exception e) {
-            uncheckRun(() -> sleepSeconds(1));
-            return getJobStatusWithRetry(job);
+        final int numRetries = 16;
+        for (int count = 1; ; count++) {
+            try {
+                return job.getStatus();
+            } catch (Exception e) {
+                if (count == numRetries) {
+                    throw new RuntimeException("job.getStatus() tried " + numRetries + " times and failed. " +
+                            "Last failure: " + e, e);
+                }
+                uncheckRun(() -> sleepSeconds(1));
+            }
         }
     }
 

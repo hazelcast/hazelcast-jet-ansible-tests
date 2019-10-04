@@ -33,7 +33,7 @@ public class SnapshotTradeProducer implements AutoCloseable {
 
     private final KafkaProducer<Long, Long> producer;
     private final ILogger logger;
-    private List<Future<RecordMetadata>> futureList;
+    private final List<Future<RecordMetadata>> futureList = new ArrayList<>();
 
     public SnapshotTradeProducer(String broker, ILogger logger) {
         Properties props = new Properties();
@@ -51,17 +51,11 @@ public class SnapshotTradeProducer implements AutoCloseable {
     }
 
     public void produce(String topic, int countPerTicker) {
-        futureList = new ArrayList<>(countPerTicker);
-        long item = 0;
-        int itemCount = countPerTicker;
-        while (true) {
-            long sent = sendItems(topic, item, itemCount);
-            if (sent != itemCount) {
-                itemCount -= sent;
-                continue;
-            }
-            item++;
-            itemCount = countPerTicker;
+        for (long item = 0; item < Long.MAX_VALUE; item++) {
+            int remainingItems = countPerTicker;
+            do {
+                remainingItems -= sendItems(topic, item, remainingItems);
+            } while (remainingItems > 0);
             try {
                 Thread.sleep(SLEEPY_MILLIS);
             } catch (InterruptedException e) {

@@ -144,8 +144,9 @@ public class S3WordCountTest extends AbstractSoakTest {
     }
 
     private void verify(int jobNumber) {
-        Iterator<S3Object> iterator = s3Client.listObjectsV2Paginator(
-                b -> b.bucket(bucketName).prefix(RESULTS_PREFIX)).contents().iterator();
+        Iterator<S3Object> iterator = listObjectsV2PaginatorWithRetry(jobNumber);
+        assertTrue(iterator != null);
+        assertTrue(iterator.hasNext());
 
         int wordNumber = 0;
         int totalNumber = 0;
@@ -187,10 +188,23 @@ public class S3WordCountTest extends AbstractSoakTest {
         throw exception;
     }
 
+    private Iterator<S3Object> listObjectsV2PaginatorWithRetry(int jobNumber) {
+        Iterator<S3Object> iterator = null;
+        for (int i = 0; i < GET_OBJECT_RETRY_COUNT; i++) {
+            iterator = s3Client.listObjectsV2Paginator(
+                    b -> b.bucket(bucketName).prefix(RESULTS_PREFIX)).contents().iterator();
+            if (iterator != null && iterator.hasNext()) {
+                return iterator;
+            }
+            logger.warning(String.format("listObjectsV2Paginator failed for job: %d", jobNumber));
+            LockSupport.parkNanos(GET_OBJECT_RETRY_WAIT_TIME);
+        }
+        return iterator;
+    }
 
     @Override
     protected void teardown(Throwable t) throws Exception {
-        if (t != null && s3Client != null) {
+        if (t == null && s3Client != null) {
             deleteBucketContents();
         }
         if (s3Client != null) {

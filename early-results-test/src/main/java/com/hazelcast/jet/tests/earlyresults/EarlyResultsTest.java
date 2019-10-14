@@ -115,6 +115,7 @@ public class EarlyResultsTest extends AbstractSoakTest {
             // we have a result after the window advanced
             // ignore if it is an early result, fail otherwise
             if (result.start() < tickerWindow.start) {
+                logger.warning("Received a result after window advanced: " + result);
                 assertTrue(result.isEarly());
                 return;
             }

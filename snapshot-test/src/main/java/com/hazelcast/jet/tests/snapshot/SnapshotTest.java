@@ -16,6 +16,7 @@
 
 package com.hazelcast.jet.tests.snapshot;
 
+import com.hazelcast.internal.util.UuidUtil;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.config.ProcessingGuarantee;
@@ -26,7 +27,6 @@ import com.hazelcast.jet.tests.common.AbstractSoakTest;
 import com.hazelcast.jet.tests.common.QueueVerifier;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.logging.LoggingService;
-import com.hazelcast.util.UuidUtil;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -40,10 +40,10 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
+import static com.hazelcast.function.Functions.wholeItem;
 import static com.hazelcast.jet.aggregate.AggregateOperations.counting;
 import static com.hazelcast.jet.config.ProcessingGuarantee.AT_LEAST_ONCE;
 import static com.hazelcast.jet.config.ProcessingGuarantee.EXACTLY_ONCE;
-import static com.hazelcast.jet.function.Functions.wholeItem;
 import static com.hazelcast.jet.pipeline.WindowDefinition.sliding;
 
 public class SnapshotTest extends AbstractSoakTest {
@@ -164,13 +164,13 @@ public class SnapshotTest extends AbstractSoakTest {
         Properties propsForTrades = kafkaPropsForTrades(brokerUri, offsetReset);
         Properties propsForResult = kafkaPropsForResults(brokerUri, offsetReset);
 
-        pipeline.drawFrom(KafkaSources.kafka(propsForTrades, ConsumerRecord<Long, Long>::value, TOPIC))
+        pipeline.readFrom(KafkaSources.kafka(propsForTrades, ConsumerRecord<Long, Long>::value, TOPIC))
                 .withTimestamps(t -> t, lagMs)
                 .setName(String.format("ReadKafka(%s-%s-%d)", TOPIC, guarantee, jobIndex))
                 .window(sliding(windowSize, slideBy))
                 .groupingKey(wholeItem())
                 .aggregate(counting()).setName(String.format("AggregateCount(%s-%s-%d)", TOPIC, guarantee, jobIndex))
-                .drainTo(KafkaSinks.kafka(propsForResult, resultTopic))
+                .writeTo(KafkaSinks.kafka(propsForResult, resultTopic))
                 .setName(String.format("WriteKafka(%s)", resultTopic));
         return pipeline;
     }

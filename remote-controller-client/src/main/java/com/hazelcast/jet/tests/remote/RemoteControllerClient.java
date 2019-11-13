@@ -17,8 +17,8 @@
 package com.hazelcast.jet.tests.remote;
 
 import com.google.common.collect.Iterables;
+import com.hazelcast.cluster.Member;
 import com.hazelcast.core.HazelcastInstance;
-import com.hazelcast.core.Member;
 import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.server.JetBootstrap;
 import com.hazelcast.logging.ILogger;

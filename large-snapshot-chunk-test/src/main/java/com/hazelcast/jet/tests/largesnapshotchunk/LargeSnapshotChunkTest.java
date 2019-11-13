@@ -19,7 +19,7 @@ package com.hazelcast.jet.tests.largesnapshotchunk;
 import com.hazelcast.client.config.ClientConfig;
 import com.hazelcast.client.config.XmlClientConfigBuilder;
 import com.hazelcast.config.Config;
-import com.hazelcast.config.EventJournalConfig;
+import com.hazelcast.config.MapConfig;
 import com.hazelcast.jet.Jet;
 import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.Job;
@@ -76,7 +76,7 @@ public class LargeSnapshotChunkTest extends AbstractSoakTest {
     public void test() {
         Pipeline p = Pipeline.create();
 
-        p.drawFrom(Sources.<String, int[]>remoteMapJournal(SOURCE, remoteClientConfig,
+        p.readFrom(Sources.<String, int[]>remoteMapJournal(SOURCE, remoteClientConfig,
                 START_FROM_OLDEST))
          .withTimestamps(e -> e.getValue()[0], lagMs)
                 .setName("Stream from map(" + SOURCE + ")")
@@ -84,7 +84,7 @@ public class LargeSnapshotChunkTest extends AbstractSoakTest {
          .window(WindowDefinition.tumbling(WINDOW_SIZE))
          .aggregate(mapping(Entry::getValue, toList()))
                 .setName("WindowAggregate(toList)")
-         .drainTo(fromProcessor("VerificationSink", VerificationProcessor.supplier(WINDOW_SIZE)));
+         .writeTo(fromProcessor("VerificationSink", VerificationProcessor.supplier(WINDOW_SIZE)));
 
         JobConfig jobConfig = new JobConfig()
                 .setName("LargeSnapshotChunkTest")
@@ -125,9 +125,11 @@ public class LargeSnapshotChunkTest extends AbstractSoakTest {
         remoteClient = Jet.newJetClient(remoteClientConfig);
 
         Config config = remoteClient.getHazelcastInstance().getConfig();
-        config.addEventJournalConfig(
-                new EventJournalConfig().setMapName(SOURCE).setCapacity(EVENT_JOURNAL_CAPACITY)
-        );
+        MapConfig mapConfig = new MapConfig(SOURCE);
+        mapConfig.getEventJournalConfig()
+                .setCapacity(EVENT_JOURNAL_CAPACITY)
+                .setEnabled(true);
+        config.addMapConfig(mapConfig);
         remoteClient.getMap(SOURCE).clear();
         producer = new LargeSnapshotChunkProducer(logger, remoteClient, WINDOW_SIZE, remoteClient.getMap(SOURCE));
         producer.start();

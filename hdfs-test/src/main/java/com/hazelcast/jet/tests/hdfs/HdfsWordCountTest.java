@@ -43,9 +43,9 @@ import java.util.StringTokenizer;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+import static com.hazelcast.function.Functions.wholeItem;
 import static com.hazelcast.jet.aggregate.AggregateOperations.counting;
 import static com.hazelcast.jet.core.processor.Processors.noopP;
-import static com.hazelcast.jet.function.Functions.wholeItem;
 import static com.hazelcast.jet.pipeline.Sinks.fromProcessor;
 import static com.hazelcast.jet.pipeline.Sources.batchFromProcessor;
 import static com.hazelcast.jet.tests.hdfs.WordGenerator.wordGenerator;
@@ -84,7 +84,7 @@ public class HdfsWordCountTest extends AbstractSoakTest {
 
         BatchSource<Object> source = batchFromProcessor("generator", wordGenerator(hdfsUri, inputPath, distinct, total));
         Sink<Object> noopSink = fromProcessor("noopSink", ProcessorMetaSupplier.of(noopP()));
-        pipeline.drawFrom(source).drainTo(noopSink);
+        pipeline.readFrom(source).writeTo(noopSink);
 
         JobConfig jobConfig = new JobConfig();
         jobConfig.addClass(HdfsWordCountTest.class);
@@ -138,14 +138,14 @@ public class HdfsWordCountTest extends AbstractSoakTest {
         TextInputFormat.addInputPath(conf, new Path(inputPath));
         TextOutputFormat.setOutputPath(conf, new Path(outputPath + "/" + threadIndex));
 
-        pipeline.drawFrom(HdfsSources.hdfs(conf, (k, v) -> v.toString()))
+        pipeline.readFrom(HdfsSources.hdfs(conf, (k, v) -> v.toString()))
                 .flatMap((String line) -> {
                     StringTokenizer s = new StringTokenizer(line);
                     return () -> s.hasMoreTokens() ? s.nextToken() : null;
                 })
                 .groupingKey(wholeItem())
                 .aggregate(counting())
-                .drainTo(HdfsSinks.hdfs(conf));
+                .writeTo(HdfsSinks.hdfs(conf));
 
         return pipeline;
     }

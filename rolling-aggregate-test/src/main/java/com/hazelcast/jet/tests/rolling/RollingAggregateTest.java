@@ -26,12 +26,12 @@ import com.hazelcast.jet.pipeline.Sources;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
 import com.hazelcast.jet.tests.common.BasicEventJournalProducer;
 
+import static com.hazelcast.function.ComparatorEx.comparing;
 import static com.hazelcast.jet.Util.mapEventNewValue;
 import static com.hazelcast.jet.Util.mapPutEvents;
 import static com.hazelcast.jet.aggregate.AggregateOperations.maxBy;
 import static com.hazelcast.jet.config.ProcessingGuarantee.EXACTLY_ONCE;
 import static com.hazelcast.jet.core.JobStatus.FAILED;
-import static com.hazelcast.jet.function.ComparatorEx.comparing;
 import static com.hazelcast.jet.pipeline.JournalInitialPosition.START_FROM_OLDEST;
 import static com.hazelcast.jet.pipeline.Sinks.fromProcessor;
 import static com.hazelcast.jet.tests.common.Util.getJobStatusWithRetry;
@@ -66,11 +66,11 @@ public class RollingAggregateTest extends AbstractSoakTest {
     public void test() {
         Pipeline p = Pipeline.create();
 
-        p.drawFrom(Sources.<Long, Long, Long>remoteMapJournal(SOURCE, remoteClusterClientConfig,
-                mapPutEvents(), mapEventNewValue(), START_FROM_OLDEST))
+        p.readFrom(Sources.<Long, Long, Long>remoteMapJournal(SOURCE, remoteClusterClientConfig,
+                START_FROM_OLDEST, mapEventNewValue(), mapPutEvents()))
          .withoutTimestamps().setName("Stream from map(" + SOURCE + ")")
          .rollingAggregate(maxBy(comparing(val -> val))).setName("RollingAggregate(max)")
-         .drainTo(fromProcessor("VerificationSink", VerificationProcessor.supplier()));
+         .writeTo(fromProcessor("VerificationSink", VerificationProcessor.supplier()));
 
         JobConfig jobConfig = new JobConfig()
                 .setName("RollingAggregateTest")

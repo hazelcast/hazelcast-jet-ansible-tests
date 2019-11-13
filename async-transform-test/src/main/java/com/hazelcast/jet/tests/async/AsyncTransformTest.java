@@ -18,16 +18,15 @@ package com.hazelcast.jet.tests.async;
 
 import com.hazelcast.client.config.ClientConfig;
 import com.hazelcast.config.Config;
-import com.hazelcast.config.EventJournalConfig;
+import com.hazelcast.config.MapConfig;
 import com.hazelcast.core.HazelcastInstance;
-import com.hazelcast.core.IMap;
 import com.hazelcast.jet.Jet;
 import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.config.ProcessingGuarantee;
-import com.hazelcast.jet.pipeline.ContextFactory;
 import com.hazelcast.jet.pipeline.Pipeline;
+import com.hazelcast.jet.pipeline.ServiceFactory;
 import com.hazelcast.jet.pipeline.Sinks;
 import com.hazelcast.jet.pipeline.Sources;
 import com.hazelcast.jet.pipeline.StreamStage;
@@ -35,6 +34,7 @@ import com.hazelcast.jet.tests.common.AbstractSoakTest;
 import com.hazelcast.jet.tests.common.BasicEventJournalProducer;
 import com.hazelcast.jet.tests.eventjournal.EventJournalConsumer;
 import com.hazelcast.logging.ILogger;
+import com.hazelcast.map.IMap;
 
 import java.util.Map;
 import java.util.PriorityQueue;
@@ -83,13 +83,16 @@ public class AsyncTransformTest extends AbstractSoakTest {
         remoteClient = Jet.newJetClient(remoteClusterClientConfig);
 
         Config config = remoteClient.getHazelcastInstance().getConfig();
-        config.addEventJournalConfig(
-                new EventJournalConfig().setMapName(ORDERED_SINK).setCapacity(EVENT_JOURNAL_CAPACITY)
-        );
-        config.addEventJournalConfig(
-                new EventJournalConfig().setMapName(UNORDERED_SINK).setCapacity(EVENT_JOURNAL_CAPACITY)
-        );
-
+        MapConfig mapConfig = new MapConfig(ORDERED_SINK);
+        mapConfig.getEventJournalConfig()
+                .setCapacity(EVENT_JOURNAL_CAPACITY)
+                .setEnabled(true);
+        config.addMapConfig(mapConfig);
+        MapConfig mapConfig2 = new MapConfig(UNORDERED_SINK);
+        mapConfig2.getEventJournalConfig()
+                .setCapacity(EVENT_JOURNAL_CAPACITY)
+                .setEnabled(true);
+        config.addMapConfig(mapConfig2);
         producer = new BasicEventJournalProducer(remoteClient, SOURCE, EVENT_JOURNAL_CAPACITY);
         producer.start();
     }
@@ -123,22 +126,22 @@ public class AsyncTransformTest extends AbstractSoakTest {
     private Pipeline pipeline() {
         Pipeline p = Pipeline.create();
 
-        StreamStage<Long> sourceStage = p.drawFrom(Sources.<Long, Long, Long>remoteMapJournal(SOURCE,
-                remoteClusterClientConfig, mapPutEvents(), mapEventNewValue(), START_FROM_OLDEST))
+        StreamStage<Long> sourceStage = p.readFrom(Sources.<Long, Long, Long>remoteMapJournal(SOURCE,
+                remoteClusterClientConfig, START_FROM_OLDEST, mapEventNewValue(), mapPutEvents()))
                                          .withoutTimestamps().setName("Stream from map(" + SOURCE + ")");
 
         long maxSchedulerDelayMillisLocal = maxSchedulerDelayMillis;
-        ContextFactory<Scheduler> orderedContextFactory = ContextFactory
+        ServiceFactory<Scheduler> orderedContextFactory = ServiceFactory
                 .withCreateFn(x -> new Scheduler(SCHEDULER_CORE_SIZE, maxSchedulerDelayMillisLocal))
                 .withDestroyFn(Scheduler::shutdown)
                 .withLocalSharing();
-        sourceStage.mapUsingContextAsync(orderedContextFactory, Scheduler::schedule)
-                   .drainTo(Sinks.remoteMap(ORDERED_SINK, remoteClusterClientConfig));
+        sourceStage.mapUsingServiceAsync(orderedContextFactory, Scheduler::schedule)
+                .writeTo(Sinks.remoteMap(ORDERED_SINK, remoteClusterClientConfig));
 
-        ContextFactory<Scheduler> unorderedContextFactory = orderedContextFactory
+        ServiceFactory<Scheduler> unorderedContextFactory = orderedContextFactory
                 .withUnorderedAsyncResponses();
-        sourceStage.mapUsingContextAsync(unorderedContextFactory, Scheduler::schedule)
-                   .drainTo(Sinks.remoteMap(UNORDERED_SINK, remoteClusterClientConfig));
+        sourceStage.mapUsingServiceAsync(unorderedContextFactory, Scheduler::schedule)
+                .writeTo(Sinks.remoteMap(UNORDERED_SINK, remoteClusterClientConfig));
         return p;
     }
 

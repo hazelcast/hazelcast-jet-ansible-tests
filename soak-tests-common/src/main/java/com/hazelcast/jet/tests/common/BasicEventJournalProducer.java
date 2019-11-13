@@ -17,12 +17,11 @@
 package com.hazelcast.jet.tests.common;
 
 import com.hazelcast.config.Config;
-import com.hazelcast.config.EventJournalConfig;
+import com.hazelcast.config.MapConfig;
 import com.hazelcast.core.HazelcastInstance;
-import com.hazelcast.core.IMap;
-import com.hazelcast.jet.IMapJet;
 import com.hazelcast.jet.JetInstance;
 import com.hazelcast.logging.ILogger;
+import com.hazelcast.map.IMap;
 
 import static com.hazelcast.jet.tests.common.Util.sleepMillis;
 import static com.hazelcast.jet.tests.common.Util.sleepSeconds;
@@ -37,7 +36,7 @@ public class BasicEventJournalProducer {
     private static final int MAP_CLEAR_THRESHOLD = 5000;
     private static final int PRODUCER_SLEEP_MILLIS = 5;
 
-    private final IMapJet<Long, Long> map;
+    private final IMap<Long, Long> map;
     private final Thread thread;
     private final ILogger logger;
 
@@ -47,9 +46,11 @@ public class BasicEventJournalProducer {
     public BasicEventJournalProducer(JetInstance jet, String mapName, int capacity) {
         HazelcastInstance hz = jet.getHazelcastInstance();
         Config config = hz.getConfig();
-        config.addEventJournalConfig(
-                new EventJournalConfig().setMapName(mapName).setCapacity(capacity)
-        );
+        MapConfig mapConfig = new MapConfig(mapName);
+        mapConfig.getEventJournalConfig()
+                .setCapacity(capacity)
+                .setEnabled(true);
+        config.addMapConfig(mapConfig);
         this.logger = hz.getLoggingService().getLogger(BasicEventJournalProducer.class.getSimpleName() + "-" + mapName);
 
         this.map = jet.getMap(mapName);

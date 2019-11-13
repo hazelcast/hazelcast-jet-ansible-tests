@@ -16,6 +16,7 @@
 
 package com.hazelcast.jet.tests.kafka;
 
+import com.hazelcast.internal.util.UuidUtil;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.config.ProcessingGuarantee;
@@ -26,7 +27,6 @@ import com.hazelcast.jet.pipeline.Pipeline;
 import com.hazelcast.jet.pipeline.Sink;
 import com.hazelcast.jet.pipeline.SinkBuilder;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
-import com.hazelcast.util.UuidUtil;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -128,12 +128,12 @@ public class KafkaSessionWindowTest extends AbstractSoakTest {
         Properties kafkaProps = kafkaPropertiesForTrades(brokerUri, offsetReset);
         Properties propsForResult = kafkaPropertiesForResults(brokerUri, offsetReset);
 
-        pipeline.drawFrom(KafkaSources.<String, Long>kafka(kafkaProps, TOPIC))
+        pipeline.readFrom(KafkaSources.<String, Long>kafka(kafkaProps, TOPIC))
                 .withTimestamps(Map.Entry::getValue, lagMs)
                 .window(session(sessionTimeout))
                 .groupingKey(Map.Entry::getKey)
                 .aggregate(counting())
-                .drainTo(KafkaSinks.kafka(propsForResult, RESULTS_TOPIC));
+                .writeTo(KafkaSinks.kafka(propsForResult, RESULTS_TOPIC));
 
         return pipeline;
     }
@@ -142,9 +142,9 @@ public class KafkaSessionWindowTest extends AbstractSoakTest {
         Pipeline pipeline = Pipeline.create();
 
         Properties properties = kafkaPropertiesForResults(brokerUri, offsetReset);
-        pipeline.drawFrom(KafkaSources.<String, Long>kafka(properties, RESULTS_TOPIC))
+        pipeline.readFrom(KafkaSources.<String, Long>kafka(properties, RESULTS_TOPIC))
                 .withoutTimestamps()
-                .drainTo(buildVerificationSink());
+                .writeTo(buildVerificationSink());
 
         return pipeline;
     }

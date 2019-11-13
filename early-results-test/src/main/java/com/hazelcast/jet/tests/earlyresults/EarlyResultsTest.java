@@ -82,14 +82,14 @@ public class EarlyResultsTest extends AbstractSoakTest {
                 .receiveFn(VerificationContext::verify)
                 .build();
 
-        StreamStage<Map.Entry<String, Long>> sourceStage = p.drawFrom(TradeGenerator.tradeSource(tradePerSecond))
-                                          .withNativeTimestamps(0)
-                                          .setName("Stream from EarlyResult-TradeGenerator");
+        StreamStage<Map.Entry<String, Long>> sourceStage = p.readFrom(TradeGenerator.tradeSource(tradePerSecond))
+                .withNativeTimestamps(0)
+                .setName("Stream from EarlyResult-TradeGenerator");
 
         sourceStage.groupingKey(Map.Entry::getKey)
                    .window(WindowDefinition.tumbling(windowSize).setEarlyResultsPeriod(earlyResultsPeriod))
                    .aggregate(AggregateOperations.counting())
-                   .drainTo(verificationSink);
+                   .writeTo(verificationSink);
 
         return p;
     }

@@ -16,9 +16,9 @@
 
 package com.hazelcast.jet.tests.jdbc;
 
+import com.hazelcast.collection.IQueue;
 import com.hazelcast.config.Config;
 import com.hazelcast.config.QueueConfig;
-import com.hazelcast.core.IQueue;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.core.Processor.Context;
@@ -86,8 +86,8 @@ public class JdbcTest extends AbstractSoakTest {
 
 
         Pipeline writeToDBPipeline = Pipeline.create();
-        writeToDBPipeline.drawFrom(queueSource).withoutTimestamps()
-                         .drainTo(Sinks.jdbc("INSERT INTO PERSON_ALL(id, name) VALUES(?, ?)", connectionUrl,
+        writeToDBPipeline.readFrom(queueSource).withoutTimestamps()
+                         .writeTo(Sinks.jdbc("INSERT INTO PERSON_ALL(id, name) VALUES(?, ?)", connectionUrl,
                                  (stmt, entry) -> {
                                      stmt.setLong(1, entry.getKey());
                                      stmt.setString(2, entry.getValue());
@@ -95,9 +95,9 @@ public class JdbcTest extends AbstractSoakTest {
                          ));
 
         Pipeline readFromDBPipeline = Pipeline.create();
-        readFromDBPipeline.drawFrom(Sources.jdbc(connectionUrl, "select * from PERSON",
+        readFromDBPipeline.readFrom(Sources.jdbc(connectionUrl, "select * from PERSON",
                 resultSet -> resultSet.getString(2)))
-                          .drainTo(queueSink);
+                          .writeTo(queueSink);
 
         Job streamJob = jet.newJob(writeToDBPipeline, new JobConfig().setName("JDBC Test stream queue to table"));
 

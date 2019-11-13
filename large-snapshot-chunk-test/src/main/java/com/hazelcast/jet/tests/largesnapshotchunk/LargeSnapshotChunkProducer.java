@@ -16,10 +16,10 @@
 
 package com.hazelcast.jet.tests.largesnapshotchunk;
 
-import com.hazelcast.jet.IMapJet;
+import com.hazelcast.internal.nio.Bits;
 import com.hazelcast.jet.JetInstance;
 import com.hazelcast.logging.ILogger;
-import com.hazelcast.nio.Bits;
+import com.hazelcast.map.IMap;
 
 import java.util.stream.IntStream;
 
@@ -34,12 +34,12 @@ class LargeSnapshotChunkProducer {
     private final ILogger logger;
     private final String[] keys;
     private final int windowSize;
-    private final IMapJet<String, int[]> map;
+    private final IMap<String, int[]> map;
     private final Thread thread;
 
     private volatile boolean shutdown;
 
-    LargeSnapshotChunkProducer(ILogger logger, JetInstance instance, int windowSize, IMapJet<String, int[]> map) {
+    LargeSnapshotChunkProducer(ILogger logger, JetInstance instance, int windowSize, IMap<String, int[]> map) {
         this.logger = logger;
         this.windowSize = windowSize;
         this.map = map;

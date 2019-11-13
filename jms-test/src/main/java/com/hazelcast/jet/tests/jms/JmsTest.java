@@ -56,14 +56,14 @@ public class JmsTest extends AbstractSoakTest {
         String localBrokerUrl = brokerURL;
 
         Pipeline p1 = Pipeline.create();
-        p1.drawFrom(Sources.jmsQueue(() -> new ActiveMQConnectionFactory(localBrokerUrl), SOURCE_QUEUE))
+        p1.readFrom(Sources.jmsQueue(() -> new ActiveMQConnectionFactory(localBrokerUrl), SOURCE_QUEUE))
           .withoutTimestamps()
-          .drainTo(Sinks.jmsQueue(() -> new ActiveMQConnectionFactory(localBrokerUrl), MIDDLE_QUEUE));
+          .writeTo(Sinks.jmsQueue(() -> new ActiveMQConnectionFactory(localBrokerUrl), MIDDLE_QUEUE));
 
         Pipeline p2 = Pipeline.create();
-        p2.drawFrom(Sources.jmsQueue(() -> new ActiveMQConnectionFactory(localBrokerUrl), MIDDLE_QUEUE))
+        p2.readFrom(Sources.jmsQueue(() -> new ActiveMQConnectionFactory(localBrokerUrl), MIDDLE_QUEUE))
           .withoutTimestamps()
-          .drainTo(Sinks.jmsQueue(() -> new ActiveMQConnectionFactory(localBrokerUrl), SINK_QUEUE));
+          .writeTo(Sinks.jmsQueue(() -> new ActiveMQConnectionFactory(localBrokerUrl), SINK_QUEUE));
 
         Job job1 = jet.newJob(p1, new JobConfig().setName("JMS Test source to middle queue"));
         waitForJobStatus(job1, RUNNING);

@@ -16,12 +16,12 @@
 
 package com.hazelcast.jet.tests.stateful;
 
-import com.hazelcast.map.AbstractEntryProcessor;
+import com.hazelcast.map.EntryProcessor;
 import com.hazelcast.query.Predicate;
 
 import java.util.Map;
 
-public class VerificationEntryProcessor extends AbstractEntryProcessor<Long, Long> {
+public class VerificationEntryProcessor implements EntryProcessor<Long, Long, Integer> {
     @Override
     public Integer process(Map.Entry<Long, Long> entry) {
         Long value = entry.getValue();

@@ -18,11 +18,9 @@ package com.hazelcast.jet.tests.eventjournal;
 
 import com.hazelcast.client.config.ClientConfig;
 import com.hazelcast.config.Config;
-import com.hazelcast.config.EventJournalConfig;
+import com.hazelcast.config.MapConfig;
 import com.hazelcast.core.EntryEventType;
 import com.hazelcast.core.HazelcastInstance;
-import com.hazelcast.core.IMap;
-import com.hazelcast.jet.IMapJet;
 import com.hazelcast.jet.Jet;
 import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.Job;
@@ -36,13 +34,14 @@ import com.hazelcast.jet.tests.common.AbstractSoakTest;
 import com.hazelcast.jet.tests.common.QueueVerifier;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.logging.LoggingService;
-import com.hazelcast.map.journal.EventJournalMapEvent;
+import com.hazelcast.map.EventJournalMapEvent;
+import com.hazelcast.map.IMap;
 
 import java.io.IOException;
 
+import static com.hazelcast.function.Functions.wholeItem;
 import static com.hazelcast.jet.Util.mapPutEvents;
 import static com.hazelcast.jet.core.JobStatus.FAILED;
-import static com.hazelcast.jet.function.Functions.wholeItem;
 import static com.hazelcast.jet.pipeline.JournalInitialPosition.START_FROM_OLDEST;
 import static com.hazelcast.jet.pipeline.WindowDefinition.sliding;
 import static com.hazelcast.jet.tests.common.Util.getJobStatusWithRetry;
@@ -142,14 +141,14 @@ public class EventJournalTest extends AbstractSoakTest {
     private Pipeline pipeline() {
         Pipeline pipeline = Pipeline.create();
 
-        pipeline.drawFrom(Sources.<Long, Long, Long>remoteMapJournal(MAP_NAME, remoteClusterClientConfig,
-                e -> e.getType() == EntryEventType.ADDED, EventJournalMapEvent::getNewValue, START_FROM_OLDEST))
+        pipeline.readFrom(Sources.<Long, Long, Long>remoteMapJournal(MAP_NAME, remoteClusterClientConfig,
+                START_FROM_OLDEST, EventJournalMapEvent::getNewValue, e -> e.getType() == EntryEventType.ADDED))
                 .withTimestamps(t -> t, lagMs).setName("Read from map(" + MAP_NAME + ")")
                 .setLocalParallelism(partitionCount / memberSize)
                 .window(sliding(windowSize, slideBy))
                 .groupingKey(wholeItem())
                 .aggregate(AggregateOperations.counting()).setName("Aggregate(count)")
-                .drainTo(Sinks.remoteMap(RESULTS_MAP_NAME, remoteClusterClientConfig))
+                .writeTo(Sinks.remoteMap(RESULTS_MAP_NAME, remoteClusterClientConfig))
                 .setName("Write to map(" + RESULTS_MAP_NAME + ")");
         return pipeline;
     }
@@ -161,15 +160,19 @@ public class EventJournalTest extends AbstractSoakTest {
         memberSize = hazelcastInstance.getCluster().getMembers().size();
         partitionCount = hazelcastInstance.getPartitionService().getPartitions().size();
         Config config = hazelcastInstance.getConfig();
-        config.addEventJournalConfig(
-                new EventJournalConfig().setMapName(MAP_NAME).setCapacity(EVENT_JOURNAL_CAPACITY)
-        );
-        config.addEventJournalConfig(
-                new EventJournalConfig().setMapName(RESULTS_MAP_NAME).setCapacity(RESULTS_EVENT_JOURNAL_CAPACITY)
-        );
+        MapConfig mapConfig = new MapConfig(MAP_NAME);
+        mapConfig.getEventJournalConfig()
+                .setCapacity(EVENT_JOURNAL_CAPACITY)
+                .setEnabled(true);
+        config.addMapConfig(mapConfig);
+        MapConfig mapConfig2 = new MapConfig(RESULTS_MAP_NAME);
+        mapConfig2.getEventJournalConfig()
+                .setCapacity(RESULTS_EVENT_JOURNAL_CAPACITY)
+                .setEnabled(true);
+        config.addMapConfig(mapConfig2);
 
         ILogger producerLogger = getLogger(EventJournalTradeProducer.class);
-        IMapJet<Long, Long> map = remoteClient.getMap(MAP_NAME);
+        IMap<Long, Long> map = remoteClient.getMap(MAP_NAME);
         tradeProducer = new EventJournalTradeProducer(countPerTicker, map, timestampPerSecond, producerLogger);
 
     }

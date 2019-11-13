@@ -17,8 +17,8 @@
 package com.hazelcast.jet.tests.s3;
 
 import com.hazelcast.client.UndefinedErrorCodeException;
+import com.hazelcast.function.SupplierEx;
 import com.hazelcast.jet.config.JobConfig;
-import com.hazelcast.jet.function.SupplierEx;
 import com.hazelcast.jet.impl.util.ExceptionUtil;
 import com.hazelcast.jet.pipeline.Pipeline;
 import com.hazelcast.jet.s3.S3Sinks;
@@ -43,8 +43,8 @@ import java.util.StringTokenizer;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.LockSupport;
 
+import static com.hazelcast.function.Functions.wholeItem;
 import static com.hazelcast.jet.aggregate.AggregateOperations.counting;
-import static com.hazelcast.jet.function.Functions.wholeItem;
 import static com.hazelcast.jet.pipeline.Sources.batchFromProcessor;
 import static com.hazelcast.jet.tests.common.Util.sleepSeconds;
 import static java.nio.charset.StandardCharsets.UTF_8;
@@ -91,9 +91,9 @@ public class S3WordCountTest extends AbstractSoakTest {
         deleteBucketContents();
 
         Pipeline p = Pipeline.create();
-        p.drawFrom(batchFromProcessor("s3-word-generator",
+        p.readFrom(batchFromProcessor("s3-word-generator",
                 WordGenerator.metaSupplier(distinct, totalWordCount)))
-         .drainTo(S3Sinks.s3(bucketName, clientSupplier()));
+         .writeTo(S3Sinks.s3(bucketName, clientSupplier()));
 
         jet.newJob(p).join();
     }
@@ -130,14 +130,14 @@ public class S3WordCountTest extends AbstractSoakTest {
     private Pipeline pipeline() {
         Pipeline pipeline = Pipeline.create();
 
-        pipeline.drawFrom(S3Sources.s3(singletonList(bucketName), null, clientSupplier()))
+        pipeline.readFrom(S3Sources.s3(singletonList(bucketName), null, clientSupplier()))
                 .flatMap((String line) -> {
                     StringTokenizer s = new StringTokenizer(line);
                     return () -> s.hasMoreTokens() ? s.nextToken() : null;
                 })
                 .groupingKey(wholeItem())
                 .aggregate(counting())
-                .drainTo(S3Sinks.s3(bucketName, RESULTS_PREFIX, UTF_8,
+                .writeTo(S3Sinks.s3(bucketName, RESULTS_PREFIX, UTF_8,
                         clientSupplier(), e -> e.getKey() + " " + e.getValue()));
 
         return pipeline;

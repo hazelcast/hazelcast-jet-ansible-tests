@@ -16,13 +16,13 @@
 
 package com.hazelcast.jet.tests.eventjournal;
 
-import com.hazelcast.core.ExecutionCallback;
-import com.hazelcast.jet.IMapJet;
 import com.hazelcast.logging.ILogger;
+import com.hazelcast.map.IMap;
 
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.LockSupport;
+import java.util.function.BiConsumer;
 
 import static com.hazelcast.jet.impl.util.Util.toLocalTime;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
@@ -34,13 +34,13 @@ public class EventJournalTradeProducer extends Thread {
 
     private final int countPerTicker;
     private final ILogger logger;
-    private final IMapJet<Long, Long> map;
+    private final IMap<Long, Long> map;
     private final int timestampPerSecond;
     private final AtomicLong realTimestamp = new AtomicLong();
     private final AtomicInteger pendingAsyncOps = new AtomicInteger();
     private volatile boolean running = true;
 
-    EventJournalTradeProducer(int countPerTicker, IMapJet<Long, Long> map, int timestampPerSecond, ILogger logger) {
+    EventJournalTradeProducer(int countPerTicker, IMap<Long, Long> map, int timestampPerSecond, ILogger logger) {
         this.countPerTicker = countPerTicker;
         this.map = map;
         this.timestampPerSecond = timestampPerSecond;
@@ -65,7 +65,7 @@ public class EventJournalTradeProducer extends Thread {
             }
             for (int i = 0; i < countPerTicker; i++) {
                 map.setAsync(key, timestamp)
-                   .andThen(new RetryRecursivelyCallback(key, timestamp));
+                        .whenComplete(new RetryRecursivelyBiConsumer(key, timestamp));
                 pendingAsyncOps.incrementAndGet();
                 key++;
             }
@@ -88,28 +88,26 @@ public class EventJournalTradeProducer extends Thread {
      * on success removes the key from map
      * on failure retries the set operation recursively
      */
-    private final class RetryRecursivelyCallback implements ExecutionCallback<Void> {
+    private final class RetryRecursivelyBiConsumer implements BiConsumer<Object, Throwable> {
 
         private final long key;
         private final long timestamp;
 
-        private RetryRecursivelyCallback(long key, long timestamp) {
+        private RetryRecursivelyBiConsumer(long key, long timestamp) {
             this.key = key;
             this.timestamp = timestamp;
         }
 
         @Override
-        public void onResponse(Void response) {
-            realTimestamp.updateAndGet(val -> Math.max(val, timestamp));
-            map.removeAsync(key);
-            pendingAsyncOps.decrementAndGet();
-        }
-
-        @Override
-        public void onFailure(Throwable t) {
-            logger.info("setAsync for (" + key + "," + timestamp + ") failed, retrying: " + t);
-            map.setAsync(key, timestamp)
-               .andThen(this);
+        public void accept(Object response, Throwable t) {
+            if (t == null) {
+                realTimestamp.updateAndGet(val -> Math.max(val, timestamp));
+                map.removeAsync(key);
+                pendingAsyncOps.decrementAndGet();
+            } else {
+                logger.info("setAsync for (" + key + "," + timestamp + ") failed, retrying: " + t);
+                map.setAsync(key, timestamp).whenComplete(this);
+            }
         }
     }
 }

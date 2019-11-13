@@ -17,8 +17,6 @@
 package com.hazelcast.jet.tests.stateful;
 
 import com.hazelcast.client.config.ClientConfig;
-import com.hazelcast.core.ReplicatedMap;
-import com.hazelcast.jet.IMapJet;
 import com.hazelcast.jet.Jet;
 import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.Job;
@@ -30,6 +28,8 @@ import com.hazelcast.jet.pipeline.StreamSource;
 import com.hazelcast.jet.pipeline.StreamStage;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
 import com.hazelcast.logging.ILogger;
+import com.hazelcast.map.IMap;
+import com.hazelcast.replicatedmap.ReplicatedMap;
 
 import java.util.Map;
 import java.util.Set;
@@ -134,8 +134,8 @@ public class StatefulMapTest extends AbstractSoakTest {
         ReplicatedMap<String, Long> replicatedMap = client.getReplicatedMap(REPLICATED_MAP);
         String txMapName = name.startsWith("Stable") ? TX_MAP_STABLE : TX_MAP_DYNAMIC;
         String timeoutMapName = name.startsWith("Stable") ? TIMEOUT_TX_MAP_STABLE : TIMEOUT_TX_MAP_DYNAMIC;
-        IMapJet<Long, Long> txMap = stableClusterClient.getMap(txMapName);
-        IMapJet<Long, Long> timeoutTxMap = stableClusterClient.getMap(timeoutMapName);
+        IMap<Long, Long> txMap = stableClusterClient.getMap(txMapName);
+        IMap<Long, Long> timeoutTxMap = stableClusterClient.getMap(timeoutMapName);
 
         ILogger logger = client.getHazelcastInstance().getLoggingService().getLogger(name);
 
@@ -173,8 +173,8 @@ public class StatefulMapTest extends AbstractSoakTest {
         assertEquals(name, expectedTotalKeyCount / generatorBatchCount, timeoutTxMap.size());
     }
 
-    private long completedTxCount(IMapJet<Long, Long> txMap, ILogger logger, long currentTxId) {
-        Map<Long, Object> verifiedTxs = txMap.executeOnEntries(
+    private long completedTxCount(IMap<Long, Long> txMap, ILogger logger, long currentTxId) {
+        Map<Long, Integer> verifiedTxs = txMap.executeOnEntries(
                 new VerificationEntryProcessor(),
                 predicate(currentTxId - estimatedTxIdGap)
         );
@@ -199,7 +199,7 @@ public class StatefulMapTest extends AbstractSoakTest {
         StreamSource<TransactionEvent> source = transactionEventSource(txPerSecond, generatorBatchCount);
 
         StreamStage<Map.Entry<Long, Long>> streamStage =
-                p.drawFrom(source).withTimestamps(TransactionEvent::timestamp, 0)
+                p.readFrom(source).withTimestamps(TransactionEvent::timestamp, 0)
                  .groupingKey(TransactionEvent::transactionId)
                  .mapStateful(
                          txTimeout,
@@ -237,7 +237,7 @@ public class StatefulMapTest extends AbstractSoakTest {
                  );
         streamStage
                 .filter(e -> e.getKey() < 0)
-                .drainTo(Sinks.remoteMapWithMerging(
+                .writeTo(Sinks.remoteMapWithMerging(
                         timeoutMapName,
                         stableClusterClientConfig,
                         (oldValue, newValue) -> {
@@ -250,7 +250,7 @@ public class StatefulMapTest extends AbstractSoakTest {
 
         streamStage
                 .filter(e -> e.getKey() >= 0)
-                .drainTo(Sinks.remoteMapWithMerging(
+                .writeTo(Sinks.remoteMapWithMerging(
                         txMapName,
                         stableClusterClientConfig,
                         (oldValue, newValue) -> {

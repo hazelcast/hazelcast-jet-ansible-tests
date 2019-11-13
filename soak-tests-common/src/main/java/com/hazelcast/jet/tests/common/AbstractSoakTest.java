@@ -19,14 +19,14 @@ package com.hazelcast.jet.tests.common;
 import com.hazelcast.client.config.ClientConfig;
 import com.hazelcast.client.config.XmlClientConfigBuilder;
 import com.hazelcast.config.CacheSimpleConfig;
+import com.hazelcast.function.PredicateEx;
 import com.hazelcast.jet.Jet;
 import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.config.JetClientConfig;
 import com.hazelcast.jet.config.JetConfig;
-import com.hazelcast.jet.function.PredicateEx;
 import com.hazelcast.jet.server.JetBootstrap;
 import com.hazelcast.logging.ILogger;
-import com.hazelcast.map.journal.EventJournalMapEvent;
+import com.hazelcast.map.EventJournalMapEvent;
 
 import java.io.IOException;
 

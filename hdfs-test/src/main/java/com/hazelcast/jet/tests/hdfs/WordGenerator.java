@@ -16,15 +16,15 @@
 
 package com.hazelcast.jet.tests.hdfs;
 
-import com.hazelcast.core.Member;
+import com.hazelcast.cluster.Address;
+import com.hazelcast.cluster.Member;
+import com.hazelcast.function.BiFunctionEx;
 import com.hazelcast.jet.core.AbstractProcessor;
 import com.hazelcast.jet.core.Processor;
 import com.hazelcast.jet.core.ProcessorMetaSupplier;
 import com.hazelcast.jet.core.ProcessorSupplier;
 import com.hazelcast.jet.core.processor.Processors;
-import com.hazelcast.jet.function.BiFunctionEx;
-import com.hazelcast.nio.Address;
-import com.hazelcast.util.ExceptionUtil;
+import com.hazelcast.jet.impl.util.ExceptionUtil;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocalFileSystem;
@@ -37,6 +37,7 @@ import java.io.OutputStreamWriter;
 import java.net.URI;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -104,7 +105,7 @@ public final class WordGenerator extends AbstractProcessor {
 
         private final BiFunctionEx<String, Integer, Processor> processorF;
 
-        private transient Map<Address, String> addressUuidMap;
+        private transient Map<Address, UUID> addressUuidMap;
 
         MetaSupplier(BiFunctionEx<String, Integer, Processor> processorF) {
             this.processorF = processorF;
@@ -113,14 +114,14 @@ public final class WordGenerator extends AbstractProcessor {
         @Override
         public void init(@Nonnull Context context) {
             addressUuidMap = context.jetInstance().getCluster().getMembers()
-                                    .stream()
-                                    .collect(Collectors.toMap(Member::getAddress, Member::getUuid));
+                    .stream()
+                    .collect(Collectors.toMap(Member::getAddress, Member::getUuid));
         }
 
         @Nonnull
         @Override
         public Function<Address, ProcessorSupplier> get(@Nonnull List<Address> addresses) {
-            return address -> processorSupplier(processorF, addressUuidMap.get(address), addresses.size());
+            return address -> processorSupplier(processorF, addressUuidMap.get(address).toString(), addresses.size());
         }
 
         private static ProcessorSupplier processorSupplier(BiFunction<String, Integer, Processor> processorF,

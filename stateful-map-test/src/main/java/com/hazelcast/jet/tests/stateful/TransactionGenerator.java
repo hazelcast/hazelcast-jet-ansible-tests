@@ -16,7 +16,7 @@
 
 package com.hazelcast.jet.tests.stateful;
 
-import com.hazelcast.core.ReplicatedMap;
+import com.hazelcast.replicatedmap.ReplicatedMap;
 import com.hazelcast.jet.core.Processor.Context;
 import com.hazelcast.jet.pipeline.SourceBuilder;
 import com.hazelcast.jet.pipeline.StreamSource;

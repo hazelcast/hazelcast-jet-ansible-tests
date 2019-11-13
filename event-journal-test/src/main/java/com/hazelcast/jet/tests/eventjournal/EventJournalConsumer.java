@@ -16,15 +16,15 @@
 
 package com.hazelcast.jet.tests.eventjournal;
 
-import com.hazelcast.client.proxy.ClientMapProxy;
-import com.hazelcast.core.ICompletableFuture;
-import com.hazelcast.core.IMap;
-import com.hazelcast.jet.function.PredicateEx;
-import com.hazelcast.map.journal.EventJournalMapEvent;
+import com.hazelcast.client.impl.proxy.ClientMapProxy;
+import com.hazelcast.function.PredicateEx;
+import com.hazelcast.map.EventJournalMapEvent;
+import com.hazelcast.map.IMap;
 import com.hazelcast.ringbuffer.ReadResultSet;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 import java.util.stream.StreamSupport;
 
@@ -48,14 +48,14 @@ public class EventJournalConsumer<K, V> {
 
     public boolean drain(Consumer<EventJournalMapEvent<K, V>> consumer) throws Exception {
         boolean isEmpty = true;
-        List<ICompletableFuture<ReadResultSet<EventJournalMapEvent<K, V>>>> futureList = new ArrayList<>();
+        List<CompletableFuture<ReadResultSet<EventJournalMapEvent<K, V>>>> futureList = new ArrayList<>();
         for (int i = 0; i < partitionCount; i++) {
-            ICompletableFuture<ReadResultSet<EventJournalMapEvent<K, V>>> f = proxy.readFromEventJournal(
+            CompletableFuture<ReadResultSet<EventJournalMapEvent<K, V>>> f = proxy.readFromEventJournal(
                     offsets[i], 0, POLL_COUNT, i, null, null);
             futureList.add(f);
         }
         for (int i = 0; i < partitionCount; i++) {
-            ICompletableFuture<ReadResultSet<EventJournalMapEvent<K, V>>> future = futureList.get(i);
+            CompletableFuture<ReadResultSet<EventJournalMapEvent<K, V>>> future = futureList.get(i);
             ReadResultSet<EventJournalMapEvent<K, V>> resultSet = future.get();
             StreamSupport.stream(resultSet.spliterator(), false).filter(predicate).forEach(consumer);
             offsets[i] = offsets[i] + resultSet.readCount();

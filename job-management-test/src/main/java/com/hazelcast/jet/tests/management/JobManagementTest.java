@@ -17,17 +17,17 @@
 package com.hazelcast.jet.tests.management;
 
 import com.hazelcast.config.Config;
-import com.hazelcast.config.EventJournalConfig;
-import com.hazelcast.jet.IMapJet;
+import com.hazelcast.config.MapConfig;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.JobStateSnapshot;
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.config.ProcessingGuarantee;
-import com.hazelcast.jet.pipeline.ContextFactory;
 import com.hazelcast.jet.pipeline.Pipeline;
+import com.hazelcast.jet.pipeline.ServiceFactory;
 import com.hazelcast.jet.pipeline.Sinks;
 import com.hazelcast.jet.pipeline.Sources;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
+import com.hazelcast.map.IMap;
 
 import static com.hazelcast.jet.Util.mapEventNewValue;
 import static com.hazelcast.jet.core.JobStatus.RUNNING;
@@ -60,9 +60,11 @@ public class JobManagementTest extends AbstractSoakTest {
         snapshotIntervalMs = propertyInt("snapshotIntervalMs", DEFAULT_SNAPSHOT_INTERVAL);
 
         Config config = jet.getHazelcastInstance().getConfig();
-        config.addEventJournalConfig(
-                new EventJournalConfig().setMapName(SOURCE).setCapacity(EVENT_JOURNAL_CAPACITY)
-        );
+        MapConfig mapConfig = new MapConfig(SOURCE);
+        mapConfig.getEventJournalConfig()
+                .setCapacity(EVENT_JOURNAL_CAPACITY)
+                .setEnabled(true);
+        config.addMapConfig(mapConfig);
         producer = new Producer(jet.getMap(SOURCE));
         producer.start();
     }
@@ -128,22 +130,22 @@ public class JobManagementTest extends AbstractSoakTest {
 
     private static Pipeline pipeline(boolean odds) {
         Pipeline p = Pipeline.create();
-        p.drawFrom(Sources.mapJournal(SOURCE, filter(odds), mapEventNewValue(), START_FROM_OLDEST))
+        p.readFrom(Sources.mapJournal(SOURCE, START_FROM_OLDEST, mapEventNewValue(), filter(odds)))
          .withoutTimestamps()
          .groupingKey(l -> 0L)
-         .mapUsingContext(ContextFactory.withCreateFn(jet -> null), (c, k, v) -> v)
-         .drainTo(Sinks.fromProcessor("sink", VerificationProcessor.supplier(odds)));
+         .mapUsingService(ServiceFactory.withCreateFn(jet -> null), (c, k, v) -> v)
+         .writeTo(Sinks.fromProcessor("sink", VerificationProcessor.supplier(odds)));
         return p;
     }
 
     static class Producer {
 
-        private final IMapJet<Long, Long> map;
+        private final IMap<Long, Long> map;
         private final Thread thread;
 
         private volatile boolean producing = true;
 
-        Producer(IMapJet<Long, Long> map) {
+        Producer(IMap<Long, Long> map) {
             this.map = map;
             this.thread = new Thread(this::run);
         }

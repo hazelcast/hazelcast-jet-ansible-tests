@@ -18,8 +18,8 @@ package com.hazelcast.jet.tests.hdfs;
 
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.core.ProcessorMetaSupplier;
-import com.hazelcast.jet.hadoop.HdfsSinks;
-import com.hazelcast.jet.hadoop.HdfsSources;
+import com.hazelcast.jet.hadoop.HadoopSinks;
+import com.hazelcast.jet.hadoop.HadoopSources;
 import com.hazelcast.jet.pipeline.BatchSource;
 import com.hazelcast.jet.pipeline.Pipeline;
 import com.hazelcast.jet.pipeline.Sink;
@@ -138,14 +138,14 @@ public class HdfsWordCountTest extends AbstractSoakTest {
         TextInputFormat.addInputPath(conf, new Path(inputPath));
         TextOutputFormat.setOutputPath(conf, new Path(outputPath + "/" + threadIndex));
 
-        pipeline.readFrom(HdfsSources.hdfs(conf, (k, v) -> v.toString()))
+        pipeline.readFrom(HadoopSources.inputFormat(conf, (k, v) -> v.toString()))
                 .flatMap((String line) -> {
                     StringTokenizer s = new StringTokenizer(line);
                     return () -> s.hasMoreTokens() ? s.nextToken() : null;
                 })
                 .groupingKey(wholeItem())
                 .aggregate(counting())
-                .writeTo(HdfsSinks.hdfs(conf));
+                .writeTo(HadoopSinks.outputFormat(conf));
 
         return pipeline;
     }

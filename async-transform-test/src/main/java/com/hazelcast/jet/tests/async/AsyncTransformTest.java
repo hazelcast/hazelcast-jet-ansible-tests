@@ -48,6 +48,7 @@ import static com.hazelcast.jet.Util.mapEventNewValue;
 import static com.hazelcast.jet.Util.mapPutEvents;
 import static com.hazelcast.jet.core.JobStatus.FAILED;
 import static com.hazelcast.jet.pipeline.JournalInitialPosition.START_FROM_OLDEST;
+import static com.hazelcast.jet.pipeline.ServiceFactories.sharedService;
 import static com.hazelcast.jet.tests.common.Util.getJobStatusWithRetry;
 import static com.hazelcast.jet.tests.common.Util.sleepMinutes;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
@@ -131,14 +132,14 @@ public class AsyncTransformTest extends AbstractSoakTest {
                                          .withoutTimestamps().setName("Stream from map(" + SOURCE + ")");
 
         long maxSchedulerDelayMillisLocal = maxSchedulerDelayMillis;
-        ServiceFactory<Scheduler> orderedContextFactory = ServiceFactory
-                .withCreateFn(x -> new Scheduler(SCHEDULER_CORE_SIZE, maxSchedulerDelayMillisLocal))
-                .withDestroyFn(Scheduler::shutdown)
-                .withLocalSharing();
+        ServiceFactory<?, Scheduler> orderedContextFactory = sharedService(
+                () -> new Scheduler(SCHEDULER_CORE_SIZE, maxSchedulerDelayMillisLocal),
+                Scheduler::shutdown
+        );
         sourceStage.mapUsingServiceAsync(orderedContextFactory, Scheduler::schedule)
                 .writeTo(Sinks.remoteMap(ORDERED_SINK, remoteClusterClientConfig));
 
-        ServiceFactory<Scheduler> unorderedContextFactory = orderedContextFactory
+        ServiceFactory<?, Scheduler> unorderedContextFactory = orderedContextFactory
                 .withUnorderedAsyncResponses();
         sourceStage.mapUsingServiceAsync(unorderedContextFactory, Scheduler::schedule)
                 .writeTo(Sinks.remoteMap(UNORDERED_SINK, remoteClusterClientConfig));

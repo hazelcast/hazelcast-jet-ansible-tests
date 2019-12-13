@@ -18,12 +18,12 @@ package com.hazelcast.jet.tests.management;
 
 import com.hazelcast.config.Config;
 import com.hazelcast.config.MapConfig;
+import com.hazelcast.function.ConsumerEx;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.JobStateSnapshot;
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.config.ProcessingGuarantee;
 import com.hazelcast.jet.pipeline.Pipeline;
-import com.hazelcast.jet.pipeline.ServiceFactory;
 import com.hazelcast.jet.pipeline.Sinks;
 import com.hazelcast.jet.pipeline.Sources;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
@@ -33,6 +33,7 @@ import static com.hazelcast.jet.Util.mapEventNewValue;
 import static com.hazelcast.jet.core.JobStatus.RUNNING;
 import static com.hazelcast.jet.core.JobStatus.SUSPENDED;
 import static com.hazelcast.jet.pipeline.JournalInitialPosition.START_FROM_OLDEST;
+import static com.hazelcast.jet.pipeline.ServiceFactories.sharedService;
 import static com.hazelcast.jet.tests.common.Util.sleepMillis;
 import static com.hazelcast.jet.tests.common.Util.sleepMinutes;
 import static com.hazelcast.jet.tests.common.Util.sleepSeconds;
@@ -133,7 +134,7 @@ public class JobManagementTest extends AbstractSoakTest {
         p.readFrom(Sources.mapJournal(SOURCE, START_FROM_OLDEST, mapEventNewValue(), filter(odds)))
          .withoutTimestamps()
          .groupingKey(l -> 0L)
-         .mapUsingService(ServiceFactory.withCreateFn(jet -> null), (c, k, v) -> v)
+         .mapUsingService(sharedService(() -> null, ConsumerEx.noop()), (c, k, v) -> v)
          .writeTo(Sinks.fromProcessor("sink", VerificationProcessor.supplier(odds)));
         return p;
     }

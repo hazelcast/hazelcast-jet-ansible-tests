@@ -24,7 +24,6 @@ import com.hazelcast.jet.Jet;
 import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.config.JetClientConfig;
 import com.hazelcast.jet.config.JetConfig;
-import com.hazelcast.jet.server.JetBootstrap;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.map.EventJournalMapEvent;
 
@@ -57,7 +56,7 @@ public abstract class AbstractSoakTest {
             instances = new JetInstance[]{Jet.newJetInstance(config), Jet.newJetInstance(config)};
             jet = Jet.newJetClient();
         } else {
-            jet = JetBootstrap.getInstance();
+            jet = Jet.bootstrappedInstance();
         }
         logger = getLogger(getClass());
 

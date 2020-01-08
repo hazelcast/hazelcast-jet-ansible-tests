@@ -26,6 +26,7 @@
         <module>soak-tests-common</module>
         <module>stateful-map-test</module>
         <module>s3-test</module>
+        <module>twopc-kafka-to-kafka-test</module>
     </modules>
 
     <properties>

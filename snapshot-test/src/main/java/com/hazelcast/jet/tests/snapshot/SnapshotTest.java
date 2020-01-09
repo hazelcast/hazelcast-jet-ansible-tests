@@ -16,7 +16,10 @@
 
 package com.hazelcast.jet.tests.snapshot;
 
+import com.hazelcast.client.config.ClientConfig;
 import com.hazelcast.internal.util.UuidUtil;
+import com.hazelcast.jet.Jet;
+import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.config.ProcessingGuarantee;
@@ -45,6 +48,8 @@ import static com.hazelcast.jet.aggregate.AggregateOperations.counting;
 import static com.hazelcast.jet.config.ProcessingGuarantee.AT_LEAST_ONCE;
 import static com.hazelcast.jet.config.ProcessingGuarantee.EXACTLY_ONCE;
 import static com.hazelcast.jet.pipeline.WindowDefinition.sliding;
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
+import static java.util.concurrent.TimeUnit.SECONDS;
 
 public class SnapshotTest extends AbstractSoakTest {
 
@@ -57,6 +62,10 @@ public class SnapshotTest extends AbstractSoakTest {
     private static final String TOPIC = SnapshotTest.class.getSimpleName();
     private static final String RESULTS_TOPIC = TOPIC + "-RESULTS";
     private static final int POLL_TIMEOUT = 1000;
+    private static final int DELAY_AFTER_TEST_FINISHED_FACTOR = 60;
+
+    private ClientConfig stableClusterClientConfig;
+    private JetInstance stableClusterClient;
 
     private String brokerUri;
     private String offsetReset;
@@ -74,7 +83,8 @@ public class SnapshotTest extends AbstractSoakTest {
         new SnapshotTest().run(args);
     }
 
-    public void init() {
+    @Override
+    public void init() throws Exception {
         producerExecutorService = Executors.newSingleThreadExecutor();
         brokerUri = property("brokerUri", "localhost:9092");
         offsetReset = property("offsetReset", "earliest");
@@ -84,6 +94,9 @@ public class SnapshotTest extends AbstractSoakTest {
         slideBy = propertyInt("slideBy", DEFAULT_SLIDE_BY);
         jobCount = propertyInt("jobCount", 2);
         countPerTicker = propertyInt("countPerTicker", DEFAULT_COUNTER_PER_TICKER);
+
+        stableClusterClientConfig = remoteClusterClientConfig();
+        stableClusterClient = Jet.newJetClient(stableClusterClientConfig);
 
         ILogger producerLogger = getLogger(SnapshotTradeProducer.class);
         producerFuture = producerExecutorService.submit(() -> {
@@ -95,25 +108,63 @@ public class SnapshotTest extends AbstractSoakTest {
         });
     }
 
-    public void test() throws Exception {
-        logger.info("SnapshotTest jobCount: " + jobCount);
-        Job[] atLeastOnceJobs = submitJobs(AT_LEAST_ONCE);
-        Job[] exactlyOnceJobs = submitJobs(EXACTLY_ONCE);
+    @Override
+    public void test() throws Throwable {
+        Throwable[] exceptions = new Throwable[2];
+        ExecutorService executorService = Executors.newFixedThreadPool(2);
+        executorService.execute(() -> {
+            try {
+                testInternal(jet, "Dynamic");
+            } catch (Throwable t) {
+                logger.severe("Exception in Dynamic cluster test", t);
+                exceptions[0] = t;
+            }
+        });
+        executorService.execute(() -> {
+            try {
+                testInternal(stableClusterClient, "Stable");
+            } catch (Throwable t) {
+                logger.severe("Exception in Stable cluster test", t);
+                exceptions[1] = t;
+            }
+        });
+        executorService.shutdown();
+        long extraDuration = DELAY_AFTER_TEST_FINISHED_FACTOR * (SECONDS.toMillis(POLL_TIMEOUT));
+        executorService.awaitTermination(durationInMillis + extraDuration, MILLISECONDS);
+
+        if (exceptions[0] != null) {
+            logger.severe("Exception in Dynamic cluster test", exceptions[0]);
+        }
+        if (exceptions[1] != null) {
+            logger.severe("Exception in Stable cluster test", exceptions[1]);
+        }
+        if (exceptions[0] != null) {
+            throw exceptions[0];
+        }
+        if (exceptions[1] != null) {
+            throw exceptions[1];
+        }
+    }
+
+    public void testInternal(JetInstance client, String name) throws Exception {
+        logger.info("[" + name + "] SnapshotTest jobCount: " + jobCount);
+        Job[] atLeastOnceJobs = submitJobs(client, name, AT_LEAST_ONCE);
+        Job[] exactlyOnceJobs = submitJobs(client, name, EXACTLY_ONCE);
 
         int windowCount = windowSize / slideBy;
         LoggingService loggingService = jet.getHazelcastInstance().getLoggingService();
         QueueVerifier atLeastOnceVerifier = new QueueVerifier(loggingService,
-                "Verifier[" + AT_LEAST_ONCE + "]", windowCount * jobCount);
+                "Verifier[" + name + ", " + AT_LEAST_ONCE + "]", windowCount * jobCount);
         QueueVerifier exactlyOnceVerifier = new QueueVerifier(loggingService,
-                "Verifier[" + EXACTLY_ONCE + "]", windowCount * jobCount);
+                "Verifier[" + name + ", " + EXACTLY_ONCE + "]", windowCount * jobCount);
         atLeastOnceVerifier.start();
         exactlyOnceVerifier.start();
 
-        KafkaConsumer<Long, Long> consumer = new KafkaConsumer<>(kafkaPropsForResults(brokerUri, offsetReset));
+        KafkaConsumer<Long, Long> consumer = new KafkaConsumer<>(kafkaPropsForVerifier(brokerUri, offsetReset));
         List<String> topicList = new ArrayList<>();
         for (int i = 0; i < jobCount; i++) {
-            topicList.add(resultsTopicName(AT_LEAST_ONCE, i));
-            topicList.add(resultsTopicName(EXACTLY_ONCE, i));
+            topicList.add(resultsTopicName(name, AT_LEAST_ONCE, i));
+            topicList.add(resultsTopicName(name, EXACTLY_ONCE, i));
         }
         consumer.subscribe(topicList);
 
@@ -124,11 +175,13 @@ public class SnapshotTest extends AbstractSoakTest {
                 records.iterator().forEachRemaining(r -> {
                             String topic = r.topic();
                             if (topic.contains(AT_LEAST_ONCE.name())) {
-                                assertTrue(topic + " -> Unexpected count for " + r.key() + ", count: " +
-                                        r.value(), r.value() >= countPerTicker);
+                                assertTrue("[" + name + "] " + topic + " -> Unexpected count for " + r.key() + ", "
+                                        + "count: " + r.value(),
+                                        r.value() >= countPerTicker);
                                 atLeastOnceVerifier.offer(r.key());
                             } else {
-                                assertEquals(topic + " -> Unexpected count for " + r.key(),
+                                assertEquals("[" + name + "] " + topic + " -> Unexpected count for " + r.key() + ", "
+                                        + "count: " + r.value(),
                                         countPerTicker, (long) r.value());
                                 exactlyOnceVerifier.offer(r.key());
                             }
@@ -137,7 +190,7 @@ public class SnapshotTest extends AbstractSoakTest {
                 assertFalse(producerFuture.isDone());
             }
         } finally {
-            logger.info("Cancelling jobs...");
+            logger.info("[" + name + "] Cancelling jobs...");
             consumer.close();
             atLeastOnceVerifier.close();
             exactlyOnceVerifier.close();
@@ -157,8 +210,8 @@ public class SnapshotTest extends AbstractSoakTest {
         }
     }
 
-    private Pipeline pipeline(ProcessingGuarantee guarantee, int jobIndex) {
-        String resultTopic = resultsTopicName(guarantee, jobIndex);
+    private Pipeline pipeline(String name, ProcessingGuarantee guarantee, int jobIndex) {
+        String resultTopic = resultsTopicName(name, guarantee, jobIndex);
         Pipeline pipeline = Pipeline.create();
 
         Properties propsForTrades = kafkaPropsForTrades(brokerUri, offsetReset);
@@ -175,22 +228,22 @@ public class SnapshotTest extends AbstractSoakTest {
         return pipeline;
     }
 
-    private Job[] submitJobs(ProcessingGuarantee guarantee) {
+    private Job[] submitJobs(JetInstance client, String name, ProcessingGuarantee guarantee) {
         Job[] jobs = new Job[jobCount];
         for (int i = 0; i < jobCount; i++) {
-            System.out.println(String.format("Executing %s test[%d] job..", guarantee.name(), i));
+            System.out.println(String.format("[%s] Executing %s test[%d] job..", name, guarantee.name(), i));
             JobConfig jobConfig = new JobConfig();
             jobConfig.setName(String.format("SnapshotTest(%s[%d])", guarantee.name(), i));
             jobConfig.setSnapshotIntervalMillis(snapshotIntervalMs);
             jobConfig.setProcessingGuarantee(guarantee);
 
-            jobs[i] = jet.newJob(pipeline(guarantee, i), jobConfig);
+            jobs[i] = client.newJob(pipeline(name, guarantee, i), jobConfig);
         }
         return jobs;
     }
 
-    private static String resultsTopicName(ProcessingGuarantee guarantee, int jobIndex) {
-        return RESULTS_TOPIC + "-" + guarantee.name() + "-" + jobIndex;
+    private static String resultsTopicName(String name, ProcessingGuarantee guarantee, int jobIndex) {
+        return RESULTS_TOPIC + "-" + name + "-" + guarantee.name() + "-" + jobIndex;
     }
 
     private static Properties kafkaPropsForTrades(String brokerUrl, String offsetReset) {
@@ -214,6 +267,12 @@ public class SnapshotTest extends AbstractSoakTest {
         props.setProperty("value.serializer", LongSerializer.class.getName());
         props.setProperty("auto.offset.reset", offsetReset);
         props.setProperty("max.poll.records", "32768");
+        return props;
+    }
+
+    private static Properties kafkaPropsForVerifier(String brokerUrl, String offsetReset) {
+        Properties props = kafkaPropsForResults(brokerUrl, offsetReset);
+        props.setProperty("isolation.level", "read_committed");
         return props;
     }
 }

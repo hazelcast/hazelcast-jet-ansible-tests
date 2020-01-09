@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.hazelcast.jet.tests.snapshot;
+package com.hazelcast.jet.tests.snapshot.kafka;
 
 import com.hazelcast.logging.ILogger;
 import org.apache.kafka.clients.producer.KafkaProducer;

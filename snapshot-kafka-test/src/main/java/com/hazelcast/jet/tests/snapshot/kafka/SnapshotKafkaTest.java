@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.hazelcast.jet.tests.snapshot;
+package com.hazelcast.jet.tests.snapshot.kafka;
 
 import com.hazelcast.client.config.ClientConfig;
 import com.hazelcast.internal.util.UuidUtil;
@@ -51,7 +51,7 @@ import static com.hazelcast.jet.pipeline.WindowDefinition.sliding;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
-public class SnapshotTest extends AbstractSoakTest {
+public class SnapshotKafkaTest extends AbstractSoakTest {
 
     private static final int DEFAULT_LAG = 3000;
     private static final int DEFAULT_SNAPSHOT_INTERVAL = 1000;
@@ -59,7 +59,7 @@ public class SnapshotTest extends AbstractSoakTest {
     private static final int DEFAULT_SLIDE_BY = 10;
     private static final int DEFAULT_COUNTER_PER_TICKER = 1000;
 
-    private static final String TOPIC = SnapshotTest.class.getSimpleName();
+    private static final String TOPIC = SnapshotKafkaTest.class.getSimpleName();
     private static final String RESULTS_TOPIC = TOPIC + "-RESULTS";
     private static final int POLL_TIMEOUT = 1000;
     private static final int DELAY_AFTER_TEST_FINISHED_FACTOR = 60;
@@ -80,7 +80,7 @@ public class SnapshotTest extends AbstractSoakTest {
     private transient Future<?> producerFuture;
 
     public static void main(String[] args) throws Exception {
-        new SnapshotTest().run(args);
+        new SnapshotKafkaTest().run(args);
     }
 
     @Override

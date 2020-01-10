@@ -22,7 +22,7 @@
         <module>large-snapshot-chunk-test</module>
         <module>remote-controller-client</module>
         <module>rolling-aggregate-test</module>
-        <module>snapshot-test</module>
+        <module>snapshot-kafka-test</module>
         <module>soak-tests-common</module>
         <module>stateful-map-test</module>
         <module>s3-test</module>

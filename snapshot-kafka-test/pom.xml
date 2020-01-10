@@ -4,7 +4,7 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <artifactId>snapshot-test</artifactId>
+    <artifactId>snapshot-kafka-test</artifactId>
 
     <parent>
         <artifactId>hazelcast-jet-ansible-tests</artifactId>
@@ -43,7 +43,7 @@
                 <configuration>
                     <archive>
                         <manifest>
-                            <mainClass>com.hazelcast.jet.tests.snapshot.SnapshotTest</mainClass>
+                            <mainClass>com.hazelcast.jet.tests.snapshot.kafka.SnapshotKafkaTest</mainClass>
                         </manifest>
                     </archive>
                 </configuration>
@@ -61,11 +61,11 @@
                         <configuration>
                             <transformers>
                                 <transformer
-                                        implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
+                                    implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
                                 <transformer
-                                        implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                                    implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                                     <manifestEntries>
-                                        <Main-Class>com.hazelcast.jet.tests.snapshot.SnapshotTest</Main-Class>
+                                        <Main-Class>com.hazelcast.jet.tests.snapshot.kafka.SnapshotKafkaTest</Main-Class>
                                     </manifestEntries>
                                 </transformer>
                             </transformers>
@@ -83,7 +83,7 @@
                             <artifactSet>
                                 <includes>
                                     <include>com.hazelcast.jet.tests:*</include>
-                                    <include>com.hazelcast.jet.tests.snapshot:*</include>
+                                    <include>com.hazelcast.jet.tests.snapshot.kafka:*</include>
                                 </includes>
                             </artifactSet>
                         </configuration>

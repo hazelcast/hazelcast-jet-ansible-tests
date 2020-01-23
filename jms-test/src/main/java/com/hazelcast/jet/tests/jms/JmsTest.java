@@ -119,6 +119,9 @@ public class JmsTest extends AbstractSoakTest {
         JobConfig jobConfig1 = new JobConfig()
                 .setName("JMS Test source to middle queue")
                 .setProcessingGuarantee(ProcessingGuarantee.EXACTLY_ONCE);
+        if (clusterName.equals(STABLE_CLUSTER)) {
+            jobConfig1.addClass(JmsTest.class, JmsMessageProducer.class, JmsMessageConsumer.class);
+        }
         Job job1 = client.newJob(p1, jobConfig1);
         waitForJobStatus(job1, RUNNING);
         log(logger, "Job1 started", clusterName);
@@ -126,6 +129,9 @@ public class JmsTest extends AbstractSoakTest {
         JobConfig jobConfig2 = new JobConfig()
                 .setName("JMS Test middle to sink queue")
                 .setProcessingGuarantee(ProcessingGuarantee.EXACTLY_ONCE);
+        if (clusterName.equals(STABLE_CLUSTER)) {
+            jobConfig2.addClass(JmsTest.class, JmsMessageProducer.class, JmsMessageConsumer.class);
+        }
         Job job2 = client.newJob(p2, jobConfig2);
         waitForJobStatus(job2, RUNNING);
         log(logger, "Job2 started", clusterName);

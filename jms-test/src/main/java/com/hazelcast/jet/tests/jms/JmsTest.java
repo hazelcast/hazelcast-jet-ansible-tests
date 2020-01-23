@@ -18,6 +18,7 @@ package com.hazelcast.jet.tests.jms;
 
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.config.JobConfig;
+import com.hazelcast.jet.config.ProcessingGuarantee;
 import com.hazelcast.jet.pipeline.Pipeline;
 import com.hazelcast.jet.pipeline.Sinks;
 import com.hazelcast.jet.pipeline.Sources;
@@ -26,6 +27,7 @@ import org.apache.activemq.ActiveMQConnectionFactory;
 
 import static com.hazelcast.jet.core.JobStatus.FAILED;
 import static com.hazelcast.jet.core.JobStatus.RUNNING;
+import static com.hazelcast.jet.tests.common.Util.getJobStatusWithRetry;
 import static com.hazelcast.jet.tests.common.Util.sleepMinutes;
 import static com.hazelcast.jet.tests.common.Util.waitForJobStatus;
 import static java.util.concurrent.TimeUnit.SECONDS;
@@ -65,11 +67,17 @@ public class JmsTest extends AbstractSoakTest {
           .withoutTimestamps()
           .writeTo(Sinks.jmsQueue(() -> new ActiveMQConnectionFactory(localBrokerUrl), SINK_QUEUE));
 
-        Job job1 = jet.newJob(p1, new JobConfig().setName("JMS Test source to middle queue"));
+        JobConfig jobConfig1 = new JobConfig()
+                .setName("JMS Test source to middle queue")
+                .setProcessingGuarantee(ProcessingGuarantee.EXACTLY_ONCE);
+        Job job1 = jet.newJob(p1, jobConfig1);
         waitForJobStatus(job1, RUNNING);
         System.out.println("job1 started");
 
-        Job job2 = jet.newJob(p2, new JobConfig().setName("JMS Test middle to sink queue"));
+        JobConfig jobConfig2 = new JobConfig()
+                .setName("JMS Test middle to sink queue")
+                .setProcessingGuarantee(ProcessingGuarantee.EXACTLY_ONCE);
+        Job job2 = jet.newJob(p2, jobConfig2);
         waitForJobStatus(job2, RUNNING);
         System.out.println("job2 started");
 
@@ -80,10 +88,10 @@ public class JmsTest extends AbstractSoakTest {
 
         long begin = System.currentTimeMillis();
         while (System.currentTimeMillis() - begin < durationInMillis) {
-            if (job1.getStatus() == FAILED) {
+            if (getJobStatusWithRetry(job1) == FAILED) {
                 job1.join();
             }
-            if (job2.getStatus() == FAILED) {
+            if (getJobStatusWithRetry(job2) == FAILED) {
                 job2.join();
             }
             sleepMinutes(1);
@@ -91,7 +99,7 @@ public class JmsTest extends AbstractSoakTest {
 
         long expectedTotalCount = producer.stop();
         System.out.println("Producer stopped, expectedTotalCount: " + expectedTotalCount);
-        assertCount(expectedTotalCount);
+        assertCountEventually(expectedTotalCount);
         consumer.stop();
         System.out.println("Consumer stopped");
 
@@ -105,7 +113,7 @@ public class JmsTest extends AbstractSoakTest {
     protected void teardown(Throwable t) throws Exception {
     }
 
-    private void assertCount(long expectedTotalCount) throws InterruptedException {
+    private void assertCountEventually(long expectedTotalCount) throws InterruptedException {
         for (int i = 0; i < ASSERTION_RETRY_COUNT; i++) {
             long actualTotalCount = consumer.getCount();
             System.out.println("expected: " + expectedTotalCount + ", actual: " + actualTotalCount);

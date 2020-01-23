@@ -25,6 +25,7 @@ import com.hazelcast.jet.pipeline.Pipeline;
 import com.hazelcast.jet.pipeline.Sinks;
 import com.hazelcast.jet.pipeline.Sources;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
+import com.hazelcast.logging.ILogger;
 import org.apache.activemq.ActiveMQConnectionFactory;
 
 import java.io.IOException;
@@ -69,8 +70,9 @@ public class JmsTest extends AbstractSoakTest {
         Throwable[] exceptions = new Throwable[2];
         ExecutorService executorService = Executors.newFixedThreadPool(2);
         executorService.execute(() -> {
+            ILogger logger = getLogger(stableClusterClient, JmsTest.class);
             try {
-                testInternal(stableClusterClient, STABLE_CLUSTER);
+                testInternal(stableClusterClient, logger, STABLE_CLUSTER);
             } catch (Throwable t) {
                 logger.severe("Exception in Stable cluster test", t);
                 exceptions[0] = t;
@@ -78,7 +80,7 @@ public class JmsTest extends AbstractSoakTest {
         });
         executorService.execute(() -> {
             try {
-                testInternal(jet, DYNAMIC_CLUSTER);
+                testInternal(jet, logger, DYNAMIC_CLUSTER);
             } catch (Throwable t) {
                 logger.severe("Exception in Dynamic cluster test", t);
                 exceptions[1] = t;
@@ -101,7 +103,7 @@ public class JmsTest extends AbstractSoakTest {
         }
     }
 
-    public void testInternal(JetInstance client, String clusterName) throws Exception {
+    public void testInternal(JetInstance client, ILogger logger, String clusterName) throws Exception {
         String localBrokerUrl = brokerURL;
 
         Pipeline p1 = Pipeline.create();
@@ -119,22 +121,22 @@ public class JmsTest extends AbstractSoakTest {
                 .setProcessingGuarantee(ProcessingGuarantee.EXACTLY_ONCE);
         Job job1 = client.newJob(p1, jobConfig1);
         waitForJobStatus(job1, RUNNING);
-        System.out.println("job1 started");
+        log(logger, "Job1 started", clusterName);
 
         JobConfig jobConfig2 = new JobConfig()
                 .setName("JMS Test middle to sink queue")
                 .setProcessingGuarantee(ProcessingGuarantee.EXACTLY_ONCE);
         Job job2 = client.newJob(p2, jobConfig2);
         waitForJobStatus(job2, RUNNING);
-        System.out.println("job2 started");
+        log(logger, "Job2 started", clusterName);
 
         JmsMessageProducer producer = new JmsMessageProducer(brokerURL, SOURCE_QUEUE + clusterName);
         producer.start();
-        System.out.println("producer started");
+        log(logger, "Producer started", clusterName);
 
         JmsMessageConsumer consumer = new JmsMessageConsumer(brokerURL, SINK_QUEUE + clusterName);
         consumer.start();
-        System.out.println("consumer started");
+        log(logger, "Consumer started", clusterName);
 
         long begin = System.currentTimeMillis();
         while (System.currentTimeMillis() - begin < durationInMillis) {
@@ -148,16 +150,16 @@ public class JmsTest extends AbstractSoakTest {
         }
 
         long expectedTotalCount = producer.stop();
-        System.out.println("Producer stopped, expectedTotalCount: " + expectedTotalCount);
-        assertCountEventually(consumer, expectedTotalCount);
+        log(logger, "Producer stopped, expectedTotalCount: " + expectedTotalCount, clusterName);
+        assertCountEventually(consumer, logger, expectedTotalCount, clusterName);
         consumer.stop();
-        System.out.println("Consumer stopped");
+        log(logger, "Consumer stopped", clusterName);
 
         job2.cancel();
-        System.out.println("Job2 completed");
+        log(logger, "Job2 completed", clusterName);
 
         job1.cancel();
-        System.out.println("Job1 completed");
+        log(logger, "Job1 completed", clusterName);
     }
 
     protected void teardown(Throwable t) {
@@ -166,10 +168,15 @@ public class JmsTest extends AbstractSoakTest {
         }
     }
 
-    private static void assertCountEventually(JmsMessageConsumer consumer, long expectedTotalCount) throws Exception {
+    private static void log(ILogger logger, String message, String clusterName) {
+        logger.info("Cluster" + clusterName + "\t\t" + message);
+    }
+
+    private static void assertCountEventually(
+            JmsMessageConsumer consumer, ILogger logger, long expectedTotalCount, String clusterName) throws Exception {
         for (int i = 0; i < ASSERTION_RETRY_COUNT; i++) {
             long actualTotalCount = consumer.getCount();
-            System.out.println("expected: " + expectedTotalCount + ", actual: " + actualTotalCount);
+            log(logger, "expected: " + expectedTotalCount + ", actual: " + actualTotalCount, clusterName);
             if (expectedTotalCount == actualTotalCount) {
                 return;
             }

@@ -16,99 +16,173 @@
 
 package com.hazelcast.jet.tests.jms;
 
+import com.hazelcast.jet.Jet;
+import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.config.JobConfig;
+import com.hazelcast.jet.config.ProcessingGuarantee;
 import com.hazelcast.jet.pipeline.Pipeline;
 import com.hazelcast.jet.pipeline.Sinks;
 import com.hazelcast.jet.pipeline.Sources;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
+import com.hazelcast.logging.ILogger;
 import org.apache.activemq.ActiveMQConnectionFactory;
+
+import java.io.IOException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import static com.hazelcast.jet.core.JobStatus.FAILED;
 import static com.hazelcast.jet.core.JobStatus.RUNNING;
+import static com.hazelcast.jet.tests.common.Util.getJobStatusWithRetry;
 import static com.hazelcast.jet.tests.common.Util.sleepMinutes;
 import static com.hazelcast.jet.tests.common.Util.waitForJobStatus;
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
 public class JmsTest extends AbstractSoakTest {
+
+    private static final double DELAY_AFTER_TEST_FINISHED_FACTOR = 1.05;
+
+    private static final String STABLE_CLUSTER = "-stable";
+    private static final String DYNAMIC_CLUSTER = "-dynamic";
 
     private static final int ASSERTION_RETRY_COUNT = 100;
     private static final String SOURCE_QUEUE = "source";
     private static final String MIDDLE_QUEUE = "middle";
     private static final String SINK_QUEUE = "sink";
 
-    private JmsMessageProducer producer;
-    private JmsMessageConsumer consumer;
+    private JetInstance stableClusterClient;
+
     private String brokerURL;
 
     public static void main(String[] args) throws Exception {
         new JmsTest().run(args);
     }
 
-    public void init() {
+    public void init() throws IOException {
         brokerURL = property("brokerURL", "tcp://localhost:61616");
 
-        producer = new JmsMessageProducer(brokerURL, SOURCE_QUEUE);
-        consumer = new JmsMessageConsumer(brokerURL, SINK_QUEUE);
+        stableClusterClient = Jet.newJetClient(remoteClusterClientConfig());
     }
 
-    public void test() throws Exception {
+    public void test() throws Throwable {
+        Throwable[] exceptions = new Throwable[2];
+        ExecutorService executorService = Executors.newFixedThreadPool(2);
+        executorService.execute(() -> {
+            ILogger logger = getLogger(stableClusterClient, JmsTest.class);
+            try {
+                testInternal(stableClusterClient, logger, STABLE_CLUSTER);
+            } catch (Throwable t) {
+                logger.severe("Exception in Stable cluster test", t);
+                exceptions[0] = t;
+            }
+        });
+        executorService.execute(() -> {
+            try {
+                testInternal(jet, logger, DYNAMIC_CLUSTER);
+            } catch (Throwable t) {
+                logger.severe("Exception in Dynamic cluster test", t);
+                exceptions[1] = t;
+            }
+        });
+        executorService.shutdown();
+        executorService.awaitTermination((long) (durationInMillis * DELAY_AFTER_TEST_FINISHED_FACTOR), MILLISECONDS);
+
+        if (exceptions[0] != null) {
+            logger.severe("Exception in Stable cluster test", exceptions[1]);
+        }
+        if (exceptions[1] != null) {
+            logger.severe("Exception in Dynamic cluster test", exceptions[0]);
+        }
+        if (exceptions[0] != null) {
+            throw exceptions[0];
+        }
+        if (exceptions[1] != null) {
+            throw exceptions[1];
+        }
+    }
+
+    public void testInternal(JetInstance client, ILogger logger, String clusterName) throws Exception {
         String localBrokerUrl = brokerURL;
 
         Pipeline p1 = Pipeline.create();
-        p1.readFrom(Sources.jmsQueue(() -> new ActiveMQConnectionFactory(localBrokerUrl), SOURCE_QUEUE))
+        p1.readFrom(Sources.jmsQueue(() -> new ActiveMQConnectionFactory(localBrokerUrl), SOURCE_QUEUE + clusterName))
           .withoutTimestamps()
-          .writeTo(Sinks.jmsQueue(() -> new ActiveMQConnectionFactory(localBrokerUrl), MIDDLE_QUEUE));
+          .writeTo(Sinks.jmsQueue(() -> new ActiveMQConnectionFactory(localBrokerUrl), MIDDLE_QUEUE + clusterName));
 
         Pipeline p2 = Pipeline.create();
-        p2.readFrom(Sources.jmsQueue(() -> new ActiveMQConnectionFactory(localBrokerUrl), MIDDLE_QUEUE))
+        p2.readFrom(Sources.jmsQueue(() -> new ActiveMQConnectionFactory(localBrokerUrl), MIDDLE_QUEUE + clusterName))
           .withoutTimestamps()
-          .writeTo(Sinks.jmsQueue(() -> new ActiveMQConnectionFactory(localBrokerUrl), SINK_QUEUE));
+          .writeTo(Sinks.jmsQueue(() -> new ActiveMQConnectionFactory(localBrokerUrl), SINK_QUEUE + clusterName));
 
-        Job job1 = jet.newJob(p1, new JobConfig().setName("JMS Test source to middle queue"));
+        JobConfig jobConfig1 = new JobConfig()
+                .setName("JMS Test source to middle queue")
+                .setProcessingGuarantee(ProcessingGuarantee.EXACTLY_ONCE);
+        if (clusterName.equals(STABLE_CLUSTER)) {
+            jobConfig1.addClass(JmsTest.class, JmsMessageProducer.class, JmsMessageConsumer.class);
+        }
+        Job job1 = client.newJob(p1, jobConfig1);
         waitForJobStatus(job1, RUNNING);
-        System.out.println("job1 started");
+        log(logger, "Job1 started", clusterName);
 
-        Job job2 = jet.newJob(p2, new JobConfig().setName("JMS Test middle to sink queue"));
+        JobConfig jobConfig2 = new JobConfig()
+                .setName("JMS Test middle to sink queue")
+                .setProcessingGuarantee(ProcessingGuarantee.EXACTLY_ONCE);
+        if (clusterName.equals(STABLE_CLUSTER)) {
+            jobConfig2.addClass(JmsTest.class, JmsMessageProducer.class, JmsMessageConsumer.class);
+        }
+        Job job2 = client.newJob(p2, jobConfig2);
         waitForJobStatus(job2, RUNNING);
-        System.out.println("job2 started");
+        log(logger, "Job2 started", clusterName);
 
+        JmsMessageProducer producer = new JmsMessageProducer(brokerURL, SOURCE_QUEUE + clusterName);
         producer.start();
-        System.out.println("producer started");
+        log(logger, "Producer started", clusterName);
+
+        JmsMessageConsumer consumer = new JmsMessageConsumer(brokerURL, SINK_QUEUE + clusterName);
         consumer.start();
-        System.out.println("consumer started");
+        log(logger, "Consumer started", clusterName);
 
         long begin = System.currentTimeMillis();
         while (System.currentTimeMillis() - begin < durationInMillis) {
-            if (job1.getStatus() == FAILED) {
+            if (getJobStatusWithRetry(job1) == FAILED) {
                 job1.join();
             }
-            if (job2.getStatus() == FAILED) {
+            if (getJobStatusWithRetry(job2) == FAILED) {
                 job2.join();
             }
             sleepMinutes(1);
         }
 
         long expectedTotalCount = producer.stop();
-        System.out.println("Producer stopped, expectedTotalCount: " + expectedTotalCount);
-        assertCount(expectedTotalCount);
+        log(logger, "Producer stopped, expectedTotalCount: " + expectedTotalCount, clusterName);
+        assertCountEventually(consumer, logger, expectedTotalCount, clusterName);
         consumer.stop();
-        System.out.println("Consumer stopped");
+        log(logger, "Consumer stopped", clusterName);
 
         job2.cancel();
-        System.out.println("Job2 completed");
+        log(logger, "Job2 completed", clusterName);
 
         job1.cancel();
-        System.out.println("Job1 completed");
+        log(logger, "Job1 completed", clusterName);
     }
 
-    protected void teardown(Throwable t) throws Exception {
+    protected void teardown(Throwable t) {
+        if (stableClusterClient != null) {
+            stableClusterClient.shutdown();
+        }
     }
 
-    private void assertCount(long expectedTotalCount) throws InterruptedException {
+    private static void log(ILogger logger, String message, String clusterName) {
+        logger.info("Cluster" + clusterName + "\t\t" + message);
+    }
+
+    private static void assertCountEventually(
+            JmsMessageConsumer consumer, ILogger logger, long expectedTotalCount, String clusterName) throws Exception {
         for (int i = 0; i < ASSERTION_RETRY_COUNT; i++) {
             long actualTotalCount = consumer.getCount();
-            System.out.println("expected: " + expectedTotalCount + ", actual: " + actualTotalCount);
+            log(logger, "expected: " + expectedTotalCount + ", actual: " + actualTotalCount, clusterName);
             if (expectedTotalCount == actualTotalCount) {
                 return;
             }

@@ -135,6 +135,10 @@ public abstract class AbstractSoakTest {
         return jet.getHazelcastInstance().getLoggingService().getLogger(clazz);
     }
 
+    protected static ILogger getLogger(JetInstance instance, Class clazz) {
+        return instance.getHazelcastInstance().getLoggingService().getLogger(clazz);
+    }
+
     protected static PredicateEx<EventJournalMapEvent<Long, Long>> filter(boolean odds) {
         PredicateEx<EventJournalMapEvent<Long, Long>> putEvents = mapPutEvents();
         return e -> putEvents.test(e) && (e.getNewValue() % 2 == (odds ? 1 : 0));

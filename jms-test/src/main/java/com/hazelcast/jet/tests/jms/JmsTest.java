@@ -16,6 +16,8 @@
 
 package com.hazelcast.jet.tests.jms;
 
+import com.hazelcast.jet.Jet;
+import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.config.ProcessingGuarantee;
@@ -25,64 +27,112 @@ import com.hazelcast.jet.pipeline.Sources;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
 import org.apache.activemq.ActiveMQConnectionFactory;
 
+import java.io.IOException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
 import static com.hazelcast.jet.core.JobStatus.FAILED;
 import static com.hazelcast.jet.core.JobStatus.RUNNING;
 import static com.hazelcast.jet.tests.common.Util.getJobStatusWithRetry;
 import static com.hazelcast.jet.tests.common.Util.sleepMinutes;
 import static com.hazelcast.jet.tests.common.Util.waitForJobStatus;
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
 public class JmsTest extends AbstractSoakTest {
+
+    private static final double DELAY_AFTER_TEST_FINISHED_FACTOR = 1.05;
+
+    private static final String STABLE_CLUSTER = "-stable";
+    private static final String DYNAMIC_CLUSTER = "-dynamic";
 
     private static final int ASSERTION_RETRY_COUNT = 100;
     private static final String SOURCE_QUEUE = "source";
     private static final String MIDDLE_QUEUE = "middle";
     private static final String SINK_QUEUE = "sink";
 
-    private JmsMessageProducer producer;
-    private JmsMessageConsumer consumer;
+    private JetInstance stableClusterClient;
+
     private String brokerURL;
 
     public static void main(String[] args) throws Exception {
         new JmsTest().run(args);
     }
 
-    public void init() {
+    public void init() throws IOException {
         brokerURL = property("brokerURL", "tcp://localhost:61616");
 
-        producer = new JmsMessageProducer(brokerURL, SOURCE_QUEUE);
-        consumer = new JmsMessageConsumer(brokerURL, SINK_QUEUE);
+        stableClusterClient = Jet.newJetClient(remoteClusterClientConfig());
     }
 
-    public void test() throws Exception {
+    public void test() throws Throwable {
+        Throwable[] exceptions = new Throwable[2];
+        ExecutorService executorService = Executors.newFixedThreadPool(2);
+        executorService.execute(() -> {
+            try {
+                testInternal(stableClusterClient, STABLE_CLUSTER);
+            } catch (Throwable t) {
+                logger.severe("Exception in Stable cluster test", t);
+                exceptions[0] = t;
+            }
+        });
+        executorService.execute(() -> {
+            try {
+                testInternal(jet, DYNAMIC_CLUSTER);
+            } catch (Throwable t) {
+                logger.severe("Exception in Dynamic cluster test", t);
+                exceptions[1] = t;
+            }
+        });
+        executorService.shutdown();
+        executorService.awaitTermination((long) (durationInMillis * DELAY_AFTER_TEST_FINISHED_FACTOR), MILLISECONDS);
+
+        if (exceptions[0] != null) {
+            logger.severe("Exception in Stable cluster test", exceptions[1]);
+        }
+        if (exceptions[1] != null) {
+            logger.severe("Exception in Dynamic cluster test", exceptions[0]);
+        }
+        if (exceptions[0] != null) {
+            throw exceptions[0];
+        }
+        if (exceptions[1] != null) {
+            throw exceptions[1];
+        }
+    }
+
+    public void testInternal(JetInstance client, String clusterName) throws Exception {
         String localBrokerUrl = brokerURL;
 
         Pipeline p1 = Pipeline.create();
-        p1.readFrom(Sources.jmsQueue(() -> new ActiveMQConnectionFactory(localBrokerUrl), SOURCE_QUEUE))
+        p1.readFrom(Sources.jmsQueue(() -> new ActiveMQConnectionFactory(localBrokerUrl), SOURCE_QUEUE + clusterName))
           .withoutTimestamps()
-          .writeTo(Sinks.jmsQueue(() -> new ActiveMQConnectionFactory(localBrokerUrl), MIDDLE_QUEUE));
+          .writeTo(Sinks.jmsQueue(() -> new ActiveMQConnectionFactory(localBrokerUrl), MIDDLE_QUEUE + clusterName));
 
         Pipeline p2 = Pipeline.create();
-        p2.readFrom(Sources.jmsQueue(() -> new ActiveMQConnectionFactory(localBrokerUrl), MIDDLE_QUEUE))
+        p2.readFrom(Sources.jmsQueue(() -> new ActiveMQConnectionFactory(localBrokerUrl), MIDDLE_QUEUE + clusterName))
           .withoutTimestamps()
-          .writeTo(Sinks.jmsQueue(() -> new ActiveMQConnectionFactory(localBrokerUrl), SINK_QUEUE));
+          .writeTo(Sinks.jmsQueue(() -> new ActiveMQConnectionFactory(localBrokerUrl), SINK_QUEUE + clusterName));
 
         JobConfig jobConfig1 = new JobConfig()
                 .setName("JMS Test source to middle queue")
                 .setProcessingGuarantee(ProcessingGuarantee.EXACTLY_ONCE);
-        Job job1 = jet.newJob(p1, jobConfig1);
+        Job job1 = client.newJob(p1, jobConfig1);
         waitForJobStatus(job1, RUNNING);
         System.out.println("job1 started");
 
         JobConfig jobConfig2 = new JobConfig()
                 .setName("JMS Test middle to sink queue")
                 .setProcessingGuarantee(ProcessingGuarantee.EXACTLY_ONCE);
-        Job job2 = jet.newJob(p2, jobConfig2);
+        Job job2 = client.newJob(p2, jobConfig2);
         waitForJobStatus(job2, RUNNING);
         System.out.println("job2 started");
 
+        JmsMessageProducer producer = new JmsMessageProducer(brokerURL, SOURCE_QUEUE + clusterName);
         producer.start();
         System.out.println("producer started");
+
+        JmsMessageConsumer consumer = new JmsMessageConsumer(brokerURL, SINK_QUEUE + clusterName);
         consumer.start();
         System.out.println("consumer started");
 
@@ -99,7 +149,7 @@ public class JmsTest extends AbstractSoakTest {
 
         long expectedTotalCount = producer.stop();
         System.out.println("Producer stopped, expectedTotalCount: " + expectedTotalCount);
-        assertCountEventually(expectedTotalCount);
+        assertCountEventually(consumer, expectedTotalCount);
         consumer.stop();
         System.out.println("Consumer stopped");
 
@@ -110,10 +160,13 @@ public class JmsTest extends AbstractSoakTest {
         System.out.println("Job1 completed");
     }
 
-    protected void teardown(Throwable t) throws Exception {
+    protected void teardown(Throwable t) {
+        if (stableClusterClient != null) {
+            stableClusterClient.shutdown();
+        }
     }
 
-    private void assertCountEventually(long expectedTotalCount) throws InterruptedException {
+    private static void assertCountEventually(JmsMessageConsumer consumer, long expectedTotalCount) throws Exception {
         for (int i = 0; i < ASSERTION_RETRY_COUNT; i++) {
             long actualTotalCount = consumer.getCount();
             System.out.println("expected: " + expectedTotalCount + ", actual: " + actualTotalCount);

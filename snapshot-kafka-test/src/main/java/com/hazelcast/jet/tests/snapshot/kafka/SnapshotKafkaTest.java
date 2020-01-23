@@ -16,7 +16,6 @@
 
 package com.hazelcast.jet.tests.snapshot.kafka;
 
-import com.hazelcast.client.config.ClientConfig;
 import com.hazelcast.internal.util.UuidUtil;
 import com.hazelcast.jet.Jet;
 import com.hazelcast.jet.JetInstance;
@@ -64,7 +63,6 @@ public class SnapshotKafkaTest extends AbstractSoakTest {
     private static final int POLL_TIMEOUT = 1000;
     private static final int DELAY_AFTER_TEST_FINISHED_FACTOR = 60;
 
-    private ClientConfig stableClusterClientConfig;
     private JetInstance stableClusterClient;
 
     private String brokerUri;
@@ -95,8 +93,7 @@ public class SnapshotKafkaTest extends AbstractSoakTest {
         jobCount = propertyInt("jobCount", 2);
         countPerTicker = propertyInt("countPerTicker", DEFAULT_COUNTER_PER_TICKER);
 
-        stableClusterClientConfig = remoteClusterClientConfig();
-        stableClusterClient = Jet.newJetClient(stableClusterClientConfig);
+        stableClusterClient = Jet.newJetClient(remoteClusterClientConfig());
 
         ILogger producerLogger = getLogger(SnapshotTradeProducer.class);
         producerFuture = producerExecutorService.submit(() -> {
@@ -204,9 +201,12 @@ public class SnapshotKafkaTest extends AbstractSoakTest {
         }
     }
 
-    protected void teardown(Throwable t) throws Exception {
+    protected void teardown(Throwable t) {
         if (producerExecutorService != null) {
             producerExecutorService.shutdown();
+        }
+        if (stableClusterClient != null) {
+            stableClusterClient.shutdown();
         }
     }
 

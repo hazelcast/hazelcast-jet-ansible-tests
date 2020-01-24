@@ -29,7 +29,6 @@ import com.hazelcast.jet.pipeline.StreamStage;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.map.IMap;
-import com.hazelcast.replicatedmap.ReplicatedMap;
 
 import java.util.Map;
 import java.util.Set;
@@ -52,7 +51,7 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 
 public class StatefulMapTest extends AbstractSoakTest {
 
-    static final String REPLICATED_MAP = "replicatedMap";
+    static final String MESSAGING_MAP = "messagingMap";
     static final String TOTAL_KEY_COUNT = "total-key-count";
     static final String STOP_GENERATION_MESSAGE = "stop-generation";
     static final String CURRENT_TX_ID = "current-tx-id";
@@ -131,7 +130,7 @@ public class StatefulMapTest extends AbstractSoakTest {
     }
 
     private void testInternal(JetInstance client, String name) {
-        ReplicatedMap<String, Long> replicatedMap = client.getReplicatedMap(REPLICATED_MAP);
+        IMap<String, Long> messagingMap = client.getMap(MESSAGING_MAP);
         String txMapName = name.startsWith("Stable") ? TX_MAP_STABLE : TX_MAP_DYNAMIC;
         String timeoutMapName = name.startsWith("Stable") ? TIMEOUT_TX_MAP_STABLE : TIMEOUT_TX_MAP_DYNAMIC;
         IMap<Long, Long> txMap = stableClusterClient.getMap(txMapName);
@@ -153,24 +152,29 @@ public class StatefulMapTest extends AbstractSoakTest {
             assertNotEquals(name, FAILED, jobStatus);
             sleepSeconds(DELAY_BETWEEN_STATUS_CHECKS);
 
-            Long currentTxId = replicatedMap.get(CURRENT_TX_ID);
+            Long currentTxId = messagingMap.get(CURRENT_TX_ID);
             if (currentTxId == null) {
                 continue;
             }
             totalTxNumber += completedTxCount(txMap, logger, currentTxId);
         }
-        replicatedMap.put(STOP_GENERATION_MESSAGE, 1L);
+        logger.info("Stop message generation");
+        messagingMap.put(STOP_GENERATION_MESSAGE, 1L);
         sleepMillis(WAIT_TX_TIMEOUT_FACTOR * txTimeout);
         cancelJobAndJoin(client, job);
         sleepSeconds(DELAY_BETWEEN_STATUS_CHECKS);
 
-        long expectedTotalKeyCount = replicatedMap.remove(TOTAL_KEY_COUNT);
+        long expectedTotalKeyCount = messagingMap.remove(TOTAL_KEY_COUNT);
         totalTxNumber += completedTxCount(txMap, logger, Long.MAX_VALUE);
-        assertEquals(name, expectedTotalKeyCount, totalTxNumber);
+        assertWithClusterName(name, expectedTotalKeyCount, totalTxNumber);
 
-        Set<Long> keySet = timeoutTxMap.keySet(mapEntry -> ((long) mapEntry.getValue()) != TIMED_OUT_CODE);
-        assertEquals(name, 0, keySet.size());
-        assertEquals(name, expectedTotalKeyCount / generatorBatchCount, timeoutTxMap.size());
+        Set<Long> keySet = timeoutTxMap.keySet(mapEntry -> mapEntry.getValue() != TIMED_OUT_CODE);
+        assertWithClusterName(name, 0, keySet.size());
+        assertWithClusterName(name, expectedTotalKeyCount / generatorBatchCount, timeoutTxMap.size());
+    }
+
+    private void assertWithClusterName(String clusterName, long expected, long actual) {
+        assertEquals(String.format("%s -> expected: %d, actual: %d", clusterName, expected, actual), expected, actual);
     }
 
     private long completedTxCount(IMap<Long, Long> txMap, ILogger logger, long currentTxId) {

@@ -90,10 +90,10 @@ public class JmsTest extends AbstractSoakTest {
         executorService.awaitTermination((long) (durationInMillis * DELAY_AFTER_TEST_FINISHED_FACTOR), MILLISECONDS);
 
         if (exceptions[0] != null) {
-            logger.severe("Exception in Stable cluster test", exceptions[1]);
+            logger.severe("Exception in Stable cluster test", exceptions[0]);
         }
         if (exceptions[1] != null) {
-            logger.severe("Exception in Dynamic cluster test", exceptions[0]);
+            logger.severe("Exception in Dynamic cluster test", exceptions[1]);
         }
         if (exceptions[0] != null) {
             throw exceptions[0];

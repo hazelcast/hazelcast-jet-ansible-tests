@@ -113,7 +113,7 @@ public class S3WordCountTest extends AbstractSoakTest {
                 sleepSeconds(sleepSeconds);
             } catch (Throwable e) {
                 if (isSocketRelatedException(e)) {
-                    logger.warning("Socket timeout ", e);
+                    logger.warning("Socket related exception ", e);
                     socketTimeoutNumber++;
                     reInitClient();
                 } else {
@@ -257,7 +257,9 @@ public class S3WordCountTest extends AbstractSoakTest {
         if (e instanceof UndefinedErrorCodeException) {
             String originClassName = ((UndefinedErrorCodeException) e).getOriginClassName();
             return originClassName.equals(SocketTimeoutException.class.getName())
-                    || originClassName.equals(SocketException.class.getName());
+                    || originClassName.equals(SocketException.class.getName())
+                    || e.getMessage().contains(SocketTimeoutException.class.getName())
+                    || e.getMessage().contains(SocketException.class.getName());
         }
         Throwable cause = e.getCause();
         if (cause != null) {

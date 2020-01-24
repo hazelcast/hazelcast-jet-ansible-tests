@@ -16,7 +16,7 @@
 
 package com.hazelcast.jet.tests.stateful;
 
-import com.hazelcast.core.ReplicatedMap;
+import com.hazelcast.jet.IMapJet;
 import com.hazelcast.jet.core.Processor.Context;
 import com.hazelcast.jet.pipeline.SourceBuilder;
 import com.hazelcast.jet.pipeline.StreamSource;
@@ -26,7 +26,7 @@ import com.hazelcast.logging.ILogger;
 import java.util.List;
 
 import static com.hazelcast.jet.tests.stateful.StatefulMapTest.CURRENT_TX_ID;
-import static com.hazelcast.jet.tests.stateful.StatefulMapTest.REPLICATED_MAP;
+import static com.hazelcast.jet.tests.stateful.StatefulMapTest.MESSAGING_MAP;
 import static com.hazelcast.jet.tests.stateful.StatefulMapTest.STOP_GENERATION_MESSAGE;
 import static com.hazelcast.jet.tests.stateful.StatefulMapTest.TOTAL_KEY_COUNT;
 import static java.util.concurrent.TimeUnit.SECONDS;
@@ -37,16 +37,16 @@ import static java.util.concurrent.locks.LockSupport.parkNanos;
  * events and then creates a batch of `end` events. After these batches it
  * creates a `start` event with a negative txId which will never get an `end`
  * event and eventually evicted by `mapStateful`.
- *
- * Uses a `replicatedMap` to check if the generation should stop. After stopping
+ * <p>
+ * Uses a `messagingMap` to check if the generation should stop. After stopping
  * the generation it still puts some events to the buffer just to advance the wm.
  * These events will be ignored by `mapStateful`.
- *
+ * <p>
  * When the job finished, the generator puts the total-key-count to the
- * replicated map for verification.
+ * messaging map for verification.
  */
 public final class TransactionGenerator {
-    private final ReplicatedMap<String, Long> replicatedMap;
+    private final IMapJet<String, Long> messagingMap;
     private final long nanosBetweenEvents;
     private final int batchCount;
     private final ILogger logger;
@@ -56,8 +56,8 @@ public final class TransactionGenerator {
 
     private TransactionGenerator(Context context, int txPerSeconds, int batchCount) {
         logger = context.jetInstance().getHazelcastInstance().getLoggingService().getLogger(getClass());
-        this.replicatedMap = context.jetInstance().getReplicatedMap(REPLICATED_MAP);
-        this.nanosBetweenEvents = SECONDS.toNanos(1) / txPerSeconds;
+        messagingMap = context.jetInstance().getMap(MESSAGING_MAP);
+        nanosBetweenEvents = SECONDS.toNanos(1) / txPerSeconds;
         this.batchCount = batchCount;
     }
 
@@ -72,7 +72,7 @@ public final class TransactionGenerator {
     }
 
     private void generateTrades(SourceBuilder.SourceBuffer<TransactionEvent> buf) {
-        if (start && replicatedMap.get(STOP_GENERATION_MESSAGE) != null) {
+        if (start && messagingMap.get(STOP_GENERATION_MESSAGE) != null) {
             //this is to advance wm and eventually evict expired transactions
             buf.add(new TransactionEvent(null, Long.MAX_VALUE, Long.MAX_VALUE - 1));
             parkNanos(nanosBetweenEvents);
@@ -91,7 +91,7 @@ public final class TransactionGenerator {
         //a single tx is produced per batch and txId<0
         if (start) {
             buf.add(new TransactionEvent(Type.START, -txId, txId));
-            replicatedMap.put(CURRENT_TX_ID, txId);
+            messagingMap.put(CURRENT_TX_ID, txId);
         }
     }
 
@@ -109,8 +109,8 @@ public final class TransactionGenerator {
 
     private void close() {
         //put the result to map only if we get the stop message
-        if (replicatedMap.get(STOP_GENERATION_MESSAGE) != null) {
-            replicatedMap.put(TOTAL_KEY_COUNT, txId);
+        if (messagingMap.get(STOP_GENERATION_MESSAGE) != null) {
+            messagingMap.put(TOTAL_KEY_COUNT, txId);
         }
     }
 }

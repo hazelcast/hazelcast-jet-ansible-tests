@@ -23,6 +23,7 @@
         <module>remote-controller-client</module>
         <module>return-result-to-caller-test</module>
         <module>rolling-aggregate-test</module>
+        <module>snapshot-file-test</module>
         <module>snapshot-kafka-test</module>
         <module>soak-tests-common</module>
         <module>stateful-map-test</module>

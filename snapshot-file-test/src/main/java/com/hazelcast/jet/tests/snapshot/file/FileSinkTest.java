@@ -22,16 +22,17 @@ import com.hazelcast.jet.Job;
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.config.ProcessingGuarantee;
 import com.hazelcast.jet.pipeline.Pipeline;
+import com.hazelcast.jet.pipeline.Sink;
 import com.hazelcast.jet.pipeline.Sinks;
 import com.hazelcast.jet.pipeline.SourceBuilder;
-import com.hazelcast.jet.pipeline.WindowDefinition;
+import com.hazelcast.jet.pipeline.StreamSource;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import static com.hazelcast.function.FunctionEx.identity;
-import static com.hazelcast.jet.aggregate.AggregateOperations.summingLong;
 import static com.hazelcast.jet.core.JobStatus.FAILED;
+import static com.hazelcast.jet.pipeline.ServiceFactories.sharedService;
 import static com.hazelcast.jet.tests.common.Util.getJobStatusWithRetry;
 import static com.hazelcast.jet.tests.common.Util.sleepMillis;
 import static com.hazelcast.jet.tests.common.Util.sleepMinutes;
@@ -102,7 +103,7 @@ public class FileSinkTest extends AbstractSoakTest {
     }
 
     public void testInternal(JetInstance client, String name) {
-        GeneratedFilesVerifier verifier = new GeneratedFilesVerifier(client, name, logger);
+        GeneratedFilesVerifier verifier = new GeneratedFilesVerifier(name, logger);
         verifier.start();
 
         try {
@@ -141,23 +142,29 @@ public class FileSinkTest extends AbstractSoakTest {
 
     private Pipeline pipeline() {
         int sleep = sleepMsBetweenItem;
+
         Pipeline pipeline = Pipeline.create();
-        pipeline.readFrom(SourceBuilder.stream("srcForFileSink", procCtx -> new long[1])
+
+        StreamSource<Long> source = SourceBuilder
+                .stream("srcForFileSink", procCtx -> new long[1])
                 .<Long>fillBufferFn((ctx, buf) -> {
                     buf.add(ctx[0]++);
                     sleepMillis(sleep);
                 })
                 .createSnapshotFn(ctx -> ctx[0])
                 .restoreSnapshotFn((ctx, state) -> ctx[0] = state.get(0))
-                .build())
-                .withTimestamps(t -> t, 0)
-                .window(WindowDefinition.tumbling(1))
+                .build();
+
+        Sink<Object> sink = Sinks.filesBuilder(FILE_SINK_LOCATION_ON_MACHINE_PATH)
+                .exactlyOnce(true)
+                .build();
+
+        pipeline.readFrom(source)
+                .withoutTimestamps()
                 .groupingKey(identity())
-                .aggregate(summingLong(t -> t))
-                .map(t -> t.key())
-                .writeTo(Sinks.filesBuilder(FILE_SINK_LOCATION_ON_MACHINE_PATH)
-                        .exactlyOnce(true)
-                        .build());
+                .filterUsingService(sharedService(ctx -> null), (s, k, v) -> true)
+                .writeTo(sink);
+
         return pipeline;
     }
 

@@ -133,7 +133,7 @@ public class AsyncTransformTest extends AbstractSoakTest {
 
         long maxSchedulerDelayMillisLocal = maxSchedulerDelayMillis;
         ServiceFactory<?, Scheduler> orderedContextFactory = sharedService(
-                () -> new Scheduler(SCHEDULER_CORE_SIZE, maxSchedulerDelayMillisLocal),
+                ctx -> new Scheduler(SCHEDULER_CORE_SIZE, maxSchedulerDelayMillisLocal),
                 Scheduler::shutdown
         );
         sourceStage.mapUsingServiceAsync(orderedContextFactory, Scheduler::schedule)

@@ -18,7 +18,6 @@ package com.hazelcast.jet.tests.management;
 
 import com.hazelcast.config.Config;
 import com.hazelcast.config.MapConfig;
-import com.hazelcast.function.ConsumerEx;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.JobStateSnapshot;
 import com.hazelcast.jet.config.JobConfig;
@@ -134,7 +133,7 @@ public class JobManagementTest extends AbstractSoakTest {
         p.readFrom(Sources.mapJournal(SOURCE, START_FROM_OLDEST, mapEventNewValue(), filter(odds)))
          .withoutTimestamps()
          .groupingKey(l -> 0L)
-         .mapUsingService(sharedService(() -> null, ConsumerEx.noop()), (c, k, v) -> v)
+         .mapUsingService(sharedService(ctw -> null), (c, k, v) -> v)
          .writeTo(Sinks.fromProcessor("sink", VerificationProcessor.supplier(odds)));
         return p;
     }

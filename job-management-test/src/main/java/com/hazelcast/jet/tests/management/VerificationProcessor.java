@@ -83,10 +83,13 @@ public final class VerificationProcessor extends AbstractProcessor {
         logger.info(String.format("restoreFromSnapshot odd: %b, counter: %d, size: %d, peek: %d",
                 odds, counter, queue.size(), queue.peek()));
 
-        if (!queue.isEmpty() && odds != isOdd(queue.peek())) {
-            counter = (long) queue.toArray()[queue.size() - 1] + 1;
-            queue.clear();
-            logger.info(String.format("Switch from %b to %b, new counter: %d", !odds, odds, counter));
+        if (odds != isOdd(counter)) {
+            if (!queue.isEmpty()) {
+                counter = (long) queue.toArray()[queue.size() - 1];
+                queue.clear();
+            }
+            counter++;
+            logger.info(String.format("Switch to odds[%b], new counter: %d", odds, counter));
         }
     }
 

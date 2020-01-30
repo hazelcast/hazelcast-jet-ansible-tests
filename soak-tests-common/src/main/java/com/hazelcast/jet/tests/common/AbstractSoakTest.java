@@ -119,8 +119,12 @@ public abstract class AbstractSoakTest {
         return new XmlClientConfigBuilder(remoteClusterXml).build();
     }
 
-    private boolean isRunLocal() {
+    private static boolean isRunLocal() {
         return System.getProperty("runLocal") != null;
+    }
+
+    protected static void setRunLocal() {
+        System.setProperty("runLocal", "true");
     }
 
     protected int propertyInt(String name, int defaultValue) {

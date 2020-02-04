@@ -63,6 +63,8 @@ public class AsyncTransformTest extends AbstractSoakTest {
     private static final int DEFAULT_MAX_SCHEDULER_DELAY = 500;
     private static final int EVENT_JOURNAL_CAPACITY = 600_000;
     private static final int SCHEDULER_CORE_SIZE = 5;
+    private static final int MAX_CONCURRENT_OPS = 256;
+    private static final boolean UNORDERED = false;
 
     private long snapshotIntervalMs;
     private long maxSchedulerDelayMillis;
@@ -132,16 +134,14 @@ public class AsyncTransformTest extends AbstractSoakTest {
                                          .withoutTimestamps().setName("Stream from map(" + SOURCE + ")");
 
         long maxSchedulerDelayMillisLocal = maxSchedulerDelayMillis;
-        ServiceFactory<?, Scheduler> orderedContextFactory = sharedService(
+        ServiceFactory<?, Scheduler> contextFactory = sharedService(
                 ctx -> new Scheduler(SCHEDULER_CORE_SIZE, maxSchedulerDelayMillisLocal),
                 Scheduler::shutdown
         );
-        sourceStage.mapUsingServiceAsync(orderedContextFactory, Scheduler::schedule)
+        sourceStage.mapUsingServiceAsync(contextFactory, Scheduler::schedule)
                 .writeTo(Sinks.remoteMap(ORDERED_SINK, remoteClusterClientConfig));
 
-        ServiceFactory<?, Scheduler> unorderedContextFactory = orderedContextFactory
-                .withUnorderedAsyncResponses();
-        sourceStage.mapUsingServiceAsync(unorderedContextFactory, Scheduler::schedule)
+        sourceStage.mapUsingServiceAsync(contextFactory, MAX_CONCURRENT_OPS, UNORDERED, Scheduler::schedule)
                 .writeTo(Sinks.remoteMap(UNORDERED_SINK, remoteClusterClientConfig));
         return p;
     }

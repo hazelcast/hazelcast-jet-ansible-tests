@@ -21,7 +21,7 @@ import com.hazelcast.jet.core.BroadcastKey;
 import com.hazelcast.jet.core.ProcessorMetaSupplier;
 import com.hazelcast.jet.core.ProcessorSupplier;
 import com.hazelcast.logging.ILogger;
-import java.util.Map;
+import com.hazelcast.map.IMap;
 import java.util.PriorityQueue;
 
 import static com.hazelcast.jet.core.ProcessorMetaSupplier.preferLocalParallelismOne;
@@ -38,7 +38,7 @@ public class VerificationProcessor extends AbstractProcessor {
     private long counter;
     private final PriorityQueue<Long> queue = new PriorityQueue<>();
     private ILogger logger;
-    private Map<String, Long> map;
+    private IMap<String, Long> map;
 
     public VerificationProcessor(String name) {
         this.name = name;

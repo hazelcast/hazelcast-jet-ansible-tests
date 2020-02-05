@@ -32,7 +32,6 @@ import com.hazelcast.logging.ILogger;
 import org.apache.activemq.ActiveMQConnectionFactory;
 
 import java.io.IOException;
-import java.io.Serializable;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -123,7 +122,6 @@ public class JmsSourceTest extends AbstractSoakTest {
         Pipeline p = Pipeline.create();
 
         StreamSource<Long> source = Sources.jmsQueueBuilder(getConnectionFactory(brokerURL))
-                .sharedConsumer(true)
                 .maxGuarantee(ProcessingGuarantee.EXACTLY_ONCE)
                 .destinationName(SOURCE_QUEUE + clusterName)
                 .build(msg -> Long.parseLong(((TextMessage) msg).getText().substring(MESSAGE_PREFIX_LENGHT)));
@@ -193,7 +191,7 @@ public class JmsSourceTest extends AbstractSoakTest {
         assertEquals(expectedTotalCount, actualTotalCount);
     }
 
-    static class JmsFactorySupplier implements Serializable {
+    static class JmsFactorySupplier {
 
         static SupplierEx<ConnectionFactory> getConnectionFactory(String brokerURL) {
             return () -> new ActiveMQConnectionFactory(brokerURL);

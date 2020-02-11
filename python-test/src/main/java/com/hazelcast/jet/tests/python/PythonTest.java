@@ -52,6 +52,7 @@ public class PythonTest extends AbstractSoakTest {
                     "    return ['echo-%s' % i for i in input_list]\n";
 
     private static final int DEFAULT_ITEM_COUNT = 10_000;
+    private static final int LOG_JOB_COUNT_THRESHOLD = 100;
 
     private File baseDir;
     private IMap<Integer, String> sourceMap;
@@ -92,7 +93,7 @@ public class PythonTest extends AbstractSoakTest {
             assertEquals(itemCount, sinkList.size());
             assertEquals(itemCount, sinkList.stream().filter(s -> s.startsWith("echo-")).count());
             sinkList.clear();
-            if (jobCount % 100 == 0) {
+            if (jobCount % LOG_JOB_COUNT_THRESHOLD == 0) {
                 logger.info("Job count: " + jobCount);
             }
             jobCount++;

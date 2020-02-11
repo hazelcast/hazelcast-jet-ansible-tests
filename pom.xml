@@ -20,6 +20,7 @@
         <module>job-management-test</module>
         <module>kafka-session-window-test</module>
         <module>large-snapshot-chunk-test</module>
+        <module>python-test</module>
         <module>remote-controller-client</module>
         <module>return-result-to-caller-test</module>
         <module>rolling-aggregate-test</module>

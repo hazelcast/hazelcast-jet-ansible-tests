@@ -85,13 +85,19 @@ public class PythonTest extends AbstractSoakTest {
     @Override
     protected void test() {
         long begin = System.currentTimeMillis();
+        long jobCount = 0;
         while (System.currentTimeMillis() - begin < durationInMillis) {
             jet.newJob(pipeline()).join();
 
             assertEquals(itemCount, sinkList.size());
             assertEquals(itemCount, sinkList.stream().filter(s -> s.startsWith("echo-")).count());
             sinkList.clear();
+            if (jobCount % 100 == 0) {
+                logger.info("Job count: " + jobCount);
+            }
+            jobCount++;
         }
+        logger.info("Final job count: " + jobCount);
     }
 
     @Override

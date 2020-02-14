@@ -22,10 +22,10 @@ import com.hazelcast.jet.pipeline.Pipeline;
 import com.hazelcast.jet.pipeline.ServiceFactories;
 import com.hazelcast.jet.pipeline.test.TestSources;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.stream.Stream;
 
 import static com.hazelcast.jet.core.processor.Processors.noopP;
@@ -53,7 +53,7 @@ public class AttachMLModelTest extends AbstractSoakTest {
 
     @Override
     protected void test() throws IOException {
-        Path mlData = new File(mlDataPath).toPath();
+        Path mlData = Paths.get(mlDataPath);
         assertTrue("testing ML data does not exists", Files.exists(mlData));
         long count = Files.lines(mlData).count();
         assertEquals(EXPECTED_LINES_IN_MODEL, count);

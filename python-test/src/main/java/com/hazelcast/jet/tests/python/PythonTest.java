@@ -18,6 +18,7 @@ package com.hazelcast.jet.tests.python;
 
 import com.hazelcast.collection.IList;
 import com.hazelcast.internal.nio.IOUtil;
+import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.pipeline.Pipeline;
 import com.hazelcast.jet.pipeline.Sinks;
 import com.hazelcast.jet.pipeline.Sources;
@@ -35,6 +36,7 @@ import java.nio.file.Path;
 import java.util.Map;
 
 import static com.hazelcast.jet.impl.util.Util.uncheckCall;
+import static com.hazelcast.jet.tests.common.Util.sleepSeconds;
 import static com.hazelcast.query.Predicates.alwaysTrue;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.stream.Collectors.toList;
@@ -53,12 +55,13 @@ public class PythonTest extends AbstractSoakTest {
 
     private static final int DEFAULT_ITEM_COUNT = 10_000;
     private static final int LOG_JOB_COUNT_THRESHOLD = 100;
+    private static final int DEFAULT_SLEEP_AFTER_TEST_SECONDS = 5;
 
     private File baseDir;
     private IMap<Integer, String> sourceMap;
     private IList<String> sinkList;
     private int itemCount;
-
+    private int sleepAfterTestSeconds;
 
     public static void main(String[] args) throws Exception {
         new PythonTest().run(args);
@@ -75,6 +78,7 @@ public class PythonTest extends AbstractSoakTest {
         sinkList.clear();
 
         itemCount = propertyInt("itemCount", DEFAULT_ITEM_COUNT);
+        sleepAfterTestSeconds = propertyInt("sleepAfterTestSeconds", DEFAULT_SLEEP_AFTER_TEST_SECONDS);
 
         installFileToBaseDir();
         range(0, itemCount)
@@ -88,7 +92,9 @@ public class PythonTest extends AbstractSoakTest {
         long begin = System.currentTimeMillis();
         long jobCount = 0;
         while (System.currentTimeMillis() - begin < durationInMillis) {
-            jet.newJob(pipeline()).join();
+            JobConfig jobConfig = new JobConfig();
+            jobConfig.setName("PythonTest" + jobCount);
+            jet.newJob(pipeline(), jobConfig).join();
 
             assertEquals(itemCount, sinkList.size());
             assertEquals(itemCount, sinkList.stream().filter(s -> s.startsWith("echo-")).count());
@@ -97,6 +103,7 @@ public class PythonTest extends AbstractSoakTest {
                 logger.info("Job count: " + jobCount);
             }
             jobCount++;
+            sleepSeconds(sleepAfterTestSeconds);
         }
         logger.info("Final job count: " + jobCount);
     }

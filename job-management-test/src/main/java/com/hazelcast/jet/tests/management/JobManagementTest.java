@@ -28,7 +28,10 @@ import com.hazelcast.jet.pipeline.Sources;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
 import com.hazelcast.map.IMap;
 
+import java.util.concurrent.CancellationException;
+
 import static com.hazelcast.jet.Util.mapEventNewValue;
+import static com.hazelcast.jet.Util.mapPutEvents;
 import static com.hazelcast.jet.core.JobStatus.RUNNING;
 import static com.hazelcast.jet.core.JobStatus.SUSPENDED;
 import static com.hazelcast.jet.pipeline.JournalInitialPosition.START_FROM_OLDEST;
@@ -50,8 +53,6 @@ public class JobManagementTest extends AbstractSoakTest {
     private Producer producer;
     private int snapshotIntervalMs;
 
-    private transient boolean odds;
-
     public static void main(String[] args) throws Exception {
         new JobManagementTest().run(args);
     }
@@ -62,8 +63,8 @@ public class JobManagementTest extends AbstractSoakTest {
         Config config = jet.getHazelcastInstance().getConfig();
         MapConfig mapConfig = new MapConfig(SOURCE);
         mapConfig.getEventJournalConfig()
-                .setCapacity(EVENT_JOURNAL_CAPACITY)
-                .setEnabled(true);
+                 .setCapacity(EVENT_JOURNAL_CAPACITY)
+                 .setEnabled(true);
         config.addMapConfig(mapConfig);
         producer = new Producer(jet.getMap(SOURCE));
         producer.start();
@@ -71,7 +72,7 @@ public class JobManagementTest extends AbstractSoakTest {
 
     public void test() {
         // Submit the job without initial snapshot
-        Job job = jet.newJob(pipeline(odds), jobConfig(null));
+        Job job = jet.newJob(pipeline(), jobConfig(null));
         waitForJobStatus(job, RUNNING);
         sleepMinutes(1);
 
@@ -95,13 +96,14 @@ public class JobManagementTest extends AbstractSoakTest {
 
             logger.info("Cancel job and export snapshot");
             JobStateSnapshot exportedSnapshot = job.cancelAndExportSnapshot("JobManagementTestSnapshot");
+            try {
+                job.join();
+            } catch (CancellationException e) { /*ignored*/ }
             sleepMinutes(1);
 
-            // Change the job (filters either odds or evens)
-            odds = !odds;
 
-            logger.info("Upgrade job");
-            job = jet.newJob(pipeline(odds), jobConfig(exportedSnapshot.name()));
+            logger.info("New job with exported snapshot");
+            job = jet.newJob(pipeline(), jobConfig(exportedSnapshot.name()));
             waitForJobStatus(job, RUNNING);
             sleepMinutes(1);
 
@@ -128,13 +130,13 @@ public class JobManagementTest extends AbstractSoakTest {
                 .setAutoScaling(false);
     }
 
-    private static Pipeline pipeline(boolean odds) {
+    private static Pipeline pipeline() {
         Pipeline p = Pipeline.create();
-        p.readFrom(Sources.mapJournal(SOURCE, START_FROM_OLDEST, mapEventNewValue(), filter(odds)))
+        p.readFrom(Sources.mapJournal(SOURCE, START_FROM_OLDEST, mapEventNewValue(), mapPutEvents()))
          .withoutTimestamps()
          .groupingKey(l -> 0L)
          .mapUsingService(sharedService(ctw -> null), (c, k, v) -> v)
-         .writeTo(Sinks.fromProcessor("sink", VerificationProcessor.supplier(odds)));
+         .writeTo(Sinks.fromProcessor("sink", VerificationProcessor.supplier()));
         return p;
     }
 

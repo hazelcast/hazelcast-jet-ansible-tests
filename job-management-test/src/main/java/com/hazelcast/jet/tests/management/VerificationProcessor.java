@@ -28,17 +28,13 @@ import static com.hazelcast.jet.core.ProcessorMetaSupplier.preferLocalParallelis
 
 public final class VerificationProcessor extends AbstractProcessor {
 
-    private static final int MAX_QUEUE_SIZE = 10_000;
-
-    private final boolean odds;
-
+    private static final int MAX_QUEUE_SIZE = 100_000;
+    private final PriorityQueue<Long> queue = new PriorityQueue<>();
     private boolean processed;
     private long counter;
-    private final PriorityQueue<Long> queue = new PriorityQueue<>();
     private ILogger logger;
 
-    private VerificationProcessor(boolean odds) {
-        this.odds = odds;
+    private VerificationProcessor() {
     }
 
     @Override
@@ -50,17 +46,22 @@ public final class VerificationProcessor extends AbstractProcessor {
     protected boolean tryProcess(int ordinal, Object item) {
         processed = true;
         long value = (Long) item;
-        assertValue(value);
         if (value < counter) {
             logger.info("discard stale value: " + value + ", counter: " + counter);
         } else if (value != counter) {
             queue.offer(value);
         } else {
-            incrementCounter();
+            counter++;
             consumeQueue();
         }
         if (queue.size() > MAX_QUEUE_SIZE) {
-            throw new IllegalStateException("Queue size reached the threshold(" + MAX_QUEUE_SIZE + ") = " + queue.size());
+            StringBuilder builder = new StringBuilder();
+            builder.append(String.format("Queue reached the threshold(%d) size: %d,", MAX_QUEUE_SIZE, queue.size()));
+            builder.append(" Counter: ").append(counter).append(", queue: ");
+            for (int i = 0; i < 10; i++) {
+                builder.append(queue.poll()).append("\t");
+            }
+            throw new IllegalStateException(builder.toString());
         }
         return true;
     }
@@ -70,8 +71,7 @@ public final class VerificationProcessor extends AbstractProcessor {
         if (!processed) {
             return true;
         }
-        logger.info(String.format("saveToSnapshot odd: %b, counter: %d, size: %d, peek: %d",
-                odds, counter, queue.size(), queue.peek()));
+        logger.info(String.format("saveToSnapshot counter: %d, size: %d, peek: %d", counter, queue.size(), queue.peek()));
         return tryEmitToSnapshot(BroadcastKey.broadcastKey(counter), queue);
     }
 
@@ -80,17 +80,8 @@ public final class VerificationProcessor extends AbstractProcessor {
         counter = (Long) ((BroadcastKey) key).key();
         queue.addAll((PriorityQueue<Long>) value);
 
-        logger.info(String.format("restoreFromSnapshot odd: %b, counter: %d, size: %d, peek: %d",
-                odds, counter, queue.size(), queue.peek()));
-
-        if (odds != isOdd(counter)) {
-            if (!queue.isEmpty()) {
-                counter = (long) queue.toArray()[queue.size() - 1];
-                queue.clear();
-            }
-            counter++;
-            logger.info(String.format("Switch to odds[%b], new counter: %d", odds, counter));
-        }
+        logger.info(String.format("restoreFromSnapshot counter: %d, size: %d, peek: %d",
+                counter, queue.size(), queue.peek()));
     }
 
     private void consumeQueue() {
@@ -99,27 +90,13 @@ public final class VerificationProcessor extends AbstractProcessor {
             if (peeked == null || counter != peeked) {
                 break;
             }
-            incrementCounter();
+            counter++;
             queue.poll();
         }
     }
 
-    private void incrementCounter() {
-        counter += 2;
-    }
-
-    private void assertValue(long value) {
-        if ((odds && !isOdd(value)) || (!odds && isOdd(value))) {
-            throw new AssertionError("Value should not be odd. odds: " + odds + ", value: " + value);
-        }
-    }
-
-    static ProcessorMetaSupplier supplier(boolean odds) {
-        return preferLocalParallelismOne(ProcessorSupplier.of(() -> new VerificationProcessor(odds)));
-    }
-
-    private static boolean isOdd(long value) {
-        return value % 2 != 0;
+    static ProcessorMetaSupplier supplier() {
+        return preferLocalParallelismOne(ProcessorSupplier.of(VerificationProcessor::new));
     }
 }
 

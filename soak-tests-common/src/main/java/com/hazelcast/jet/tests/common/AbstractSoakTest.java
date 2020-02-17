@@ -19,17 +19,14 @@ package com.hazelcast.jet.tests.common;
 import com.hazelcast.client.config.ClientConfig;
 import com.hazelcast.client.config.XmlClientConfigBuilder;
 import com.hazelcast.config.CacheSimpleConfig;
-import com.hazelcast.function.PredicateEx;
 import com.hazelcast.jet.Jet;
 import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.config.JetClientConfig;
 import com.hazelcast.jet.config.JetConfig;
 import com.hazelcast.logging.ILogger;
-import com.hazelcast.map.EventJournalMapEvent;
 
 import java.io.IOException;
 
-import static com.hazelcast.jet.Util.mapPutEvents;
 import static com.hazelcast.jet.tests.common.Util.parseArguments;
 import static java.util.concurrent.TimeUnit.MINUTES;
 
@@ -141,11 +138,6 @@ public abstract class AbstractSoakTest {
 
     protected static ILogger getLogger(JetInstance instance, Class clazz) {
         return instance.getHazelcastInstance().getLoggingService().getLogger(clazz);
-    }
-
-    protected static PredicateEx<EventJournalMapEvent<Long, Long>> filter(boolean odds) {
-        PredicateEx<EventJournalMapEvent<Long, Long>> putEvents = mapPutEvents();
-        return e -> putEvents.test(e) && (e.getNewValue() % 2 == (odds ? 1 : 0));
     }
 
     protected static void assertEquals(int expected, int actual) {

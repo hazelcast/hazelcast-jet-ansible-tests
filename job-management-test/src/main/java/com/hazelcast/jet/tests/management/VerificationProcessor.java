@@ -28,7 +28,7 @@ import static com.hazelcast.jet.core.ProcessorMetaSupplier.preferLocalParallelis
 
 public final class VerificationProcessor extends AbstractProcessor {
 
-    private static final int MAX_QUEUE_SIZE = 100_000;
+    private static final int MAX_QUEUE_SIZE = 50_000;
     private final PriorityQueue<Long> queue = new PriorityQueue<>();
     private boolean processed;
     private long counter;

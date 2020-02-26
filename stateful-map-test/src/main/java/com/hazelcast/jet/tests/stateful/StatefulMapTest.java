@@ -202,7 +202,7 @@ public class StatefulMapTest extends AbstractSoakTest {
             Optional<Entry<Long, Long>> max = txMap.entrySet()
                     .stream()
                     .max(Comparator.comparing(Map.Entry::getKey));
-            logger.info(String.format("MaxID at the end: %d", max.get().getValue()));
+            logger.info(String.format("MaxID at the end: %d", max.get().getKey()));
         }
 
         Map<Long, Integer> verifiedTxs = txMap.executeOnEntries(

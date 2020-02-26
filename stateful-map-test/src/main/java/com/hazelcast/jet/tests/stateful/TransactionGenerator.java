@@ -51,7 +51,7 @@ public final class TransactionGenerator {
     private final int batchCount;
     private final ILogger logger;
 
-    private long txId;
+    private volatile long txId;
     private boolean start = true;
 
     private TransactionGenerator(Context context, int txPerSeconds, int batchCount) {

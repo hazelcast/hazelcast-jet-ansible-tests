@@ -29,8 +29,13 @@ import com.hazelcast.jet.pipeline.StreamStage;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.map.IMap;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
 
 import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -164,20 +169,42 @@ public class StatefulMapTest extends AbstractSoakTest {
         cancelJobAndJoin(client, job);
         sleepSeconds(DELAY_BETWEEN_STATUS_CHECKS);
 
+        List<AssertionError> assertionChecks = new ArrayList<>();
+
         long expectedTotalKeyCount = messagingMap.remove(TOTAL_KEY_COUNT);
+        logger.info("Total key count: " + expectedTotalKeyCount);
+
         totalTxNumber += completedTxCount(txMap, logger, Long.MAX_VALUE);
-        assertWithClusterName(name, expectedTotalKeyCount, totalTxNumber);
+        assertWithClusterName(name, expectedTotalKeyCount, totalTxNumber, assertionChecks);
 
         Set<Long> keySet = timeoutTxMap.keySet(mapEntry -> mapEntry.getValue() != TIMED_OUT_CODE);
-        assertWithClusterName(name, 0, keySet.size());
-        assertWithClusterName(name, expectedTotalKeyCount / generatorBatchCount, timeoutTxMap.size());
+        assertWithClusterName(name, 0, keySet.size(), assertionChecks);
+        assertWithClusterName(name, expectedTotalKeyCount / generatorBatchCount, timeoutTxMap.size(), assertionChecks);
+
+        if (!assertionChecks.isEmpty()) {
+            for (AssertionError check : assertionChecks) {
+                logger.severe("Exception in " + name, check);
+            }
+            throw assertionChecks.get(0);
+        }
     }
 
-    private void assertWithClusterName(String clusterName, long expected, long actual) {
-        assertEquals(String.format("%s -> expected: %d, actual: %d", clusterName, expected, actual), expected, actual);
+    private void assertWithClusterName(String clusterName, long expected, long actual, List<AssertionError> checks) {
+        try {
+            assertEquals(String.format("%s -> expected: %d, actual: %d", clusterName, expected, actual), expected, actual);
+        } catch (AssertionError ex) {
+            checks.add(ex);
+        }
     }
 
     private long completedTxCount(IMap<Long, Long> txMap, ILogger logger, long currentTxId) {
+        if (currentTxId == Long.MAX_VALUE) {
+            Optional<Entry<Long, Long>> max = txMap.entrySet()
+                    .stream()
+                    .max(Comparator.comparing(Map.Entry::getKey));
+            logger.info(String.format("MaxID at the end: %d", max.get().getValue()));
+        }
+
         Map<Long, Integer> verifiedTxs = txMap.executeOnEntries(
                 new VerificationEntryProcessor(),
                 predicate(currentTxId - estimatedTxIdGap)

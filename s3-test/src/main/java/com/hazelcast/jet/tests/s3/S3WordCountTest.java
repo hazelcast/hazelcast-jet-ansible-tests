@@ -60,6 +60,7 @@ public class S3WordCountTest extends AbstractSoakTest {
     private static final int S3_CLIENT_SOCKET_TIMEOUT_MINUTES = 5;
 
     private static final String DEFAULT_BUCKET_NAME = "jet-soak-tests-bucket";
+    private static final String DEFAULT_DIRECTORY_NAME = "dir";
     private static final String RESULTS_PREFIX = "results/";
     private static final int DEFAULT_TOTAL = 400000;
     private static final int DEFAULT_DISTINCT = 50000;
@@ -68,6 +69,8 @@ public class S3WordCountTest extends AbstractSoakTest {
 
     private S3Client s3Client;
     private String bucketName;
+    private String directoryName;
+    private String result;
     private String accessKey;
     private String secretKey;
     private int distinct;
@@ -81,19 +84,21 @@ public class S3WordCountTest extends AbstractSoakTest {
     @Override
     protected void init() {
         bucketName = property("bucketName", DEFAULT_BUCKET_NAME);
-        accessKey = property("accessKey", null);
-        secretKey = property("secretKey", null);
+        directoryName = property("directoryName", DEFAULT_DIRECTORY_NAME) + "/";
+        result = directoryName + RESULTS_PREFIX;
+        accessKey = property("accessKey", "");
+        secretKey = property("secretKey", "");
         distinct = propertyInt("distinctWords", DEFAULT_DISTINCT);
         totalWordCount = propertyInt("totalWordCount", DEFAULT_TOTAL);
         sleepSeconds = propertyInt("sleepSecondsBetweenJobs", DEFAULT_SLEEP_SECONDS);
 
         s3Client = clientSupplier().get();
-        deleteBucketContents();
+        deleteBucketContents(directoryName);
 
         Pipeline p = Pipeline.create();
         p.readFrom(batchFromProcessor("s3-word-generator",
                 WordGenerator.metaSupplier(distinct, totalWordCount)))
-         .writeTo(S3Sinks.s3(bucketName, clientSupplier()));
+         .writeTo(S3Sinks.s3(bucketName, directoryName, UTF_8, clientSupplier(), Object::toString));
 
         jet.newJob(p).join();
     }
@@ -130,14 +135,14 @@ public class S3WordCountTest extends AbstractSoakTest {
     private Pipeline pipeline() {
         Pipeline pipeline = Pipeline.create();
 
-        pipeline.readFrom(S3Sources.s3(singletonList(bucketName), null, clientSupplier()))
+        pipeline.readFrom(S3Sources.s3(singletonList(bucketName), directoryName, clientSupplier()))
                 .flatMap((String line) -> {
                     StringTokenizer s = new StringTokenizer(line);
                     return () -> s.hasMoreTokens() ? s.nextToken() : null;
                 })
                 .groupingKey(wholeItem())
                 .aggregate(counting())
-                .writeTo(S3Sinks.s3(bucketName, RESULTS_PREFIX, UTF_8,
+                .writeTo(S3Sinks.s3(bucketName, result, UTF_8,
                         clientSupplier(), e -> e.getKey() + " " + e.getValue()));
 
         return pipeline;
@@ -192,7 +197,7 @@ public class S3WordCountTest extends AbstractSoakTest {
         Iterator<S3Object> iterator = null;
         for (int i = 0; i < GET_OBJECT_RETRY_COUNT; i++) {
             iterator = s3Client.listObjectsV2Paginator(
-                    b -> b.bucket(bucketName).prefix(RESULTS_PREFIX)).contents().iterator();
+                    b -> b.bucket(bucketName).prefix(result)).contents().iterator();
             if (iterator != null && iterator.hasNext()) {
                 return iterator;
             }
@@ -205,7 +210,7 @@ public class S3WordCountTest extends AbstractSoakTest {
     @Override
     protected void teardown(Throwable t) throws Exception {
         if (t == null && s3Client != null) {
-            deleteBucketContents();
+            deleteBucketContents(directoryName);
         }
         if (s3Client != null) {
             s3Client.close();
@@ -213,7 +218,7 @@ public class S3WordCountTest extends AbstractSoakTest {
     }
 
     private void deleteResults() {
-        s3Client.listObjectsV2Paginator(b -> b.bucket(bucketName).prefix(RESULTS_PREFIX))
+        s3Client.listObjectsV2Paginator(b -> b.bucket(bucketName).prefix(result))
                 .contents()
                 .forEach(s3Object -> s3Client.deleteObject(b -> b.bucket(bucketName).key(s3Object.key())));
     }
@@ -268,9 +273,9 @@ public class S3WordCountTest extends AbstractSoakTest {
         return false;
     }
 
-    private void deleteBucketContents() {
+    private void deleteBucketContents(String directoryName) {
         try {
-            s3Client.listObjectsV2Paginator(b -> b.bucket(bucketName))
+            s3Client.listObjectsV2Paginator(b -> b.bucket(bucketName).prefix(directoryName))
                     .contents()
                     .forEach(s3Object -> s3Client.deleteObject(b -> b.bucket(bucketName).key(s3Object.key())));
         } catch (Exception e) {

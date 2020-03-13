@@ -7,7 +7,7 @@
     <groupId>com.hazelcast.jet.tests</groupId>
     <artifactId>hazelcast-jet-ansible-tests</artifactId>
     <packaging>pom</packaging>
-    <version>4.0-SNAPSHOT</version>
+    <version>4.1-SNAPSHOT</version>
     <description>Soak Tests for Hazelcast Jet</description>
     <modules>
         <module>async-transform-test</module>
@@ -35,7 +35,7 @@
 
     <properties>
         <jdk.version>1.8</jdk.version>
-        <jet.version>4.0-SNAPSHOT</jet.version>
+        <jet.version>4.1-SNAPSHOT</jet.version>
         <main.basedir>${project.basedir}</main.basedir>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 

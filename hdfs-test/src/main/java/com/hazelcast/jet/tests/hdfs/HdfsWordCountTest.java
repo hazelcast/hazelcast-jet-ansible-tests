@@ -16,6 +16,7 @@
 
 package com.hazelcast.jet.tests.hdfs;
 
+import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.core.ProcessorMetaSupplier;
 import com.hazelcast.jet.hadoop.HadoopSinks;
@@ -71,7 +72,8 @@ public class HdfsWordCountTest extends AbstractSoakTest {
         new HdfsWordCountTest().run(args);
     }
 
-    public void init() {
+    @Override
+    public void init(JetInstance client) {
         long timestamp = System.nanoTime();
         hdfsUri = property("hdfs_name_node", "hdfs://localhost:8020");
         inputPath = property("hdfs_input_path", "hdfs-input-") + timestamp;
@@ -91,10 +93,16 @@ public class HdfsWordCountTest extends AbstractSoakTest {
         jobConfig.addClass(WordGenerator.class);
         jobConfig.addClass(WordGenerator.MetaSupplier.class);
 
-        jet.newJob(pipeline, jobConfig).join();
+        client.newJob(pipeline, jobConfig).join();
     }
 
-    public void test() throws Exception {
+    @Override
+    protected boolean runOnBothClusters() {
+        return false;
+    }
+
+    @Override
+    public void test(JetInstance client, String name) throws Exception {
         long begin = System.currentTimeMillis();
         ExecutorService executorService = Executors.newFixedThreadPool(threadCount);
         for (int i = 0; i < threadCount; i++) {
@@ -102,7 +110,7 @@ public class HdfsWordCountTest extends AbstractSoakTest {
             executorService.submit(() -> {
                 while ((System.currentTimeMillis() - begin) < durationInMillis && exception == null) {
                     try {
-                        executeJob(threadIndex);
+                        executeJob(client, threadIndex);
                         verify(threadIndex);
                     } catch (Throwable e) {
                         exception = new Exception(e);
@@ -120,10 +128,10 @@ public class HdfsWordCountTest extends AbstractSoakTest {
     protected void teardown(Throwable t) throws Exception {
     }
 
-    private void executeJob(int threadIndex) {
+    private void executeJob(JetInstance client, int threadIndex) {
         JobConfig jobConfig = new JobConfig();
         jobConfig.setName("Hdfs WordCount Test [" + threadIndex + "]");
-        jet.newJob(pipeline(threadIndex), jobConfig).join();
+        client.newJob(pipeline(threadIndex), jobConfig).join();
     }
 
     private Pipeline pipeline(int threadIndex) {

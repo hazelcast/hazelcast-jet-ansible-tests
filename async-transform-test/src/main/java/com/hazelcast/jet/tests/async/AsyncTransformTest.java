@@ -78,35 +78,40 @@ public class AsyncTransformTest extends AbstractSoakTest {
     }
 
     @Override
-    protected void init() throws Exception {
+    protected void init(JetInstance client) throws Exception {
         snapshotIntervalMs = propertyInt("snapshotIntervalMs", DEFAULT_SNAPSHOT_INTERVAL);
         maxSchedulerDelayMillis = propertyInt("maxSchedulerDelayMillis", DEFAULT_MAX_SCHEDULER_DELAY);
-        remoteClusterClientConfig = remoteClusterClientConfig();
 
+        remoteClusterClientConfig = remoteClusterClientConfig();
         remoteClient = Jet.newJetClient(remoteClusterClientConfig);
 
         Config config = remoteClient.getHazelcastInstance().getConfig();
         MapConfig mapConfig = new MapConfig(ORDERED_SINK);
         mapConfig.getEventJournalConfig()
-                .setCapacity(EVENT_JOURNAL_CAPACITY)
-                .setEnabled(true);
+                 .setCapacity(EVENT_JOURNAL_CAPACITY)
+                 .setEnabled(true);
         config.addMapConfig(mapConfig);
         MapConfig mapConfig2 = new MapConfig(UNORDERED_SINK);
         mapConfig2.getEventJournalConfig()
-                .setCapacity(EVENT_JOURNAL_CAPACITY)
-                .setEnabled(true);
+                  .setCapacity(EVENT_JOURNAL_CAPACITY)
+                  .setEnabled(true);
         config.addMapConfig(mapConfig2);
         producer = new BasicEventJournalProducer(remoteClient, SOURCE, EVENT_JOURNAL_CAPACITY);
         producer.start();
     }
 
     @Override
-    protected void test() throws InterruptedException {
+    protected boolean runOnBothClusters() {
+        return false;
+    }
+
+    @Override
+    protected void test(JetInstance client, String name) throws InterruptedException {
         JobConfig jobConfig = new JobConfig();
-        jobConfig.setName(AsyncTransformTest.class.getSimpleName());
+        jobConfig.setName(name);
         jobConfig.setSnapshotIntervalMillis(snapshotIntervalMs);
         jobConfig.setProcessingGuarantee(ProcessingGuarantee.EXACTLY_ONCE);
-        Job job = jet.newJob(pipeline(), jobConfig);
+        Job job = client.newJob(pipeline(), jobConfig);
 
         Verifier orderedVerifier = new Verifier(remoteClient, ORDERED_SINK);
         Verifier unorderedVerifier = new Verifier(remoteClient, UNORDERED_SINK);
@@ -139,10 +144,10 @@ public class AsyncTransformTest extends AbstractSoakTest {
                 Scheduler::shutdown
         );
         sourceStage.mapUsingServiceAsync(contextFactory, Scheduler::schedule)
-                .writeTo(Sinks.remoteMap(ORDERED_SINK, remoteClusterClientConfig));
+                   .writeTo(Sinks.remoteMap(ORDERED_SINK, remoteClusterClientConfig));
 
         sourceStage.mapUsingServiceAsync(contextFactory, MAX_CONCURRENT_OPS, UNORDERED, Scheduler::schedule)
-                .writeTo(Sinks.remoteMap(UNORDERED_SINK, remoteClusterClientConfig));
+                   .writeTo(Sinks.remoteMap(UNORDERED_SINK, remoteClusterClientConfig));
         return p;
     }
 

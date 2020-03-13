@@ -17,6 +17,7 @@
 package com.hazelcast.jet.tests.cooperativesource;
 
 import com.hazelcast.client.config.ClientConfig;
+import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.impl.util.Util;
 import com.hazelcast.jet.pipeline.BatchSource;
@@ -79,7 +80,7 @@ public class CooperativeMapCacheSourceTest extends AbstractSoakTest {
     }
 
     @Override
-    public void init() {
+    public void init(JetInstance client) {
         threadCount = propertyInt("cooperative_map_cache_thread_count", DEFAULT_THREAD_COUNT);
         localMapSequence = new int[threadCount];
         remoteMapSequence = new int[threadCount];
@@ -88,40 +89,46 @@ public class CooperativeMapCacheSourceTest extends AbstractSoakTest {
         localCacheSequence = new int[threadCount];
         remoteCacheSequence = new int[threadCount];
 
-        initializeSourceMap();
-        initializeSourceCache();
+        initializeSourceMap(client);
+        initializeSourceCache(client);
     }
+
     @Override
-    public void test() throws Exception {
+    protected boolean runOnBothClusters() {
+        return false;
+    }
+
+    @Override
+    public void test(JetInstance client, String name) throws Exception {
         List<ExecutorService> executorServices = new ArrayList<>();
         executorServices.add(runTestInExecutorService(
-                threadIndex -> executeLocalMapJob(threadIndex),
-                threadIndex -> verifyLocalMapJob(threadIndex),
+                threadIndex -> executeLocalMapJob(client, threadIndex),
+                threadIndex -> verifyLocalMapJob(client, threadIndex),
                 localMapSequence
         ));
         executorServices.add(runTestInExecutorService(
-                threadIndex -> executeRemoteMapJob(threadIndex),
-                threadIndex -> verifyRemoteMapJob(threadIndex),
+                threadIndex -> executeRemoteMapJob(client, threadIndex),
+                threadIndex -> verifyRemoteMapJob(client, threadIndex),
                 remoteMapSequence
         ));
         executorServices.add(runTestInExecutorService(
-                threadIndex -> executeQueryLocalMapJob(threadIndex),
-                threadIndex -> verifyQueryLocalMapJob(threadIndex),
+                threadIndex -> executeQueryLocalMapJob(client, threadIndex),
+                threadIndex -> verifyQueryLocalMapJob(client, threadIndex),
                 queryLocalMapSequence
         ));
         executorServices.add(runTestInExecutorService(
-                threadIndex -> executeQueryRemoteMapJob(threadIndex),
-                threadIndex -> verifyQueryRemoteMapJob(threadIndex),
+                threadIndex -> executeQueryRemoteMapJob(client, threadIndex),
+                threadIndex -> verifyQueryRemoteMapJob(client, threadIndex),
                 queryRemoteMapSequence
         ));
         executorServices.add(runTestInExecutorService(
-                threadIndex -> executeLocalCacheJob(threadIndex),
-                threadIndex -> verifyLocalCacheJob(threadIndex),
+                threadIndex -> executeLocalCacheJob(client, threadIndex),
+                threadIndex -> verifyLocalCacheJob(client, threadIndex),
                 localCacheSequence
         ));
         executorServices.add(runTestInExecutorService(
-                threadIndex -> executeRemoteCacheJob(threadIndex),
-                threadIndex -> verifyRemoteCacheJob(threadIndex),
+                threadIndex -> executeRemoteCacheJob(client, threadIndex),
+                threadIndex -> verifyRemoteCacheJob(client, threadIndex),
                 remoteCacheSequence
         ));
 
@@ -137,7 +144,7 @@ public class CooperativeMapCacheSourceTest extends AbstractSoakTest {
     }
 
     private ExecutorService runTestInExecutorService(Consumer<Integer> executeJob, Consumer<Integer> verify,
-            int[] sequenceArray) {
+                                                     int[] sequenceArray) {
         long begin = System.currentTimeMillis();
         ExecutorService executorService = Executors.newFixedThreadPool(threadCount);
         for (int i = 0; i < threadCount; i++) {
@@ -158,7 +165,7 @@ public class CooperativeMapCacheSourceTest extends AbstractSoakTest {
         return executorService;
     }
 
-    private void executeLocalMapJob(int threadIndex) {
+    private void executeLocalMapJob(JetInstance client, int threadIndex) {
         Pipeline pipeline = Pipeline.create();
         int sequence = localMapSequence[threadIndex];
         pipeline.readFrom(Sources.map(SOURCE_MAP))
@@ -170,10 +177,10 @@ public class CooperativeMapCacheSourceTest extends AbstractSoakTest {
 
         JobConfig jobConfig = new JobConfig();
         jobConfig.setName("Cooperative Source - Local Map [thread " + threadIndex + "]");
-        jet.newJob(pipeline, jobConfig).join();
+        client.newJob(pipeline, jobConfig).join();
     }
 
-    private void executeRemoteMapJob(int threadIndex) {
+    private void executeRemoteMapJob(JetInstance client, int threadIndex) {
         Pipeline pipeline = Pipeline.create();
         int sequence = remoteMapSequence[threadIndex];
         pipeline.readFrom(Sources.remoteMap(SOURCE_MAP, wrappedRemoteClusterClientConfig()))
@@ -185,16 +192,16 @@ public class CooperativeMapCacheSourceTest extends AbstractSoakTest {
 
         JobConfig jobConfig = new JobConfig();
         jobConfig.setName("Cooperative Source - Remote Map [thread " + threadIndex + "]");
-        jet.newJob(pipeline, jobConfig).join();
+        client.newJob(pipeline, jobConfig).join();
     }
 
-    private void executeQueryLocalMapJob(int threadIndex) {
+    private void executeQueryLocalMapJob(JetInstance client, int threadIndex) {
         Pipeline pipeline = Pipeline.create();
         BatchSource<Map.Entry<Integer, String>> source
                 = Sources.<Map.Entry<Integer, String>, Integer, String>map(
-                        SOURCE_MAP,
-                        Predicates.greaterEqual("__key", PREDICATE_FROM),
-                        Projections.identity());
+                SOURCE_MAP,
+                Predicates.greaterEqual("__key", PREDICATE_FROM),
+                Projections.identity());
         int sequence = queryLocalMapSequence[threadIndex];
         pipeline.readFrom(source)
                 .map((t) -> {
@@ -205,17 +212,17 @@ public class CooperativeMapCacheSourceTest extends AbstractSoakTest {
 
         JobConfig jobConfig = new JobConfig();
         jobConfig.setName("Cooperative Source - Query Local Map [thread " + threadIndex + "]");
-        jet.newJob(pipeline, jobConfig).join();
+        client.newJob(pipeline, jobConfig).join();
     }
 
-    private void executeQueryRemoteMapJob(int threadIndex) {
+    private void executeQueryRemoteMapJob(JetInstance client, int threadIndex) {
         Pipeline pipeline = Pipeline.create();
         BatchSource<Map.Entry<Integer, String>> source
                 = Sources.<Map.Entry<Integer, String>, Integer, String>remoteMap(
-                        SOURCE_MAP,
-                        wrappedRemoteClusterClientConfig(),
-                        Predicates.greaterEqual("__key", PREDICATE_FROM),
-                        Projections.identity());
+                SOURCE_MAP,
+                wrappedRemoteClusterClientConfig(),
+                Predicates.greaterEqual("__key", PREDICATE_FROM),
+                Projections.identity());
         int sequence = queryRemoteMapSequence[threadIndex];
         pipeline.readFrom(source)
                 .map((t) -> {
@@ -226,10 +233,10 @@ public class CooperativeMapCacheSourceTest extends AbstractSoakTest {
 
         JobConfig jobConfig = new JobConfig();
         jobConfig.setName("Cooperative Source - Query Remote Map [thread " + threadIndex + "]");
-        jet.newJob(pipeline, jobConfig).join();
+        client.newJob(pipeline, jobConfig).join();
     }
 
-    private void executeLocalCacheJob(int threadIndex) {
+    private void executeLocalCacheJob(JetInstance client, int threadIndex) {
         Pipeline pipeline = Pipeline.create();
         int sequence = localCacheSequence[threadIndex];
         pipeline.readFrom(Sources.cache(SOURCE_CACHE))
@@ -241,10 +248,10 @@ public class CooperativeMapCacheSourceTest extends AbstractSoakTest {
 
         JobConfig jobConfig = new JobConfig();
         jobConfig.setName("Cooperative Source - Local Cache [thread " + threadIndex + "]");
-        jet.newJob(pipeline, jobConfig).join();
+        client.newJob(pipeline, jobConfig).join();
     }
 
-    private void executeRemoteCacheJob(int threadIndex) {
+    private void executeRemoteCacheJob(JetInstance client, int threadIndex) {
         Pipeline pipeline = Pipeline.create();
         int sequence = remoteCacheSequence[threadIndex];
         pipeline.readFrom(Sources.remoteCache(SOURCE_CACHE, wrappedRemoteClusterClientConfig()))
@@ -256,11 +263,11 @@ public class CooperativeMapCacheSourceTest extends AbstractSoakTest {
 
         JobConfig jobConfig = new JobConfig();
         jobConfig.setName("Cooperative Source - Remote Cache [thread " + threadIndex + "]");
-        jet.newJob(pipeline, jobConfig).join();
+        client.newJob(pipeline, jobConfig).join();
     }
 
-    private void verifyLocalMapJob(int threadIndex) {
-        Map<Integer, String> map = jet.getMap(SINK_LOCAL_MAP + threadIndex);
+    private void verifyLocalMapJob(JetInstance client, int threadIndex) {
+        Map<Integer, String> map = client.getMap(SINK_LOCAL_MAP + threadIndex);
         assertEquals(SOURCE_MAP_ITEMS, map.size());
         String value = map.get(SOURCE_MAP_LAST_KEY);
         String expectedValue = SOURCE_MAP_LAST_KEY + "_" + localMapSequence[threadIndex];
@@ -268,8 +275,8 @@ public class CooperativeMapCacheSourceTest extends AbstractSoakTest {
         map.clear();
     }
 
-    private void verifyRemoteMapJob(int threadIndex) {
-        Map<Integer, String> map = jet.getMap(SINK_REMOTE_MAP + threadIndex);
+    private void verifyRemoteMapJob(JetInstance client, int threadIndex) {
+        Map<Integer, String> map = client.getMap(SINK_REMOTE_MAP + threadIndex);
         assertEquals(SOURCE_MAP_ITEMS, map.size());
         String value = map.get(SOURCE_MAP_LAST_KEY);
         String expectedValue = SOURCE_MAP_LAST_KEY + "_" + remoteMapSequence[threadIndex];
@@ -277,8 +284,8 @@ public class CooperativeMapCacheSourceTest extends AbstractSoakTest {
         map.clear();
     }
 
-    private void verifyQueryLocalMapJob(int threadIndex) {
-        Map<Integer, String> map = jet.getMap(SINK_QUERY_LOCAL_MAP + threadIndex);
+    private void verifyQueryLocalMapJob(JetInstance client, int threadIndex) {
+        Map<Integer, String> map = client.getMap(SINK_QUERY_LOCAL_MAP + threadIndex);
         assertEquals(EXPECTED_SIZE_AFTER_PREDICATE, map.size());
         String value = map.get(SOURCE_MAP_LAST_KEY);
         String expectedValue = SOURCE_MAP_LAST_KEY + "_" + queryLocalMapSequence[threadIndex];
@@ -286,8 +293,8 @@ public class CooperativeMapCacheSourceTest extends AbstractSoakTest {
         map.clear();
     }
 
-    private void verifyQueryRemoteMapJob(int threadIndex) {
-        Map<Integer, String> map = jet.getMap(SINK_QUERY_REMOTE_MAP + threadIndex);
+    private void verifyQueryRemoteMapJob(JetInstance client, int threadIndex) {
+        Map<Integer, String> map = client.getMap(SINK_QUERY_REMOTE_MAP + threadIndex);
         assertEquals(EXPECTED_SIZE_AFTER_PREDICATE, map.size());
         String value = map.get(SOURCE_MAP_LAST_KEY);
         String expectedValue = SOURCE_MAP_LAST_KEY + "_" + queryRemoteMapSequence[threadIndex];
@@ -295,8 +302,8 @@ public class CooperativeMapCacheSourceTest extends AbstractSoakTest {
         map.clear();
     }
 
-    private void verifyLocalCacheJob(int threadIndex) {
-        Map<Integer, String> map = jet.getMap(SINK_LOCAL_CACHE + threadIndex);
+    private void verifyLocalCacheJob(JetInstance client, int threadIndex) {
+        Map<Integer, String> map = client.getMap(SINK_LOCAL_CACHE + threadIndex);
         assertEquals(SOURCE_CACHE_ITEMS, map.size());
         String value = map.get(SOURCE_CACHE_LAST_KEY);
         String expectedValue = SOURCE_CACHE_LAST_KEY + "_" + localCacheSequence[threadIndex];
@@ -304,8 +311,8 @@ public class CooperativeMapCacheSourceTest extends AbstractSoakTest {
         map.clear();
     }
 
-    private void verifyRemoteCacheJob(int threadIndex) {
-        Map<Integer, String> map = jet.getMap(SINK_REMOTE_CACHE + threadIndex);
+    private void verifyRemoteCacheJob(JetInstance client, int threadIndex) {
+        Map<Integer, String> map = client.getMap(SINK_REMOTE_CACHE + threadIndex);
         assertEquals(SOURCE_CACHE_ITEMS, map.size());
         String value = map.get(SOURCE_CACHE_LAST_KEY);
         String expectedValue = SOURCE_CACHE_LAST_KEY + "_" + remoteCacheSequence[threadIndex];
@@ -319,19 +326,19 @@ public class CooperativeMapCacheSourceTest extends AbstractSoakTest {
         }
     }
 
-    private void initializeSourceMap() {
-        Map<Integer, String> map = jet.getMap(SOURCE_MAP);
+    private void initializeSourceMap(JetInstance client) {
+        Map<Integer, String> map = client.getMap(SOURCE_MAP);
         for (int i = 0; i < SOURCE_MAP_ITEMS; i++) {
             map.put(i, Integer.toString(i));
         }
     }
 
     private ClientConfig wrappedRemoteClusterClientConfig() {
-        return Util.uncheckCall(() -> remoteClusterClientConfig());
+        return Util.uncheckCall(this::remoteClusterClientConfig);
     }
 
-    private void initializeSourceCache() {
-        Cache<Integer, String> cache = jet.getCacheManager().getCache(SOURCE_CACHE);
+    private void initializeSourceCache(JetInstance client) {
+        Cache<Integer, String> cache = client.getCacheManager().getCache(SOURCE_CACHE);
         logger.info("Populating cache " + cache.getName() + "...");
         Map<Integer, String> tmpMap = new HashMap<>();
         for (int i = 0; i < SOURCE_MAP_ITEMS; i++) {

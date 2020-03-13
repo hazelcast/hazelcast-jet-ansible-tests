@@ -16,6 +16,7 @@
 
 package com.hazelcast.jet.tests.earlyresults;
 
+import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.aggregate.AggregateOperations;
 import com.hazelcast.jet.config.JobConfig;
@@ -50,17 +51,22 @@ public class EarlyResultsTest extends AbstractSoakTest {
     }
 
     @Override
-    protected void init() {
+    protected void init(JetInstance client) {
         windowSize = propertyInt("windowSize", DEFAULT_WINDOW_SIZE);
         tradePerSecond = propertyInt("tradePerSecond", DEFAULT_TRADE_PER_SECOND);
         earlyResultsPeriod = windowSize * ONE_THOUSAND / tradePerSecond / 3;
     }
 
     @Override
-    protected void test() {
+    protected boolean runOnBothClusters() {
+        return false;
+    }
+
+    @Override
+    protected void test(JetInstance client, String name) {
         JobConfig jobConfig = new JobConfig();
-        jobConfig.setName(EarlyResultsTest.class.getSimpleName());
-        Job job = jet.newJob(pipeline(), jobConfig);
+        jobConfig.setName(name);
+        Job job = client.newJob(pipeline(), jobConfig);
 
         long begin = System.currentTimeMillis();
         while (System.currentTimeMillis() - begin < durationInMillis) {
@@ -83,8 +89,8 @@ public class EarlyResultsTest extends AbstractSoakTest {
                 .build();
 
         StreamStage<Map.Entry<String, Long>> sourceStage = p.readFrom(TradeGenerator.tradeSource(tradePerSecond))
-                .withNativeTimestamps(0)
-                .setName("Stream from EarlyResult-TradeGenerator");
+                                                            .withNativeTimestamps(0)
+                                                            .setName("Stream from EarlyResult-TradeGenerator");
 
         sourceStage.groupingKey(Map.Entry::getKey)
                    .window(WindowDefinition.tumbling(windowSize).setEarlyResultsPeriod(earlyResultsPeriod))

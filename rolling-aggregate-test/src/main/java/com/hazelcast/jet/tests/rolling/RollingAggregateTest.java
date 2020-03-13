@@ -53,17 +53,23 @@ public class RollingAggregateTest extends AbstractSoakTest {
         new RollingAggregateTest().run(args);
     }
 
-    public void init() throws Exception {
+    @Override
+    public void init(JetInstance client) throws Exception {
         snapshotIntervalMs = propertyInt("snapshotIntervalMs", DEFAULT_SNAPSHOT_INTERVAL);
         remoteClusterClientConfig = remoteClusterClientConfig();
-
         remoteClient = Jet.newJetClient(remoteClusterClientConfig);
 
         producer = new BasicEventJournalProducer(remoteClient, SOURCE, EVENT_JOURNAL_CAPACITY);
         producer.start();
     }
 
-    public void test() {
+    @Override
+    protected boolean runOnBothClusters() {
+        return false;
+    }
+
+    @Override
+    public void test(JetInstance client, String name) {
         Pipeline p = Pipeline.create();
 
         p.readFrom(Sources.<Long, Long, Long>remoteMapJournal(SOURCE, remoteClusterClientConfig,
@@ -73,11 +79,11 @@ public class RollingAggregateTest extends AbstractSoakTest {
          .writeTo(fromProcessor("VerificationSink", VerificationProcessor.supplier()));
 
         JobConfig jobConfig = new JobConfig()
-                .setName("RollingAggregateTest")
+                .setName(name)
                 .setSnapshotIntervalMillis(snapshotIntervalMs)
                 .setProcessingGuarantee(EXACTLY_ONCE);
 
-        Job job = jet.newJob(p, jobConfig);
+        Job job = client.newJob(p, jobConfig);
 
         long begin = System.currentTimeMillis();
         while (System.currentTimeMillis() - begin < durationInMillis) {

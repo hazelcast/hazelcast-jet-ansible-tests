@@ -18,6 +18,7 @@ package com.hazelcast.jet.tests.management;
 
 import com.hazelcast.config.Config;
 import com.hazelcast.config.MapConfig;
+import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.JobStateSnapshot;
 import com.hazelcast.jet.config.JobConfig;
@@ -57,25 +58,31 @@ public class JobManagementTest extends AbstractSoakTest {
         new JobManagementTest().run(args);
     }
 
-    public void init() {
+    @Override
+    public void init(JetInstance client) {
         snapshotIntervalMs = propertyInt("snapshotIntervalMs", DEFAULT_SNAPSHOT_INTERVAL);
 
-        Config config = jet.getHazelcastInstance().getConfig();
+        Config config = client.getHazelcastInstance().getConfig();
         MapConfig mapConfig = new MapConfig(SOURCE);
         mapConfig.getEventJournalConfig()
                  .setCapacity(EVENT_JOURNAL_CAPACITY)
                  .setEnabled(true);
         config.addMapConfig(mapConfig);
-        producer = new Producer(jet.getMap(SOURCE));
+        producer = new Producer(client.getMap(SOURCE));
         producer.start();
     }
 
-    public void test() {
+    @Override
+    protected boolean runOnBothClusters() {
+        return false;
+    }
+
+    @Override
+    public void test(JetInstance client, String name) {
         // Submit the job without initial snapshot
-        Job job = jet.newJob(pipeline(), jobConfig(null));
+        Job job = client.newJob(pipeline(), jobConfig(name, null));
         waitForJobStatus(job, RUNNING);
         sleepMinutes(1);
-
 
         long begin = System.currentTimeMillis();
         while (System.currentTimeMillis() - begin < durationInMillis) {
@@ -103,7 +110,7 @@ public class JobManagementTest extends AbstractSoakTest {
 
 
             logger.info("New job with exported snapshot");
-            job = jet.newJob(pipeline(), jobConfig(exportedSnapshot.name()));
+            job = client.newJob(pipeline(), jobConfig(name, exportedSnapshot.name()));
             waitForJobStatus(job, RUNNING);
             sleepMinutes(1);
 
@@ -121,9 +128,9 @@ public class JobManagementTest extends AbstractSoakTest {
         }
     }
 
-    private JobConfig jobConfig(String initialSnapshot) {
+    private JobConfig jobConfig(String name, String initialSnapshot) {
         return new JobConfig()
-                .setName("JobManagementTest")
+                .setName(name)
                 .setProcessingGuarantee(ProcessingGuarantee.EXACTLY_ONCE)
                 .setSnapshotIntervalMillis(snapshotIntervalMs)
                 .setInitialSnapshotName(initialSnapshot)

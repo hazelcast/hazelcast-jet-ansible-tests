@@ -16,8 +16,6 @@
 
 package com.hazelcast.jet.tests.stateful;
 
-import com.hazelcast.client.config.ClientConfig;
-import com.hazelcast.jet.Jet;
 import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.config.JobConfig;
@@ -32,8 +30,6 @@ import com.hazelcast.map.IMap;
 
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 import static com.hazelcast.jet.Util.entry;
 import static com.hazelcast.jet.config.ProcessingGuarantee.EXACTLY_ONCE;
@@ -45,9 +41,7 @@ import static com.hazelcast.jet.tests.common.Util.sleepMillis;
 import static com.hazelcast.jet.tests.common.Util.sleepSeconds;
 import static com.hazelcast.jet.tests.stateful.TransactionGenerator.transactionEventSource;
 import static com.hazelcast.jet.tests.stateful.VerificationEntryProcessor.predicate;
-import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.MINUTES;
-import static java.util.concurrent.TimeUnit.SECONDS;
 
 public class StatefulMapTest extends AbstractSoakTest {
 
@@ -69,67 +63,66 @@ public class StatefulMapTest extends AbstractSoakTest {
     private static final int DEFAULT_SNAPSHOT_INTERVAL_MILLIS = 5000;
     private static final int WAIT_TX_TIMEOUT_FACTOR = 4;
 
-    private ClientConfig stableClusterClientConfig;
-    private JetInstance stableClusterClient;
     private int txTimeout;
     private int txPerSecond;
     private int generatorBatchCount;
     private int snapshotIntervalMillis;
     private long estimatedTxIdGap;
 
-
     public static void main(String[] args) throws Exception {
         new StatefulMapTest().run(args);
     }
 
     @Override
-    protected void init() throws Exception {
+    protected void init(JetInstance client) throws Exception {
         txTimeout = propertyInt("txTimeout", DEFAULT_TX_TIMEOUT);
         txPerSecond = propertyInt("txPerSecond", DEFAULT_TX_PER_SECOND);
         generatorBatchCount = propertyInt("generatorBatchCount", DEFAULT_GENERATOR_BATCH_COUNT);
         snapshotIntervalMillis = propertyInt("snapshotIntervalMillis", DEFAULT_SNAPSHOT_INTERVAL_MILLIS);
         int verificationGapMinutes = propertyInt("verificationGapMinutes", DEFAULT_VERIFICATION_GAP_MINUTES);
         estimatedTxIdGap = MINUTES.toSeconds(verificationGapMinutes) * txPerSecond / 2;
-
-        stableClusterClientConfig = remoteClusterClientConfig();
-        stableClusterClient = Jet.newJetClient(stableClusterClientConfig);
     }
 
     @Override
-    protected void test() throws Throwable {
-        Throwable[] exceptions = new Throwable[2];
-        ExecutorService executorService = Executors.newFixedThreadPool(2);
-        executorService.execute(() -> {
-            try {
-                testInternal(jet, "Dynamic-StatefulMapTest");
-            } catch (Throwable t) {
-                logger.severe("Exception in Dynamic cluster test", t);
-                exceptions[0] = t;
-            }
-        });
-        executorService.execute(() -> {
-            try {
-                testInternal(stableClusterClient, "Stable-StatefulMapTest");
-            } catch (Throwable t) {
-                logger.severe("Exception in Stable cluster test", t);
-                exceptions[1] = t;
-            }
-        });
-        executorService.shutdown();
-        long extraDuration = WAIT_TX_TIMEOUT_FACTOR * (SECONDS.toMillis(DELAY_BETWEEN_STATUS_CHECKS) + txTimeout);
-        executorService.awaitTermination(durationInMillis + extraDuration, MILLISECONDS);
-
-        if (exceptions[0] != null) {
-            logger.severe("Exception in Dynamic cluster test", exceptions[0]);
-            throw exceptions[0];
-        }
-        if (exceptions[1] != null) {
-            logger.severe("Exception in Stable cluster test", exceptions[1]);
-            throw exceptions[1];
-        }
+    protected boolean runOnBothClusters() {
+        return true;
     }
 
-    private void testInternal(JetInstance client, String name) {
+//    @Override
+//    protected void test(Jetin) throws Throwable {
+//        Throwable[] exceptions = new Throwable[2];
+//        ExecutorService executorService = Executors.newFixedThreadPool(2);
+//        executorService.execute(() -> {
+//            try {
+//                testInternal(jet, "Dynamic-StatefulMapTest");
+//            } catch (Throwable t) {
+//                logger.severe("Exception in Dynamic cluster test", t);
+//                exceptions[0] = t;
+//            }
+//        });
+//        executorService.execute(() -> {
+//            try {
+//                testInternal(stableClusterClient, "Stable-StatefulMapTest");
+//            } catch (Throwable t) {
+//                logger.severe("Exception in Stable cluster test", t);
+//                exceptions[1] = t;
+//            }
+//        });
+//        executorService.shutdown();
+//        long extraDuration = WAIT_TX_TIMEOUT_FACTOR * (SECONDS.toMillis(DELAY_BETWEEN_STATUS_CHECKS) + txTimeout);
+//        executorService.awaitTermination(durationInMillis + extraDuration, MILLISECONDS);
+//
+//        if (exceptions[0] != null) {
+//            logger.severe("Exception in Dynamic cluster test", exceptions[0]);
+//            throw exceptions[0];
+//        }
+//        if (exceptions[1] != null) {
+//            logger.severe("Exception in Stable cluster test", exceptions[1]);
+//            throw exceptions[1];
+//        }
+//    }
+
+    public void test(JetInstance client, String name) {
         IMap<String, Long> messagingMap = client.getMap(MESSAGING_MAP);
         String txMapName = name.startsWith("Stable") ? TX_MAP_STABLE : TX_MAP_DYNAMIC;
         String timeoutMapName = name.startsWith("Stable") ? TIMEOUT_TX_MAP_STABLE : TIMEOUT_TX_MAP_DYNAMIC;
@@ -269,8 +262,5 @@ public class StatefulMapTest extends AbstractSoakTest {
 
     @Override
     protected void teardown(Throwable t) throws Exception {
-        if (stableClusterClient != null) {
-            stableClusterClient.shutdown();
-        }
     }
 }

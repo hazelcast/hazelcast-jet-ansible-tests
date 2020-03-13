@@ -18,6 +18,7 @@ package com.hazelcast.jet.tests.python;
 
 import com.hazelcast.collection.IList;
 import com.hazelcast.internal.nio.IOUtil;
+import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.pipeline.Pipeline;
 import com.hazelcast.jet.pipeline.Sinks;
@@ -68,11 +69,11 @@ public class PythonTest extends AbstractSoakTest {
     }
 
     @Override
-    protected void init() throws Exception {
+    protected void init(JetInstance client) throws Exception {
         baseDir = createTempDirectory();
 
-        sourceMap = jet.getMap(SOURCE_MAP_NAME);
-        sinkList = jet.getList(SINK_LIST_NAME);
+        sourceMap = client.getMap(SOURCE_MAP_NAME);
+        sinkList = client.getList(SINK_LIST_NAME);
 
         sourceMap.clear();
         sinkList.clear();
@@ -88,13 +89,18 @@ public class PythonTest extends AbstractSoakTest {
     }
 
     @Override
-    protected void test() {
+    protected boolean runOnBothClusters() {
+        return false;
+    }
+
+    @Override
+    protected void test(JetInstance client, String name) {
         long begin = System.currentTimeMillis();
         long jobCount = 0;
         while (System.currentTimeMillis() - begin < durationInMillis) {
             JobConfig jobConfig = new JobConfig();
             jobConfig.setName("PythonTest" + jobCount);
-            jet.newJob(pipeline(), jobConfig).join();
+            client.newJob(pipeline(), jobConfig).join();
 
             assertEquals(itemCount, sinkList.size());
             assertEquals(itemCount, sinkList.stream().filter(s -> s.startsWith("echo-")).count());

@@ -17,7 +17,6 @@
 package com.hazelcast.jet.tests.snapshot.kafka;
 
 import com.hazelcast.internal.util.UuidUtil;
-import com.hazelcast.jet.Jet;
 import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.config.JobConfig;
@@ -47,8 +46,6 @@ import static com.hazelcast.jet.aggregate.AggregateOperations.counting;
 import static com.hazelcast.jet.config.ProcessingGuarantee.AT_LEAST_ONCE;
 import static com.hazelcast.jet.config.ProcessingGuarantee.EXACTLY_ONCE;
 import static com.hazelcast.jet.pipeline.WindowDefinition.sliding;
-import static java.util.concurrent.TimeUnit.MILLISECONDS;
-import static java.util.concurrent.TimeUnit.SECONDS;
 
 public class SnapshotKafkaTest extends AbstractSoakTest {
 
@@ -62,8 +59,6 @@ public class SnapshotKafkaTest extends AbstractSoakTest {
     private static final String RESULTS_TOPIC = TOPIC + "-RESULTS";
     private static final int POLL_TIMEOUT = 1000;
     private static final int DELAY_AFTER_TEST_FINISHED_FACTOR = 60;
-
-    private JetInstance stableClusterClient;
 
     private String brokerUri;
     private String offsetReset;
@@ -82,7 +77,7 @@ public class SnapshotKafkaTest extends AbstractSoakTest {
     }
 
     @Override
-    public void init() throws Exception {
+    public void init(JetInstance client) throws Exception {
         producerExecutorService = Executors.newSingleThreadExecutor();
         brokerUri = property("brokerUri", "localhost:9092");
         offsetReset = property("offsetReset", "earliest");
@@ -92,8 +87,6 @@ public class SnapshotKafkaTest extends AbstractSoakTest {
         slideBy = propertyInt("slideBy", DEFAULT_SLIDE_BY);
         jobCount = propertyInt("jobCount", 2);
         countPerTicker = propertyInt("countPerTicker", DEFAULT_COUNTER_PER_TICKER);
-
-        stableClusterClient = Jet.newJetClient(remoteClusterClientConfig());
 
         ILogger producerLogger = getLogger(SnapshotTradeProducer.class);
         producerFuture = producerExecutorService.submit(() -> {
@@ -106,50 +99,17 @@ public class SnapshotKafkaTest extends AbstractSoakTest {
     }
 
     @Override
-    public void test() throws Throwable {
-        Throwable[] exceptions = new Throwable[2];
-        ExecutorService executorService = Executors.newFixedThreadPool(2);
-        executorService.execute(() -> {
-            try {
-                testInternal(jet, "Dynamic");
-            } catch (Throwable t) {
-                logger.severe("Exception in Dynamic cluster test", t);
-                exceptions[0] = t;
-            }
-        });
-        executorService.execute(() -> {
-            try {
-                testInternal(stableClusterClient, "Stable");
-            } catch (Throwable t) {
-                logger.severe("Exception in Stable cluster test", t);
-                exceptions[1] = t;
-            }
-        });
-        executorService.shutdown();
-        long extraDuration = DELAY_AFTER_TEST_FINISHED_FACTOR * (SECONDS.toMillis(POLL_TIMEOUT));
-        executorService.awaitTermination(durationInMillis + extraDuration, MILLISECONDS);
-
-        if (exceptions[0] != null) {
-            logger.severe("Exception in Dynamic cluster test", exceptions[0]);
-        }
-        if (exceptions[1] != null) {
-            logger.severe("Exception in Stable cluster test", exceptions[1]);
-        }
-        if (exceptions[0] != null) {
-            throw exceptions[0];
-        }
-        if (exceptions[1] != null) {
-            throw exceptions[1];
-        }
+    protected boolean runOnBothClusters() {
+        return true;
     }
 
-    public void testInternal(JetInstance client, String name) throws Exception {
+    public void test(JetInstance client, String name) throws Exception {
         logger.info("[" + name + "] SnapshotTest jobCount: " + jobCount);
         Job[] atLeastOnceJobs = submitJobs(client, name, AT_LEAST_ONCE);
         Job[] exactlyOnceJobs = submitJobs(client, name, EXACTLY_ONCE);
 
         int windowCount = windowSize / slideBy;
-        LoggingService loggingService = jet.getHazelcastInstance().getLoggingService();
+        LoggingService loggingService = client.getHazelcastInstance().getLoggingService();
         QueueVerifier atLeastOnceVerifier = new QueueVerifier(loggingService,
                 "Verifier[" + name + ", " + AT_LEAST_ONCE + "]", windowCount * jobCount);
         QueueVerifier exactlyOnceVerifier = new QueueVerifier(loggingService,
@@ -173,12 +133,12 @@ public class SnapshotKafkaTest extends AbstractSoakTest {
                             String topic = r.topic();
                             if (topic.contains(AT_LEAST_ONCE.name())) {
                                 assertTrue("[" + name + "] " + topic + " -> Unexpected count for " + r.key() + ", "
-                                        + "count: " + r.value(),
+                                                + "count: " + r.value(),
                                         r.value() >= countPerTicker);
                                 atLeastOnceVerifier.offer(r.key());
                             } else {
                                 assertEquals("[" + name + "] " + topic + " -> Unexpected count for " + r.key() + ", "
-                                        + "count: " + r.value(),
+                                                + "count: " + r.value(),
                                         countPerTicker, (long) r.value());
                                 exactlyOnceVerifier.offer(r.key());
                             }
@@ -204,9 +164,6 @@ public class SnapshotKafkaTest extends AbstractSoakTest {
     protected void teardown(Throwable t) {
         if (producerExecutorService != null) {
             producerExecutorService.shutdown();
-        }
-        if (stableClusterClient != null) {
-            stableClusterClient.shutdown();
         }
     }
 

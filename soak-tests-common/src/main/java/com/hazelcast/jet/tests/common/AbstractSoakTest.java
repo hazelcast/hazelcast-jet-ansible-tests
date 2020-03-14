@@ -139,8 +139,8 @@ public abstract class AbstractSoakTest {
             return;
         }
 
-        ClientConfig stableClusterClientConfig = remoteClusterClientConfig();
-        JetInstance stableClusterClient = Jet.newJetClient(stableClusterClientConfig);
+        stableClusterClientConfig = remoteClusterClientConfig();
+        stableClusterClient = Jet.newJetClient(stableClusterClientConfig);
 
         Throwable[] exceptions = new Throwable[2];
         String dynamicName = DYNAMIC_CLUSTER + "-" + getClass().getSimpleName();

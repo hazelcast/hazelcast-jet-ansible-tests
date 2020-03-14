@@ -89,11 +89,6 @@ public class PythonTest extends AbstractSoakTest {
     }
 
     @Override
-    protected boolean runOnBothClusters() {
-        return false;
-    }
-
-    @Override
     protected void test(JetInstance client, String name) {
         long begin = System.currentTimeMillis();
         long jobCount = 0;

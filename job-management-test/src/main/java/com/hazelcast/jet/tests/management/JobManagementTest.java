@@ -73,11 +73,6 @@ public class JobManagementTest extends AbstractSoakTest {
     }
 
     @Override
-    protected boolean runOnBothClusters() {
-        return false;
-    }
-
-    @Override
     public void test(JetInstance client, String name) {
         // Submit the job without initial snapshot
         Job job = client.newJob(pipeline(), jobConfig(name, null));

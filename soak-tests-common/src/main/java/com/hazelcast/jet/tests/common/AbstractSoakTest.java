@@ -92,11 +92,9 @@ public abstract class AbstractSoakTest {
         teardown(null);
         if (jet != null) {
             jet.shutdown();
-            jet = null;
         }
         if (stableClusterClient != null) {
             stableClusterClient.shutdown();
-            stableClusterClient = null;
         }
         if (instances != null) {
             Jet.shutdownAll();
@@ -107,11 +105,13 @@ public abstract class AbstractSoakTest {
 
     protected abstract void init(JetInstance client) throws Exception;
 
-    protected abstract boolean runOnBothClusters();
-
     protected abstract void test(JetInstance client, String name) throws Throwable;
 
     protected abstract void teardown(Throwable t) throws Exception;
+
+    protected boolean runOnBothClusters() {
+        return false;
+    }
 
     protected String property(String name, String defaultValue) {
         return System.getProperty(name, defaultValue);

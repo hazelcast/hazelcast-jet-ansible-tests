@@ -69,11 +69,6 @@ public class AttachMLModelTest extends AbstractSoakTest {
     }
 
     @Override
-    protected boolean runOnBothClusters() {
-        return false;
-    }
-
-    @Override
     protected void test(JetInstance client, String name) throws Throwable {
         Throwable[] exceptions = new Throwable[2];
         ExecutorService executorService = Executors.newFixedThreadPool(2);

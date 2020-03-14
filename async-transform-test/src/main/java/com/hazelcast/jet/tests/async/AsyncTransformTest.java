@@ -101,11 +101,6 @@ public class AsyncTransformTest extends AbstractSoakTest {
     }
 
     @Override
-    protected boolean runOnBothClusters() {
-        return false;
-    }
-
-    @Override
     protected void test(JetInstance client, String name) throws InterruptedException {
         JobConfig jobConfig = new JobConfig();
         jobConfig.setName(name);

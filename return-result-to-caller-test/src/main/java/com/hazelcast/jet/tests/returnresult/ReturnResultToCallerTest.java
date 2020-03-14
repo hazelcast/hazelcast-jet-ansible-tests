@@ -80,11 +80,6 @@ public class ReturnResultToCallerTest extends AbstractSoakTest {
     }
 
     @Override
-    protected boolean runOnBothClusters() {
-        return false;
-    }
-
-    @Override
     public void test(JetInstance client, String name) throws Throwable {
         JobConfig jobConfig = new JobConfig()
                 .setName(name);

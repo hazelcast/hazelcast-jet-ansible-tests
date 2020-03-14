@@ -72,11 +72,6 @@ public class LargeSnapshotChunkTest extends AbstractSoakTest {
     }
 
     @Override
-    protected boolean runOnBothClusters() {
-        return false;
-    }
-
-    @Override
     public void test(JetInstance client, String name) {
         Pipeline p = Pipeline.create();
 

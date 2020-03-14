@@ -97,11 +97,6 @@ public class HdfsWordCountTest extends AbstractSoakTest {
     }
 
     @Override
-    protected boolean runOnBothClusters() {
-        return false;
-    }
-
-    @Override
     public void test(JetInstance client, String name) throws Exception {
         long begin = System.currentTimeMillis();
         ExecutorService executorService = Executors.newFixedThreadPool(threadCount);

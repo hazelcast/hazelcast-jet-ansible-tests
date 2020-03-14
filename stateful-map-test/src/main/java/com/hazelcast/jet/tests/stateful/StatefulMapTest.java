@@ -88,40 +88,6 @@ public class StatefulMapTest extends AbstractSoakTest {
         return true;
     }
 
-//    @Override
-//    protected void test(Jetin) throws Throwable {
-//        Throwable[] exceptions = new Throwable[2];
-//        ExecutorService executorService = Executors.newFixedThreadPool(2);
-//        executorService.execute(() -> {
-//            try {
-//                testInternal(jet, "Dynamic-StatefulMapTest");
-//            } catch (Throwable t) {
-//                logger.severe("Exception in Dynamic cluster test", t);
-//                exceptions[0] = t;
-//            }
-//        });
-//        executorService.execute(() -> {
-//            try {
-//                testInternal(stableClusterClient, "Stable-StatefulMapTest");
-//            } catch (Throwable t) {
-//                logger.severe("Exception in Stable cluster test", t);
-//                exceptions[1] = t;
-//            }
-//        });
-//        executorService.shutdown();
-//        long extraDuration = WAIT_TX_TIMEOUT_FACTOR * (SECONDS.toMillis(DELAY_BETWEEN_STATUS_CHECKS) + txTimeout);
-//        executorService.awaitTermination(durationInMillis + extraDuration, MILLISECONDS);
-//
-//        if (exceptions[0] != null) {
-//            logger.severe("Exception in Dynamic cluster test", exceptions[0]);
-//            throw exceptions[0];
-//        }
-//        if (exceptions[1] != null) {
-//            logger.severe("Exception in Stable cluster test", exceptions[1]);
-//            throw exceptions[1];
-//        }
-//    }
-
     public void test(JetInstance client, String name) {
         IMap<String, Long> messagingMap = client.getMap(MESSAGING_MAP);
         String txMapName = name.startsWith("Stable") ? TX_MAP_STABLE : TX_MAP_DYNAMIC;

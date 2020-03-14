@@ -94,11 +94,6 @@ public class CooperativeMapCacheSourceTest extends AbstractSoakTest {
     }
 
     @Override
-    protected boolean runOnBothClusters() {
-        return false;
-    }
-
-    @Override
     public void test(JetInstance client, String name) throws Exception {
         List<ExecutorService> executorServices = new ArrayList<>();
         executorServices.add(runTestInExecutorService(

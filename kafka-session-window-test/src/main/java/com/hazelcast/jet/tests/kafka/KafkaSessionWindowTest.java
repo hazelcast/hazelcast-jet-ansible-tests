@@ -91,11 +91,6 @@ public class KafkaSessionWindowTest extends AbstractSoakTest {
     }
 
     @Override
-    protected boolean runOnBothClusters() {
-        return false;
-    }
-
-    @Override
     public void test(JetInstance client, String name) throws Exception {
         System.out.println("Executing job..");
         JobConfig jobConfig = new JobConfig();

@@ -93,11 +93,6 @@ public class EventJournalTest extends AbstractSoakTest {
     }
 
     @Override
-    protected boolean runOnBothClusters() {
-        return false;
-    }
-
-    @Override
     public void test(JetInstance client, String name) throws Exception {
         JobConfig jobConfig = new JobConfig();
         jobConfig.setName(name);

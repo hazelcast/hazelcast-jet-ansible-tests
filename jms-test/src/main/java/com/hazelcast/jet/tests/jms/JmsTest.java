@@ -16,6 +16,7 @@
 
 package com.hazelcast.jet.tests.jms;
 
+import com.hazelcast.function.SupplierEx;
 import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.config.JobConfig;
@@ -26,7 +27,9 @@ import com.hazelcast.jet.pipeline.Sources;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
 import com.hazelcast.logging.ILogger;
 import org.apache.activemq.ActiveMQConnectionFactory;
+import org.apache.activemq.ActiveMQXAConnectionFactory;
 
+import javax.jms.ConnectionFactory;
 import java.io.IOException;
 
 import static com.hazelcast.jet.core.JobStatus.FAILED;
@@ -62,18 +65,17 @@ public class JmsTest extends AbstractSoakTest {
 
     @Override
     public void test(JetInstance client, String clusterName) throws Exception {
-        String localBrokerUrl = brokerURL;
         ILogger logger = getLogger(client, JmsTest.class);
 
         Pipeline p1 = Pipeline.create();
-        p1.readFrom(Sources.jmsQueue(() -> new ActiveMQConnectionFactory(localBrokerUrl), SOURCE_QUEUE + clusterName))
+        p1.readFrom(Sources.jmsQueue(connectionFactory(), SOURCE_QUEUE + clusterName))
           .withoutTimestamps()
-          .writeTo(Sinks.jmsQueue(MIDDLE_QUEUE + clusterName, () -> new ActiveMQConnectionFactory(localBrokerUrl)));
+          .writeTo(Sinks.jmsQueue(MIDDLE_QUEUE + clusterName, xaConnectionFactory()));
 
         Pipeline p2 = Pipeline.create();
-        p2.readFrom(Sources.jmsQueue(() -> new ActiveMQConnectionFactory(localBrokerUrl), MIDDLE_QUEUE + clusterName))
+        p2.readFrom(Sources.jmsQueue(connectionFactory(), MIDDLE_QUEUE + clusterName))
           .withoutTimestamps()
-          .writeTo(Sinks.jmsQueue(SINK_QUEUE + clusterName, () -> new ActiveMQConnectionFactory(localBrokerUrl)));
+          .writeTo(Sinks.jmsQueue(SINK_QUEUE + clusterName, xaConnectionFactory()));
 
         JobConfig jobConfig1 = new JobConfig()
                 .setName("JMS Test source to middle queue")
@@ -128,6 +130,16 @@ public class JmsTest extends AbstractSoakTest {
     }
 
     protected void teardown(Throwable t) {
+    }
+
+    private SupplierEx<ConnectionFactory> connectionFactory() {
+        String localBrokerURL = this.brokerURL;
+        return () -> new ActiveMQConnectionFactory(localBrokerURL);
+    }
+
+    private SupplierEx<ConnectionFactory> xaConnectionFactory() {
+        String localBrokerURL = this.brokerURL;
+        return () -> new ActiveMQXAConnectionFactory(localBrokerURL);
     }
 
     private static void log(ILogger logger, String message, String clusterName) {

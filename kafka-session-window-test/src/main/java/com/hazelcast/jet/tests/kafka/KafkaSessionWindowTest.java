@@ -17,6 +17,7 @@
 package com.hazelcast.jet.tests.kafka;
 
 import com.hazelcast.internal.util.UuidUtil;
+import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.config.ProcessingGuarantee;
@@ -69,7 +70,8 @@ public class KafkaSessionWindowTest extends AbstractSoakTest {
         new KafkaSessionWindowTest().run(args);
     }
 
-    public void init() {
+    @Override
+    public void init(JetInstance client) {
         producerExecutorService = Executors.newSingleThreadExecutor();
 
         brokerUri = property("brokerUri", "localhost:9092");
@@ -88,18 +90,19 @@ public class KafkaSessionWindowTest extends AbstractSoakTest {
         });
     }
 
-    public void test() throws Exception {
+    @Override
+    public void test(JetInstance client, String name) throws Exception {
         System.out.println("Executing job..");
         JobConfig jobConfig = new JobConfig();
-        jobConfig.setName("Kafka Session Window Test");
+        jobConfig.setName(name);
         jobConfig.setSnapshotIntervalMillis(snapshotIntervalMs);
         jobConfig.setProcessingGuarantee(ProcessingGuarantee.AT_LEAST_ONCE);
 
-        Job testJob = jet.newJob(pipeline(), jobConfig);
+        Job testJob = client.newJob(pipeline(), jobConfig);
 
         System.out.println("Executing verification job..");
         JobConfig verificationJobConfig = new JobConfig().setName("Kafka Session Window Verification");
-        Job verificationJob = jet.newJob(verificationPipeline(), verificationJobConfig);
+        Job verificationJob = client.newJob(verificationPipeline(), verificationJobConfig);
 
         long begin = System.currentTimeMillis();
         while (System.currentTimeMillis() - begin < durationInMillis) {

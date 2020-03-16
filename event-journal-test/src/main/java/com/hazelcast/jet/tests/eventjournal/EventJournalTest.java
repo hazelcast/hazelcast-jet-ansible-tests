@@ -78,7 +78,8 @@ public class EventJournalTest extends AbstractSoakTest {
         new EventJournalTest().run(args);
     }
 
-    public void init() throws Exception {
+    @Override
+    public void init(JetInstance client) throws Exception {
         lagMs = propertyInt("lagMs", DEFAULT_LAG);
         timestampPerSecond = propertyInt("timestampPerSecond", DEFAULT_TIMESTAMP_PER_SECOND);
         snapshotIntervalMs = propertyInt("snapshotIntervalMs", DEFAULT_SNAPSHOT_INTERVAL);
@@ -91,16 +92,17 @@ public class EventJournalTest extends AbstractSoakTest {
         configureTradeProducer();
     }
 
-    public void test() throws Exception {
+    @Override
+    public void test(JetInstance client, String name) throws Exception {
         JobConfig jobConfig = new JobConfig();
-        jobConfig.setName("EventJournalTest");
+        jobConfig.setName(name);
         jobConfig.setSnapshotIntervalMillis(snapshotIntervalMs);
         jobConfig.setProcessingGuarantee(ProcessingGuarantee.EXACTLY_ONCE);
-        Job job = jet.newJob(pipeline(), jobConfig);
+        Job job = client.newJob(pipeline(), jobConfig);
         tradeProducer.start();
 
         int windowCount = windowSize / slideBy;
-        LoggingService loggingService = jet.getHazelcastInstance().getLoggingService();
+        LoggingService loggingService = client.getHazelcastInstance().getLoggingService();
         QueueVerifier queueVerifier = new QueueVerifier(loggingService,
                 "Verifier[" + RESULTS_MAP_NAME + "]", windowCount).startVerification();
 
@@ -162,13 +164,13 @@ public class EventJournalTest extends AbstractSoakTest {
         Config config = hazelcastInstance.getConfig();
         MapConfig mapConfig = new MapConfig(MAP_NAME);
         mapConfig.getEventJournalConfig()
-                .setCapacity(EVENT_JOURNAL_CAPACITY)
-                .setEnabled(true);
+                 .setCapacity(EVENT_JOURNAL_CAPACITY)
+                 .setEnabled(true);
         config.addMapConfig(mapConfig);
         MapConfig mapConfig2 = new MapConfig(RESULTS_MAP_NAME);
         mapConfig2.getEventJournalConfig()
-                .setCapacity(RESULTS_EVENT_JOURNAL_CAPACITY)
-                .setEnabled(true);
+                  .setCapacity(RESULTS_EVENT_JOURNAL_CAPACITY)
+                  .setEnabled(true);
         config.addMapConfig(mapConfig2);
 
         ILogger producerLogger = getLogger(EventJournalTradeProducer.class);

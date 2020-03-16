@@ -26,18 +26,28 @@ import com.hazelcast.jet.config.JetConfig;
 import com.hazelcast.logging.ILogger;
 
 import java.io.IOException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import static com.hazelcast.jet.tests.common.Util.parseArguments;
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.MINUTES;
 
 public abstract class AbstractSoakTest {
 
+    public static final String STABLE_CLUSTER = "Stable";
+    public static final String DYNAMIC_CLUSTER = "Dynamic";
+
     private static final int DEFAULT_DURATION_MINUTES = 30;
     private static final int CACHE_EVICTION_SIZE = 2000000;
+    private static final double WAIT_TIMEOUT_FACTOR = 1.1;
 
-    protected transient JetInstance jet;
+    protected transient ClientConfig stableClusterClientConfig;
+    protected transient JetInstance stableClusterClient;
     protected transient ILogger logger;
     protected long durationInMillis;
+
+    private transient JetInstance jet;
 
     protected final void run(String[] args) throws Exception {
         parseArguments(args);
@@ -60,7 +70,7 @@ public abstract class AbstractSoakTest {
         logger.info("Initializing...");
         try {
             durationInMillis = durationInMillis();
-            init();
+            init(jet);
         } catch (Throwable t) {
             t.printStackTrace();
             logger.severe(t);
@@ -70,7 +80,7 @@ public abstract class AbstractSoakTest {
         }
         logger.info("Running...");
         try {
-            test();
+            testInternal();
         } catch (Throwable t) {
             t.printStackTrace();
             logger.severe(t);
@@ -83,6 +93,9 @@ public abstract class AbstractSoakTest {
         if (jet != null) {
             jet.shutdown();
         }
+        if (stableClusterClient != null) {
+            stableClusterClient.shutdown();
+        }
         if (instances != null) {
             Jet.shutdownAll();
         }
@@ -90,11 +103,21 @@ public abstract class AbstractSoakTest {
         System.exit(0);
     }
 
-    protected abstract void init() throws Exception;
+    protected abstract void init(JetInstance client) throws Exception;
 
-    protected abstract void test() throws Throwable;
+    protected abstract void test(JetInstance client, String name) throws Throwable;
 
     protected abstract void teardown(Throwable t) throws Exception;
+
+    /**
+     * If {@code true} then {@link #test(JetInstance, String)} method will be
+     * called with the dynamic cluster client (which should be the bootstrapped
+     * instance) and stable cluster client (which needs a `remoteClusterXml`
+     * defined).
+     */
+    protected boolean runOnBothClusters() {
+        return false;
+    }
 
     protected String property(String name, String defaultValue) {
         return System.getProperty(name, defaultValue);
@@ -116,12 +139,50 @@ public abstract class AbstractSoakTest {
         return new XmlClientConfigBuilder(remoteClusterXml).build();
     }
 
-    private static boolean isRunLocal() {
-        return System.getProperty("runLocal") != null;
-    }
+    private void testInternal() throws Throwable {
+        if (!runOnBothClusters()) {
+            test(jet, getClass().getSimpleName());
+            return;
+        }
 
-    protected static void setRunLocal() {
-        System.setProperty("runLocal", "true");
+        stableClusterClientConfig = remoteClusterClientConfig();
+        stableClusterClient = Jet.newJetClient(stableClusterClientConfig);
+
+        Throwable[] exceptions = new Throwable[2];
+        String dynamicName = DYNAMIC_CLUSTER + "-" + getClass().getSimpleName();
+        String stableName = STABLE_CLUSTER + "-" + getClass().getSimpleName();
+        ExecutorService executorService = Executors.newFixedThreadPool(2);
+        executorService.execute(() -> {
+            try {
+                test(jet, dynamicName);
+            } catch (Throwable t) {
+                logger.severe("Exception in " + dynamicName, t);
+                exceptions[0] = t;
+            }
+        });
+        executorService.execute(() -> {
+            try {
+                test(stableClusterClient, stableName);
+            } catch (Throwable t) {
+                logger.severe("Exception in " + stableName, t);
+                exceptions[1] = t;
+            }
+        });
+        executorService.shutdown();
+        executorService.awaitTermination((long) (durationInMillis * WAIT_TIMEOUT_FACTOR), MILLISECONDS);
+
+        if (exceptions[0] != null) {
+            logger.severe("Exception in " + dynamicName, exceptions[0]);
+        }
+        if (exceptions[1] != null) {
+            logger.severe("Exception in " + stableName, exceptions[1]);
+        }
+        if (exceptions[0] != null) {
+            throw exceptions[0];
+        }
+        if (exceptions[1] != null) {
+            throw exceptions[1];
+        }
     }
 
     protected int propertyInt(String name, int defaultValue) {
@@ -134,6 +195,14 @@ public abstract class AbstractSoakTest {
 
     protected ILogger getLogger(Class clazz) {
         return jet.getHazelcastInstance().getLoggingService().getLogger(clazz);
+    }
+
+    private static boolean isRunLocal() {
+        return System.getProperty("runLocal") != null;
+    }
+
+    protected static void setRunLocal() {
+        System.setProperty("runLocal", "true");
     }
 
     protected static ILogger getLogger(JetInstance instance, Class clazz) {

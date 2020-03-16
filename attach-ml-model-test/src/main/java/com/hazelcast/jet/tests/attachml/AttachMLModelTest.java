@@ -16,12 +16,14 @@
 
 package com.hazelcast.jet.tests.attachml;
 
+import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.core.ProcessorMetaSupplier;
 import com.hazelcast.jet.pipeline.Pipeline;
 import com.hazelcast.jet.pipeline.ServiceFactories;
 import com.hazelcast.jet.pipeline.test.TestSources;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -61,18 +63,18 @@ public class AttachMLModelTest extends AbstractSoakTest {
     }
 
     @Override
-    protected void init() throws Exception {
+    protected void init(JetInstance client) throws Exception {
         ml10mbDataPath = property("ml10mbDataPath", ML_DATA_PATH_DEFAULT);
         ml100mbDataPath = property("ml100mbDataPath", ML_LARGE_DATA_PATH_DEFAULT);
     }
 
     @Override
-    protected void test() throws Throwable {
+    protected void test(JetInstance client, String name) throws Throwable {
         Throwable[] exceptions = new Throwable[2];
         ExecutorService executorService = Executors.newFixedThreadPool(2);
         executorService.execute(() -> {
             try {
-                test10mbFile();
+                test10mbFile(client);
             } catch (Throwable t) {
                 logger.severe("Exception in 10MB file test", t);
                 exceptions[0] = t;
@@ -80,7 +82,7 @@ public class AttachMLModelTest extends AbstractSoakTest {
         });
         executorService.execute(() -> {
             try {
-                test100mbDirectory();
+                test100mbDirectory(client);
             } catch (Throwable t) {
                 logger.severe("Exception in 100MB directory test", t);
                 exceptions[1] = t;
@@ -103,7 +105,7 @@ public class AttachMLModelTest extends AbstractSoakTest {
         }
     }
 
-    protected void test10mbFile() throws IOException {
+    protected void test10mbFile(JetInstance client) throws IOException {
         Path mlData = Paths.get(ml10mbDataPath);
         assertTrue("testing ML 10MB data does not exists", Files.exists(mlData));
         long count = Files.lines(mlData).count();
@@ -117,7 +119,7 @@ public class AttachMLModelTest extends AbstractSoakTest {
             JobConfig jobConfig = new JobConfig();
             jobConfig.setName("AttachMLModelTest_10mbFile" + jobCount);
             jobConfig.attachFile(ml10mbDataPath, MODEL + jobCount);
-            jet.newJob(pipeline10mbFile(jobCount), jobConfig).join();
+            client.newJob(pipeline10mbFile(jobCount), jobConfig).join();
             if (jobCount % LOG_JOB_COUNT_THRESHOLD == 0) {
                 logger.info("Job count 10MB: " + jobCount);
             }
@@ -127,7 +129,7 @@ public class AttachMLModelTest extends AbstractSoakTest {
         logger.info("Final job count 10MB: " + jobCount);
     }
 
-    protected void test100mbDirectory() throws IOException {
+    protected void test100mbDirectory(JetInstance client) throws IOException {
         Path mlDir = Paths.get(ml100mbDataPath);
         assertTrue("testing ML 100MB data does not exists", Files.exists(mlDir));
         assertTrue(Files.isDirectory(mlDir));
@@ -145,7 +147,7 @@ public class AttachMLModelTest extends AbstractSoakTest {
             JobConfig jobConfig = new JobConfig();
             jobConfig.setName("AttachMLModelTest_100mbDirectory" + jobCount);
             jobConfig.attachDirectory(ml100mbDataPath, MODEL_LARGE + jobCount);
-            jet.newJob(pipeline100mbDirectory(jobCount), jobConfig).join();
+            client.newJob(pipeline100mbDirectory(jobCount), jobConfig).join();
             if (jobCount % LOG_JOB_COUNT_LARGE_FILE_THRESHOLD == 0) {
                 logger.info("Job count 100MB: " + jobCount);
             }
@@ -163,44 +165,44 @@ public class AttachMLModelTest extends AbstractSoakTest {
     private Pipeline pipeline10mbFile(long i) {
         Pipeline p = Pipeline.create();
         p.readFrom(TestSources.items(1))
-                .mapUsingService(
-                        ServiceFactories.sharedService(context -> context.attachedFile(MODEL + i)),
-                        (file, integer) -> {
-                            Path mlData = file.toPath();
-                            assertTrue("testing ML 10MB data does not exists", Files.exists(mlData));
-                            try (Stream<String> lines = Files.lines(mlData)) {
-                                assertEquals(EXPECTED_LINES_IN_MODEL, lines.count());
-                            }
-                            try (Stream<String> lines = Files.lines(mlData)) {
-                                assertEquals(EXPECTED_FIRST_LINE_IN_MODEL, lines.findFirst().get());
-                            }
-                            return true;
-                        })
-                .writeTo(fromProcessor("noopSink", ProcessorMetaSupplier.of(noopP())));
+         .mapUsingService(
+                 ServiceFactories.sharedService(context -> context.attachedFile(MODEL + i)),
+                 (file, integer) -> {
+                     Path mlData = file.toPath();
+                     assertTrue("testing ML 10MB data does not exists", Files.exists(mlData));
+                     try (Stream<String> lines = Files.lines(mlData)) {
+                         assertEquals(EXPECTED_LINES_IN_MODEL, lines.count());
+                     }
+                     try (Stream<String> lines = Files.lines(mlData)) {
+                         assertEquals(EXPECTED_FIRST_LINE_IN_MODEL, lines.findFirst().get());
+                     }
+                     return true;
+                 })
+         .writeTo(fromProcessor("noopSink", ProcessorMetaSupplier.of(noopP())));
         return p;
     }
 
     private Pipeline pipeline100mbDirectory(long i) {
         Pipeline p = Pipeline.create();
         p.readFrom(TestSources.items(1))
-                .mapUsingService(
-                        ServiceFactories.sharedService(context -> context.attachedDirectory(MODEL_LARGE + i)),
-                        (dir, integer) -> {
-                            Path mlDir = dir.toPath();
-                            assertTrue("testing ML 100MB data does not exists", Files.exists(mlDir));
-                            assertTrue(Files.isDirectory(mlDir));
-                            List<Path> dirContent = Files.list(mlDir).collect(toList());
-                            assertEquals(1, dirContent.size());
-                            Path mlData = dirContent.get(0);
-                            try (Stream<String> lines = Files.lines(mlData)) {
-                                assertEquals(EXPECTED_LINES_IN_LARGE_FILE_MODEL, lines.count());
-                            }
-                            try (Stream<String> lines = Files.lines(mlData)) {
-                                assertEquals(EXPECTED_FIRST_LINE_IN_MODEL, lines.findFirst().get());
-                            }
-                            return true;
-                        })
-                .writeTo(fromProcessor("noopSink", ProcessorMetaSupplier.of(noopP())));
+         .mapUsingService(
+                 ServiceFactories.sharedService(context -> context.attachedDirectory(MODEL_LARGE + i)),
+                 (dir, integer) -> {
+                     Path mlDir = dir.toPath();
+                     assertTrue("testing ML 100MB data does not exists", Files.exists(mlDir));
+                     assertTrue(Files.isDirectory(mlDir));
+                     List<Path> dirContent = Files.list(mlDir).collect(toList());
+                     assertEquals(1, dirContent.size());
+                     Path mlData = dirContent.get(0);
+                     try (Stream<String> lines = Files.lines(mlData)) {
+                         assertEquals(EXPECTED_LINES_IN_LARGE_FILE_MODEL, lines.count());
+                     }
+                     try (Stream<String> lines = Files.lines(mlData)) {
+                         assertEquals(EXPECTED_FIRST_LINE_IN_MODEL, lines.findFirst().get());
+                     }
+                     return true;
+                 })
+         .writeTo(fromProcessor("noopSink", ProcessorMetaSupplier.of(noopP())));
         return p;
     }
 

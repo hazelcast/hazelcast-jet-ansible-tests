@@ -16,7 +16,7 @@
 
 package com.hazelcast.jet.tests.jms;
 
-import com.hazelcast.jet.Jet;
+import com.hazelcast.function.SupplierEx;
 import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.config.JobConfig;
@@ -27,32 +27,25 @@ import com.hazelcast.jet.pipeline.Sources;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
 import com.hazelcast.logging.ILogger;
 import org.apache.activemq.ActiveMQConnectionFactory;
+import org.apache.activemq.ActiveMQXAConnectionFactory;
 
+import javax.jms.ConnectionFactory;
 import java.io.IOException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 import static com.hazelcast.jet.core.JobStatus.FAILED;
 import static com.hazelcast.jet.core.JobStatus.RUNNING;
 import static com.hazelcast.jet.tests.common.Util.getJobStatusWithRetry;
 import static com.hazelcast.jet.tests.common.Util.sleepMinutes;
 import static com.hazelcast.jet.tests.common.Util.waitForJobStatus;
-import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
 public class JmsTest extends AbstractSoakTest {
-
-    private static final double DELAY_AFTER_TEST_FINISHED_FACTOR = 1.05;
-
-    private static final String STABLE_CLUSTER = "-stable";
-    private static final String DYNAMIC_CLUSTER = "-dynamic";
 
     private static final int ASSERTION_RETRY_COUNT = 100;
     private static final String SOURCE_QUEUE = "source";
     private static final String MIDDLE_QUEUE = "middle";
     private static final String SINK_QUEUE = "sink";
 
-    private JetInstance stableClusterClient;
 
     private String brokerURL;
 
@@ -60,66 +53,34 @@ public class JmsTest extends AbstractSoakTest {
         new JmsTest().run(args);
     }
 
-    public void init() throws IOException {
+    @Override
+    public void init(JetInstance client) throws IOException {
         brokerURL = property("brokerURL", "tcp://localhost:61616");
-
-        stableClusterClient = Jet.newJetClient(remoteClusterClientConfig());
     }
 
-    public void test() throws Throwable {
-        Throwable[] exceptions = new Throwable[2];
-        ExecutorService executorService = Executors.newFixedThreadPool(2);
-        executorService.execute(() -> {
-            ILogger logger = getLogger(stableClusterClient, JmsTest.class);
-            try {
-                testInternal(stableClusterClient, logger, STABLE_CLUSTER);
-            } catch (Throwable t) {
-                logger.severe("Exception in Stable cluster test", t);
-                exceptions[0] = t;
-            }
-        });
-        executorService.execute(() -> {
-            try {
-                testInternal(jet, logger, DYNAMIC_CLUSTER);
-            } catch (Throwable t) {
-                logger.severe("Exception in Dynamic cluster test", t);
-                exceptions[1] = t;
-            }
-        });
-        executorService.shutdown();
-        executorService.awaitTermination((long) (durationInMillis * DELAY_AFTER_TEST_FINISHED_FACTOR), MILLISECONDS);
-
-        if (exceptions[0] != null) {
-            logger.severe("Exception in Stable cluster test", exceptions[0]);
-        }
-        if (exceptions[1] != null) {
-            logger.severe("Exception in Dynamic cluster test", exceptions[1]);
-        }
-        if (exceptions[0] != null) {
-            throw exceptions[0];
-        }
-        if (exceptions[1] != null) {
-            throw exceptions[1];
-        }
+    @Override
+    protected boolean runOnBothClusters() {
+        return true;
     }
 
-    public void testInternal(JetInstance client, ILogger logger, String clusterName) throws Exception {
-        String localBrokerUrl = brokerURL;
+    @Override
+    public void test(JetInstance client, String clusterName) throws Exception {
+        ILogger logger = getLogger(client, JmsTest.class);
 
         Pipeline p1 = Pipeline.create();
-        p1.readFrom(Sources.jmsQueue(() -> new ActiveMQConnectionFactory(localBrokerUrl), SOURCE_QUEUE + clusterName))
+        p1.readFrom(Sources.jmsQueue(connectionFactory(), SOURCE_QUEUE + clusterName))
           .withoutTimestamps()
-          .writeTo(Sinks.jmsQueue(() -> new ActiveMQConnectionFactory(localBrokerUrl), MIDDLE_QUEUE + clusterName));
+          .writeTo(Sinks.jmsQueue(MIDDLE_QUEUE + clusterName, xaConnectionFactory()));
 
         Pipeline p2 = Pipeline.create();
-        p2.readFrom(Sources.jmsQueue(() -> new ActiveMQConnectionFactory(localBrokerUrl), MIDDLE_QUEUE + clusterName))
+        p2.readFrom(Sources.jmsQueue(connectionFactory(), MIDDLE_QUEUE + clusterName))
           .withoutTimestamps()
-          .writeTo(Sinks.jmsQueue(() -> new ActiveMQConnectionFactory(localBrokerUrl), SINK_QUEUE + clusterName));
+          .writeTo(Sinks.jmsQueue(SINK_QUEUE + clusterName, xaConnectionFactory()));
 
         JobConfig jobConfig1 = new JobConfig()
                 .setName("JMS Test source to middle queue")
                 .setProcessingGuarantee(ProcessingGuarantee.EXACTLY_ONCE);
-        if (clusterName.equals(STABLE_CLUSTER)) {
+        if (clusterName.startsWith(STABLE_CLUSTER)) {
             jobConfig1.addClass(JmsTest.class, JmsMessageProducer.class, JmsMessageConsumer.class);
         }
         Job job1 = client.newJob(p1, jobConfig1);
@@ -129,7 +90,7 @@ public class JmsTest extends AbstractSoakTest {
         JobConfig jobConfig2 = new JobConfig()
                 .setName("JMS Test middle to sink queue")
                 .setProcessingGuarantee(ProcessingGuarantee.EXACTLY_ONCE);
-        if (clusterName.equals(STABLE_CLUSTER)) {
+        if (clusterName.startsWith(STABLE_CLUSTER)) {
             jobConfig2.addClass(JmsTest.class, JmsMessageProducer.class, JmsMessageConsumer.class);
         }
         Job job2 = client.newJob(p2, jobConfig2);
@@ -169,13 +130,20 @@ public class JmsTest extends AbstractSoakTest {
     }
 
     protected void teardown(Throwable t) {
-        if (stableClusterClient != null) {
-            stableClusterClient.shutdown();
-        }
+    }
+
+    private SupplierEx<ConnectionFactory> connectionFactory() {
+        String localBrokerURL = this.brokerURL;
+        return () -> new ActiveMQConnectionFactory(localBrokerURL);
+    }
+
+    private SupplierEx<ConnectionFactory> xaConnectionFactory() {
+        String localBrokerURL = this.brokerURL;
+        return () -> new ActiveMQXAConnectionFactory(localBrokerURL);
     }
 
     private static void log(ILogger logger, String message, String clusterName) {
-        logger.info("Cluster" + clusterName + "\t\t" + message);
+        logger.info("Cluster " + clusterName + "\t\t" + message);
     }
 
     private static void assertCountEventually(

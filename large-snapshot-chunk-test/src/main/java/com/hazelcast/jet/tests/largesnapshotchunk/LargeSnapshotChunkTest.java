@@ -17,7 +17,6 @@
 package com.hazelcast.jet.tests.largesnapshotchunk;
 
 import com.hazelcast.client.config.ClientConfig;
-import com.hazelcast.client.config.XmlClientConfigBuilder;
 import com.hazelcast.config.Config;
 import com.hazelcast.config.MapConfig;
 import com.hazelcast.jet.Jet;
@@ -64,34 +63,34 @@ public class LargeSnapshotChunkTest extends AbstractSoakTest {
         new LargeSnapshotChunkTest().run(args);
     }
 
-    public void init() throws Exception {
+    @Override
+    public void init(JetInstance client) throws Exception {
         snapshotIntervalMs = propertyInt("snapshotIntervalMs", DEFAULT_SNAPSHOT_INTERVAL);
         lagMs = propertyInt("lagMs", DEFAULT_LAG);
 
-        String remoteClusterXml = property("remoteClusterXml", null);
-
-        configureProducer(remoteClusterXml);
+        configureProducer();
     }
 
-    public void test() {
+    @Override
+    public void test(JetInstance client, String name) {
         Pipeline p = Pipeline.create();
 
         p.readFrom(Sources.<String, int[]>remoteMapJournal(SOURCE, remoteClientConfig,
                 START_FROM_OLDEST))
          .withTimestamps(e -> e.getValue()[0], lagMs)
-                .setName("Stream from map(" + SOURCE + ")")
+         .setName("Stream from map(" + SOURCE + ")")
          .groupingKey(Entry::getKey)
          .window(WindowDefinition.tumbling(WINDOW_SIZE))
          .aggregate(mapping(Entry::getValue, toList()))
-                .setName("WindowAggregate(toList)")
+         .setName("WindowAggregate(toList)")
          .writeTo(fromProcessor("VerificationSink", VerificationProcessor.supplier(WINDOW_SIZE)));
 
         JobConfig jobConfig = new JobConfig()
-                .setName("LargeSnapshotChunkTest")
+                .setName(name)
                 .setSnapshotIntervalMillis(snapshotIntervalMs)
                 .setProcessingGuarantee(EXACTLY_ONCE);
 
-        Job job = jet.newJob(p, jobConfig);
+        Job job = client.newJob(p, jobConfig);
 
         long begin = System.currentTimeMillis();
         while (System.currentTimeMillis() - begin < durationInMillis) {
@@ -109,26 +108,20 @@ public class LargeSnapshotChunkTest extends AbstractSoakTest {
         if (producer != null) {
             producer.stop();
         }
-        if (jet != null) {
-            jet.shutdown();
-        }
         if (remoteClient != null) {
             remoteClient.shutdown();
         }
     }
 
-    private void configureProducer(String remoteClusterXml) throws IOException {
-        if (remoteClusterXml == null) {
-            throw new IllegalArgumentException("Remote cluster xml should be set");
-        }
-        remoteClientConfig = new XmlClientConfigBuilder(remoteClusterXml).build();
+    private void configureProducer() throws IOException {
+        remoteClientConfig = remoteClusterClientConfig();
         remoteClient = Jet.newJetClient(remoteClientConfig);
 
         Config config = remoteClient.getHazelcastInstance().getConfig();
         MapConfig mapConfig = new MapConfig(SOURCE);
         mapConfig.getEventJournalConfig()
-                .setCapacity(EVENT_JOURNAL_CAPACITY)
-                .setEnabled(true);
+                 .setCapacity(EVENT_JOURNAL_CAPACITY)
+                 .setEnabled(true);
         config.addMapConfig(mapConfig);
         remoteClient.getMap(SOURCE).clear();
         producer = new LargeSnapshotChunkProducer(logger, remoteClient, WINDOW_SIZE, remoteClient.getMap(SOURCE));

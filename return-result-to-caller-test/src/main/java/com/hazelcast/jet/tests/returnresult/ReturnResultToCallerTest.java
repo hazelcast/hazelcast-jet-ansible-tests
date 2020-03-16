@@ -16,6 +16,7 @@
 
 package com.hazelcast.jet.tests.returnresult;
 
+import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.Observable;
 import com.hazelcast.jet.config.JobConfig;
@@ -66,23 +67,23 @@ public class ReturnResultToCallerTest extends AbstractSoakTest {
     }
 
     @Override
-    public void init() {
+    public void init(JetInstance client) {
         windowSize = propertyInt("windowSize", DEFAULT_WINDOW_SIZE);
         allowedLag = propertyInt("allowedLag", DEFAULT_ALLOWED_LAG);
         logProgress = propertyInt("logProgress", DEFAULT_LOG_PROGRESS);
 
-        observable = jet.getObservable(OBSERVABLE_NAME);
+        observable = client.getObservable(OBSERVABLE_NAME);
         observer = new TestObserver(logger);
         observable.addObserver(observer);
 
-        producer = new BasicEventJournalProducer(jet, SOURCE, EVENT_JOURNAL_CAPACITY);
+        producer = new BasicEventJournalProducer(client, SOURCE, EVENT_JOURNAL_CAPACITY);
     }
 
     @Override
-    public void test() throws Throwable {
+    public void test(JetInstance client, String name) throws Throwable {
         JobConfig jobConfig = new JobConfig()
-                .setName("ReturnResultToCallerTest");
-        Job job = jet.newJob(pipeline(), jobConfig);
+                .setName(name);
+        Job job = client.newJob(pipeline(), jobConfig);
         waitForJobStatus(job, RUNNING);
         producer.start();
         sleepMinutes(1);
@@ -145,7 +146,7 @@ public class ReturnResultToCallerTest extends AbstractSoakTest {
         private final AtomicReference<Throwable> error = new AtomicReference<>();
         private final AtomicReference<Throwable> onNextError = new AtomicReference<>();
         private int completions;
-        private int lastTs = (0 - windowSize);
+        private int lastTs = -windowSize;
 
         TestObserver(ILogger logger) {
             this.logger = logger;

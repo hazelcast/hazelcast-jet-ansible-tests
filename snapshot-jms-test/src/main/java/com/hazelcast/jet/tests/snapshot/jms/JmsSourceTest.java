@@ -17,7 +17,6 @@
 package com.hazelcast.jet.tests.snapshot.jms;
 
 import com.hazelcast.function.SupplierEx;
-import com.hazelcast.jet.Jet;
 import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.config.JobConfig;
@@ -31,12 +30,10 @@ import com.hazelcast.jet.tests.common.AbstractSoakTest;
 import com.hazelcast.logging.ILogger;
 import org.apache.activemq.ActiveMQConnectionFactory;
 
-import java.io.IOException;
-import java.util.Map;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import javax.jms.ConnectionFactory;
 import javax.jms.TextMessage;
+import java.io.IOException;
+import java.util.Map;
 
 import static com.hazelcast.jet.core.JobStatus.FAILED;
 import static com.hazelcast.jet.core.JobStatus.RUNNING;
@@ -46,24 +43,14 @@ import static com.hazelcast.jet.tests.common.Util.sleepMinutes;
 import static com.hazelcast.jet.tests.common.Util.waitForJobStatus;
 import static com.hazelcast.jet.tests.snapshot.jms.JmsMessageProducer.MESSAGE_PREFIX;
 import static com.hazelcast.jet.tests.snapshot.jms.JmsSourceTest.JmsFactorySupplier.getConnectionFactory;
-import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
 public class JmsSourceTest extends AbstractSoakTest {
 
     private static final int SNAPSHOT_INTERVAL = 5_000;
-
     private static final int ASSERTION_RETRY_COUNT = 60;
-    private static final double DELAY_AFTER_TEST_FINISHED = 60_000;
-
-    private static final int MESSAGE_PREFIX_LENGHT = MESSAGE_PREFIX.length();
-
-    private static final String STABLE_CLUSTER = "Stable";
-    private static final String DYNAMIC_CLUSTER = "Dynamic";
-
+    private static final int MESSAGE_PREFIX_LENGTH = MESSAGE_PREFIX.length();
     private static final String SOURCE_QUEUE = "JmsSourceTest_source";
-
-    private JetInstance stableClusterClient;
 
     private int snapshotIntervalMs;
     private String brokerURL;
@@ -73,72 +60,39 @@ public class JmsSourceTest extends AbstractSoakTest {
     }
 
     @Override
-    public void init() throws IOException {
+    public void init(JetInstance client) throws IOException {
         snapshotIntervalMs = propertyInt("snapshotIntervalMs", SNAPSHOT_INTERVAL);
         brokerURL = property("brokerURL", "tcp://localhost:61616");
-
-        stableClusterClient = Jet.newJetClient(remoteClusterClientConfig());
     }
 
     @Override
-    public void test() throws Throwable {
-        Throwable[] exceptions = new Throwable[2];
-        ExecutorService executorService = Executors.newFixedThreadPool(2);
-        executorService.execute(() -> {
-            ILogger logger = getLogger(stableClusterClient, JmsSourceTest.class);
-            try {
-                testInternal(stableClusterClient, logger, STABLE_CLUSTER);
-            } catch (Throwable t) {
-                logger.severe("Exception in Stable cluster test", t);
-                exceptions[0] = t;
-            }
-        });
-        executorService.execute(() -> {
-            try {
-                testInternal(jet, logger, DYNAMIC_CLUSTER);
-            } catch (Throwable t) {
-                logger.severe("Exception in Dynamic cluster test", t);
-                exceptions[1] = t;
-            }
-        });
-        executorService.shutdown();
-        executorService.awaitTermination((long) (durationInMillis + DELAY_AFTER_TEST_FINISHED), MILLISECONDS);
-
-        if (exceptions[0] != null) {
-            logger.severe("Exception in Stable cluster test", exceptions[0]);
-        }
-        if (exceptions[1] != null) {
-            logger.severe("Exception in Dynamic cluster test", exceptions[1]);
-        }
-        if (exceptions[0] != null) {
-            throw exceptions[0];
-        }
-        if (exceptions[1] != null) {
-            throw exceptions[1];
-        }
+    protected boolean runOnBothClusters() {
+        return true;
     }
 
-    public void testInternal(JetInstance client, ILogger logger, String clusterName) throws Exception {
+    public void test(JetInstance client, String clusterName) throws Exception {
+        ILogger logger = getLogger(client, JmsSourceTest.class);
         Pipeline p = Pipeline.create();
 
-        StreamSource<Long> source = Sources.jmsQueueBuilder(getConnectionFactory(brokerURL))
+        StreamSource<Long> source = Sources
+                .jmsQueueBuilder(getConnectionFactory(brokerURL))
                 .maxGuarantee(ProcessingGuarantee.EXACTLY_ONCE)
                 .destinationName(SOURCE_QUEUE + clusterName)
-                .build(msg -> Long.parseLong(((TextMessage) msg).getText().substring(MESSAGE_PREFIX_LENGHT)));
+                .build(msg -> Long.parseLong(((TextMessage) msg).getText().substring(MESSAGE_PREFIX_LENGTH)));
 
         Sink<Long> sink = Sinks.fromProcessor("sinkVerificationProcessor", VerificationProcessor.supplier(clusterName));
 
         p.readFrom(source)
-                .withoutTimestamps()
-                .groupingKey(t -> 0L)
-                .mapUsingService(sharedService(ctw -> null), (c, k, v) -> v)
-                .writeTo(sink);
+         .withoutTimestamps()
+         .groupingKey(t -> 0L)
+         .mapUsingService(sharedService(ctw -> null), (c, k, v) -> v)
+         .writeTo(sink);
 
         JobConfig jobConfig = new JobConfig()
                 .setName("JMS transactional source " + clusterName)
                 .setSnapshotIntervalMillis(snapshotIntervalMs)
                 .setProcessingGuarantee(ProcessingGuarantee.EXACTLY_ONCE);
-        if (clusterName.equals(STABLE_CLUSTER)) {
+        if (clusterName.startsWith(STABLE_CLUSTER)) {
             jobConfig.addClass(JmsSourceTest.class, JmsMessageProducer.class, VerificationProcessor.class,
                     JmsSourceTest.JmsFactorySupplier.class);
         }
@@ -167,9 +121,6 @@ public class JmsSourceTest extends AbstractSoakTest {
 
     @Override
     protected void teardown(Throwable t) {
-        if (stableClusterClient != null) {
-            stableClusterClient.shutdown();
-        }
     }
 
     private static void log(ILogger logger, String message, String clusterName) {
@@ -177,7 +128,7 @@ public class JmsSourceTest extends AbstractSoakTest {
     }
 
     private static void assertCountEventually(JetInstance client, long expectedTotalCount, ILogger logger,
-            String clusterName) throws Exception {
+                                              String clusterName) throws Exception {
         Map<String, Long> latestCounterMap = client.getMap(VerificationProcessor.CONSUMED_MESSAGES_MAP_NAME);
         for (int i = 0; i < ASSERTION_RETRY_COUNT; i++) {
             long actualTotalCount = latestCounterMap.get(clusterName);

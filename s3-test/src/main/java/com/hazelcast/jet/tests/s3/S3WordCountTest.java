@@ -18,6 +18,7 @@ package com.hazelcast.jet.tests.s3;
 
 import com.hazelcast.client.UndefinedErrorCodeException;
 import com.hazelcast.function.SupplierEx;
+import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.impl.util.ExceptionUtil;
 import com.hazelcast.jet.pipeline.Pipeline;
@@ -53,7 +54,6 @@ import static software.amazon.awssdk.regions.Region.US_EAST_1;
 
 public class S3WordCountTest extends AbstractSoakTest {
 
-
     private static final int GET_OBJECT_RETRY_COUNT = 30;
     private static final long GET_OBJECT_RETRY_WAIT_TIME = TimeUnit.SECONDS.toNanos(1);
     private static final int S3_CLIENT_CONNECTION_TIMEOUT_SECONDS = 10;
@@ -82,7 +82,7 @@ public class S3WordCountTest extends AbstractSoakTest {
     }
 
     @Override
-    protected void init() {
+    protected void init(JetInstance client) {
         bucketName = property("bucketName", DEFAULT_BUCKET_NAME);
         directoryName = property("directoryName", DEFAULT_DIRECTORY_NAME) + "/";
         result = directoryName + RESULTS_PREFIX;
@@ -100,20 +100,19 @@ public class S3WordCountTest extends AbstractSoakTest {
                 WordGenerator.metaSupplier(distinct, totalWordCount)))
          .writeTo(S3Sinks.s3(bucketName, directoryName, UTF_8, clientSupplier(), Object::toString));
 
-        jet.newJob(p).join();
+        client.newJob(p).join();
     }
 
-
     @Override
-    protected void test() {
+    protected void test(JetInstance client, String name) {
         long begin = System.currentTimeMillis();
         int jobNumber = 0;
         int socketTimeoutNumber = 0;
         while ((System.currentTimeMillis() - begin) < durationInMillis) {
             try {
                 JobConfig jobConfig = new JobConfig();
-                jobConfig.setName("s3-test-" + jobNumber);
-                jet.newJob(pipeline(), jobConfig).join();
+                jobConfig.setName(name + "-" + jobNumber);
+                client.newJob(pipeline(), jobConfig).join();
                 verify(jobNumber);
                 sleepSeconds(sleepSeconds);
             } catch (Throwable e) {

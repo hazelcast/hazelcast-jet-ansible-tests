@@ -109,6 +109,12 @@ public abstract class AbstractSoakTest {
 
     protected abstract void teardown(Throwable t) throws Exception;
 
+    /**
+     * If {@code true} then {@link #test(JetInstance, String)} method will be
+     * called with the dynamic cluster client (which should be the bootstrapped
+     * instance) and stable cluster client (which needs a `remoteClusterXml`
+     * defined).
+     */
     protected boolean runOnBothClusters() {
         return false;
     }

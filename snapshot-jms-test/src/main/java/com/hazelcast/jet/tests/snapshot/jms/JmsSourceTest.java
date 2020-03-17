@@ -27,6 +27,7 @@ import com.hazelcast.jet.pipeline.Sinks;
 import com.hazelcast.jet.pipeline.Sources;
 import com.hazelcast.jet.pipeline.StreamSource;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
+import com.hazelcast.jet.tests.jms.JmsMessageProducer;
 import com.hazelcast.logging.ILogger;
 import org.apache.activemq.ActiveMQConnectionFactory;
 
@@ -41,7 +42,7 @@ import static com.hazelcast.jet.pipeline.ServiceFactories.sharedService;
 import static com.hazelcast.jet.tests.common.Util.getJobStatusWithRetry;
 import static com.hazelcast.jet.tests.common.Util.sleepMinutes;
 import static com.hazelcast.jet.tests.common.Util.waitForJobStatus;
-import static com.hazelcast.jet.tests.snapshot.jms.JmsMessageProducer.MESSAGE_PREFIX;
+import static com.hazelcast.jet.tests.jms.JmsMessageProducer.MESSAGE_PREFIX;
 import static com.hazelcast.jet.tests.snapshot.jms.JmsSourceTest.JmsFactorySupplier.getConnectionFactory;
 import static java.util.concurrent.TimeUnit.SECONDS;
 

@@ -26,8 +26,9 @@ import javax.jms.TextMessage;
 import static com.hazelcast.jet.impl.util.Util.uncheckRun;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
-class JmsMessageProducer {
+public class JmsMessageProducer {
 
+    public static final String MESSAGE_PREFIX = "Message-";
     private static final int SLEEP_MILLIS = 50;
 
     private final Thread producerThread;
@@ -37,7 +38,7 @@ class JmsMessageProducer {
     private volatile boolean running = true;
     private volatile long totalCount;
 
-    JmsMessageProducer(String brokerURL, String queueName) {
+    public JmsMessageProducer(String brokerURL, String queueName) {
         producerThread = new Thread(() -> uncheckRun(this::run));
         this.brokerURL = brokerURL;
         this.queueName = queueName;
@@ -52,7 +53,7 @@ class JmsMessageProducer {
 
         long count = 0;
         while (running) {
-            TextMessage textMessage = session.createTextMessage("Message-" + count++);
+            TextMessage textMessage = session.createTextMessage(MESSAGE_PREFIX + count++);
             producer.send(textMessage);
             MILLISECONDS.sleep(SLEEP_MILLIS);
         }
@@ -62,11 +63,11 @@ class JmsMessageProducer {
         totalCount = count;
     }
 
-    void start() {
+    public void start() {
         producerThread.start();
     }
 
-    long stop() throws InterruptedException {
+    public long stop() throws InterruptedException {
         running = false;
         producerThread.join();
         return totalCount;

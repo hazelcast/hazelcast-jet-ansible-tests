@@ -27,6 +27,11 @@
             <artifactId>soak-tests-common</artifactId>
             <version>${jet.version}</version>
         </dependency>
+        <dependency>
+            <groupId>com.hazelcast.jet.tests</groupId>
+            <artifactId>jms-test</artifactId>
+            <version>${jet.version}</version>
+        </dependency>
     </dependencies>
 
     <build>
@@ -77,6 +82,7 @@
                             <artifactSet>
                                 <includes>
                                     <include>com.hazelcast.jet.tests:*</include>
+                                    <include>com.hazelcast.jet.tests.jms:*</include>
                                     <include>com.hazelcast.jet.tests.snapshot.jms:*</include>
                                     <include>org.apache.activemq:*</include>
                                 </includes>

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.hazelcast.jet.tests.snapshot.jms;
+package com.hazelcast.jet.tests.snapshot.jmssource;
 
 import com.hazelcast.function.SupplierEx;
 import com.hazelcast.jet.JetInstance;
@@ -43,7 +43,7 @@ import static com.hazelcast.jet.tests.common.Util.getJobStatusWithRetry;
 import static com.hazelcast.jet.tests.common.Util.sleepMinutes;
 import static com.hazelcast.jet.tests.common.Util.waitForJobStatus;
 import static com.hazelcast.jet.tests.jms.JmsMessageProducer.MESSAGE_PREFIX;
-import static com.hazelcast.jet.tests.snapshot.jms.JmsSourceTest.JmsFactorySupplier.getConnectionFactory;
+import static com.hazelcast.jet.tests.snapshot.jmssource.JmsSourceTest.JmsFactorySupplier.getConnectionFactory;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
 public class JmsSourceTest extends AbstractSoakTest {

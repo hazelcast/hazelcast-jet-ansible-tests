@@ -26,6 +26,7 @@
         <module>return-result-to-caller-test</module>
         <module>rolling-aggregate-test</module>
         <module>snapshot-file-test</module>
+        <module>snapshot-jdbc-test</module>
         <module>snapshot-jms-sink-test</module>
         <module>snapshot-jms-source-test</module>
         <module>snapshot-kafka-test</module>

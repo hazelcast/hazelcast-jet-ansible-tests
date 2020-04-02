@@ -18,6 +18,11 @@
 
     <dependencies>
         <dependency>
+            <groupId>com.hazelcast.jet</groupId>
+            <artifactId>hazelcast-jet-kafka</artifactId>
+            <version>${jet.version}</version>
+        </dependency>
+        <dependency>
             <groupId>com.hazelcast.jet.tests</groupId>
             <artifactId>soak-tests-common</artifactId>
             <version>${jet.version}</version>

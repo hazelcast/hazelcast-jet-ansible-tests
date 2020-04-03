@@ -18,26 +18,20 @@ package com.hazelcast.jet.tests.stateful;
 
 import java.io.Serializable;
 
-/**
- * todo add proper javadoc
- */
 public class TransactionEvent implements Serializable {
 
-    private final Type type;
+    // 0 = start, 1 = end
+    private final int type;
     private final long transactionId;
     private final long timestamp;
 
-    public enum Type {
-        START, END
-    }
-
-    public TransactionEvent(Type type, long transactionId, long timestamp) {
+    public TransactionEvent(int type, long transactionId, long timestamp) {
         this.type = type;
         this.transactionId = transactionId;
         this.timestamp = timestamp;
     }
 
-    public Type type() {
+    public int type() {
         return type;
     }
 

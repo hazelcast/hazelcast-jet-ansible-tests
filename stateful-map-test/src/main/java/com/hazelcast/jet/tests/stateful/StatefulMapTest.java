@@ -118,11 +118,7 @@ public class StatefulMapTest extends AbstractSoakTest {
         KafkaSinkVerifier verifier = new KafkaSinkVerifier(name, brokerUri, TX_TOPIC_PREFIX + name, logger);
         verifier.start();
 
-        KafkaConsumer<Long, Long> txTimeoutConsumer = new KafkaConsumer<>(kafkaPropertiesForTimeoutVerifier());
-        List<String> topicList = new ArrayList<>();
-        topicList.add(TX_TIMEOUT_TOPIC_PREFIX + name);
-        txTimeoutConsumer.subscribe(topicList);
-
+        KafkaConsumer<Long, Long> txTimeoutConsumer = prepareTxTimeoutConsumer(name);
         long txTimoutCount = 0;
 
         JobConfig jobConfig = new JobConfig()
@@ -159,7 +155,15 @@ public class StatefulMapTest extends AbstractSoakTest {
         cancelJobAndJoin(client, job);
     }
 
-    public long processTimeoutItems(String name, KafkaConsumer<Long, Long> txTimeoutConsumer) {
+    private KafkaConsumer<Long, Long> prepareTxTimeoutConsumer(String name) {
+        KafkaConsumer<Long, Long> txTimeoutConsumer = new KafkaConsumer<>(kafkaPropertiesForTimeoutVerifier());
+        List<String> topicList = new ArrayList<>();
+        topicList.add(TX_TIMEOUT_TOPIC_PREFIX + name);
+        txTimeoutConsumer.subscribe(topicList);
+        return txTimeoutConsumer;
+    }
+
+    private long processTimeoutItems(String name, KafkaConsumer<Long, Long> txTimeoutConsumer) {
         ConsumerRecords<Long, Long> records = txTimeoutConsumer.poll(POLL_TIMEOUT);
         for (ConsumerRecord<Long, Long> record : records) {
             if (record.value() != -1) {
@@ -201,18 +205,19 @@ public class StatefulMapTest extends AbstractSoakTest {
 
     private Pipeline buildPipeline(String clusterName) {
         Pipeline p = Pipeline.create();
-        StreamSource<Map.Entry<String, Long>> source
-                = KafkaSources.<String, Long>kafka(kafkaPropertiesForSource(), TOPIC_PREFIX + clusterName);
+        StreamSource<TransactionEvent> source = KafkaSources.<String, Long, TransactionEvent>kafka(
+                kafkaPropertiesForSource(),
+                t -> {
+                    String key = t.key();
+                    String[] split = key.split(",");
+                    return new TransactionEvent(
+                            Integer.parseInt(split[0]), Long.parseLong(split[1]), t.value());
+                },
+                TOPIC_PREFIX + clusterName);
 
         StreamStage<Map.Entry<Long, Long>> streamStage =
                 p.readFrom(source)
-                 .withTimestamps(Map.Entry::getValue, 0)
-                 .map(t -> {
-                     String key = t.getKey();
-                     String[] split = key.split(",");
-                     return new TransactionEvent(
-                            Integer.parseInt(split[0]), Long.parseLong(split[1]), t.getValue());
-                     })
+                 .withTimestamps(TransactionEvent::timestamp, 0)
                  .groupingKey(TransactionEvent::transactionId)
                  .mapStateful(
                          txTimeout,
@@ -273,12 +278,8 @@ public class StatefulMapTest extends AbstractSoakTest {
         Properties props = new Properties();
         props.setProperty("bootstrap.servers", brokerUri);
         props.setProperty("group.id", UuidUtil.newUnsecureUuidString());
-        props.setProperty("key.deserializer", LongDeserializer.class.getName());
-        props.setProperty("value.deserializer", LongDeserializer.class.getName());
         props.setProperty("key.serializer", LongSerializer.class.getName());
         props.setProperty("value.serializer", LongSerializer.class.getName());
-        props.setProperty("auto.offset.reset", "earliest");
-        props.setProperty("max.poll.records", "32768");
         return props;
     }
 
@@ -288,8 +289,6 @@ public class StatefulMapTest extends AbstractSoakTest {
         props.setProperty("group.id", UuidUtil.newUnsecureUuidString());
         props.setProperty("key.deserializer", LongDeserializer.class.getName());
         props.setProperty("value.deserializer", LongDeserializer.class.getName());
-        props.setProperty("key.serializer", LongSerializer.class.getName());
-        props.setProperty("value.serializer", LongSerializer.class.getName());
         props.setProperty("auto.offset.reset", "earliest");
         props.setProperty("max.poll.records", "32768");
         return props;

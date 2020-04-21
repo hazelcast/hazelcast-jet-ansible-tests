@@ -16,6 +16,7 @@
 
 package com.hazelcast.jet.tests.snapshot.file;
 
+import com.hazelcast.internal.util.UuidUtil;
 import com.hazelcast.logging.ILogger;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -32,13 +33,17 @@ import static com.hazelcast.jet.impl.util.Util.uncheckCall;
 public class GeneratedFilesVerifier extends Thread {
 
     private static final String FILE_SINK_DIR_FOR_TEST_PATH = "/tmp/file_sink";
+    private static final String FILE_SINK_ARCHIVE_PATH = "/tmp/file_sink_archive";
 
     private static final int SLEEP_AFTER_VERIFICATION_CYCLE_MS = 1000;
     private static final int ALLOWED_NO_INPUT_MS = 600000;
     private static final int QUEUE_SIZE_LIMIT = 20_000;
     private static final int PRINT_LOG_ITEMS = 10_000;
+    // it is used to not store all logs in single directory
+    private static final int ARCHIVE_DIR_COUNTER_LIMIT = 10_000;
 
     private final Path filesinkDirectory;
+    private final Path filesinkArchiveDirectory;
     private final String name;
     private final ILogger logger;
 
@@ -46,11 +51,13 @@ public class GeneratedFilesVerifier extends Thread {
     private volatile Throwable error;
     private long counter;
     private final PriorityQueue<Long> verificationQueue = new PriorityQueue<>();
+    private Path filesinkArchiveCurrentSubdirectory;
 
     public GeneratedFilesVerifier(String name, ILogger logger) {
         this.name = name;
         this.logger = logger;
         filesinkDirectory = Paths.get(FILE_SINK_DIR_FOR_TEST_PATH + name);
+        filesinkArchiveDirectory = Paths.get(FILE_SINK_ARCHIVE_PATH + name);
     }
 
     @Override
@@ -82,11 +89,12 @@ public class GeneratedFilesVerifier extends Thread {
     }
 
     private List<Long> processFiles() throws IOException {
+        prepareOrCheckCurrentArchiveDirectory();
         try (Stream<Path> fileList = Files.list(filesinkDirectory)) {
             return fileList
                     .map(path -> uncheckCall(() -> {
                         List<String> lines = Files.readAllLines(path);
-                        Files.deleteIfExists(path);
+                        archiveLoadedFile(path);
                         return lines;
                     }))
                     .flatMap(Collection::stream)
@@ -119,6 +127,21 @@ public class GeneratedFilesVerifier extends Thread {
                     + "item. Limit=%d, expected next=%d, next in queue: %s, %s, %s, %s, ...",
                     name, QUEUE_SIZE_LIMIT, counter, verificationQueue.poll(), verificationQueue.poll(),
                     verificationQueue.poll(), verificationQueue.poll()));
+        }
+    }
+
+    private void archiveLoadedFile(Path path) throws IOException {
+        // add suffix to not override files which can have the same name (it is mostly for dynamic cluster)
+        String filename = path.toFile().getName() + "_" + UuidUtil.newUnsecureUuidString().substring(0, 8);
+        Path moveTo = filesinkArchiveCurrentSubdirectory.resolve(filename);
+        Files.move(path, moveTo);
+    }
+
+    private void prepareOrCheckCurrentArchiveDirectory() throws IOException {
+        long filename = counter / ARCHIVE_DIR_COUNTER_LIMIT;
+        filesinkArchiveCurrentSubdirectory = filesinkArchiveDirectory.resolve(Long.toString(filename));
+        if (!Files.exists(filesinkArchiveCurrentSubdirectory)) {
+            Files.createDirectory(filesinkArchiveCurrentSubdirectory);
         }
     }
 

@@ -58,15 +58,14 @@ public class JobLevelSerializersTest extends AbstractSoakTest {
 
     @Override
     protected void test(JetInstance client, String name) throws Throwable {
-        prepareSourceData(client);
         prepareExpectedList();
+        prepareSourceData(client);
 
         long begin = System.currentTimeMillis();
         long jobCount = 0;
         while (System.currentTimeMillis() - begin < durationInMillis) {
             JobConfig jobConfig = new JobConfig();
             jobConfig.setName("JobLevelSerializersTest" + jobCount);
-            jobConfig.addPackage(JobLevelSerializersTest.class.getPackage().getName());
             jobConfig.registerSerializer(IntValue.class, IntValueSerializer.class);
 
             client.newJob(pipeline(jobCount), jobConfig).join();
@@ -89,9 +88,7 @@ public class JobLevelSerializersTest extends AbstractSoakTest {
 
     private void prepareSourceData(JetInstance client) {
         List<Integer> list = client.getList(SOURCE_LIST_NAME);
-        for (int i = 0; i < sourceListSize; i++) {
-            list.add(i);
-        }
+        list.addAll(expectedList);
     }
 
     private void prepareExpectedList() {

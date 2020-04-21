@@ -16,7 +16,6 @@
 
 package com.hazelcast.jet.tests.snapshot.file;
 
-import com.hazelcast.internal.util.UuidUtil;
 import com.hazelcast.logging.ILogger;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -42,8 +41,8 @@ public class GeneratedFilesVerifier extends Thread {
     // it is used to not store all logs in single directory
     private static final int ARCHIVE_DIR_COUNTER_LIMIT = 10_000;
 
-    private final Path filesinkDirectory;
-    private final Path filesinkArchiveDirectory;
+    private final Path testDirectory;
+    private final Path archiveDirectory;
     private final String name;
     private final ILogger logger;
 
@@ -51,13 +50,14 @@ public class GeneratedFilesVerifier extends Thread {
     private volatile Throwable error;
     private long counter;
     private final PriorityQueue<Long> verificationQueue = new PriorityQueue<>();
-    private Path filesinkArchiveCurrentSubdirectory;
+    private Path currentSubdirectory;
+    private long archiveSuffixCounter;
 
     public GeneratedFilesVerifier(String name, ILogger logger) {
         this.name = name;
         this.logger = logger;
-        filesinkDirectory = Paths.get(FILE_SINK_DIR_FOR_TEST_PATH + name);
-        filesinkArchiveDirectory = Paths.get(FILE_SINK_ARCHIVE_PATH + name);
+        testDirectory = Paths.get(FILE_SINK_DIR_FOR_TEST_PATH + name);
+        archiveDirectory = Paths.get(FILE_SINK_ARCHIVE_PATH + name);
     }
 
     @Override
@@ -90,7 +90,7 @@ public class GeneratedFilesVerifier extends Thread {
 
     private List<Long> processFiles() throws IOException {
         prepareOrCheckCurrentArchiveDirectory();
-        try (Stream<Path> fileList = Files.list(filesinkDirectory)) {
+        try (Stream<Path> fileList = Files.list(testDirectory)) {
             return fileList
                     .map(path -> uncheckCall(() -> {
                         List<String> lines = Files.readAllLines(path);
@@ -132,16 +132,18 @@ public class GeneratedFilesVerifier extends Thread {
 
     private void archiveLoadedFile(Path path) throws IOException {
         // add suffix to not override files which can have the same name (it is mostly for dynamic cluster)
-        String filename = path.toFile().getName() + "_" + UuidUtil.newUnsecureUuidString().substring(0, 8);
-        Path moveTo = filesinkArchiveCurrentSubdirectory.resolve(filename);
+        String filename = path.toFile().getName() + "_" + archiveSuffixCounter;
+        Path moveTo = currentSubdirectory.resolve(filename);
         Files.move(path, moveTo);
+        archiveSuffixCounter++;
     }
 
     private void prepareOrCheckCurrentArchiveDirectory() throws IOException {
         long filename = counter / ARCHIVE_DIR_COUNTER_LIMIT;
-        filesinkArchiveCurrentSubdirectory = filesinkArchiveDirectory.resolve(Long.toString(filename));
-        if (!Files.exists(filesinkArchiveCurrentSubdirectory)) {
-            Files.createDirectory(filesinkArchiveCurrentSubdirectory);
+        currentSubdirectory = archiveDirectory.resolve(Long.toString(filename));
+        if (!Files.exists(currentSubdirectory)) {
+            Files.createDirectory(currentSubdirectory);
+            archiveSuffixCounter = 0;
         }
     }
 

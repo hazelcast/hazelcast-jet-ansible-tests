@@ -18,6 +18,7 @@
         <module>hdfs-test</module>
         <module>jdbc-test</module>
         <module>jms-test</module>
+        <module>job-level-serializers-test</module>
         <module>job-management-test</module>
         <module>kafka-session-window-test</module>
         <module>large-snapshot-chunk-test</module>

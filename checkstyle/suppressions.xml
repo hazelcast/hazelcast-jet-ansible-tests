@@ -34,4 +34,7 @@
 
     <!-- Suppress checks for main code -->
     <suppress checks="MagicNumber" files="[\\/]src[\\/]main[\\/]"/>
+
+    <!-- Suppress checks for auto-generated classes -->
+    <suppress checks="" files="generated-sources"/>
 </suppressions>

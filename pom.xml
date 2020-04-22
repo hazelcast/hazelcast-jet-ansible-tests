@@ -33,6 +33,7 @@
         <module>soak-tests-common</module>
         <module>stateful-map-test</module>
         <module>s3-test</module>
+        <module>grpc-test</module>
     </modules>
 
     <properties>

@@ -38,7 +38,7 @@ public abstract class AbstractSoakTest {
     public static final String STABLE_CLUSTER = "Stable";
     public static final String DYNAMIC_CLUSTER = "Dynamic";
 
-    private static final int DEFAULT_DURATION_MINUTES = 30;
+    private static final int DEFAULT_DURATION_MINUTES = 3;
     private static final int CACHE_EVICTION_SIZE = 2000000;
     private static final double WAIT_TIMEOUT_FACTOR = 1.1;
 

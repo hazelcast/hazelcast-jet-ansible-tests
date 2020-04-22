@@ -22,6 +22,7 @@ import io.grpc.ServerBuilder;
 import io.grpc.stub.StreamObserver;
 
 import java.io.IOException;
+import java.util.concurrent.Executors;
 
 import static com.hazelcast.jet.tests.grpc.greeter.GreeterOuterClass.HelloReply;
 import static com.hazelcast.jet.tests.grpc.greeter.GreeterOuterClass.HelloRequest;
@@ -71,6 +72,7 @@ public final class GreeterService extends GreeterGrpc.GreeterImplBase {
     }
 
     static Server createServer() throws IOException {
-        return ServerBuilder.forPort(0).addService(new GreeterService()).build().start();
+        return ServerBuilder.forPort(0).executor(Executors.newFixedThreadPool(4))
+                            .addService(new GreeterService()).build().start();
     }
 }

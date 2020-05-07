@@ -32,9 +32,7 @@ import java.sql.Connection;
 import javax.sql.CommonDataSource;
 import javax.sql.DataSource;
 
-import static com.hazelcast.function.FunctionEx.identity;
 import static com.hazelcast.jet.core.JobStatus.FAILED;
-import static com.hazelcast.jet.pipeline.ServiceFactories.sharedService;
 import static com.hazelcast.jet.tests.common.Util.getJobStatusWithRetry;
 import static com.hazelcast.jet.tests.common.Util.sleepMillis;
 import static com.hazelcast.jet.tests.common.Util.sleepMinutes;
@@ -140,8 +138,7 @@ public class JdbcSinkTest extends AbstractSoakTest {
 
         pipeline.readFrom(source)
                 .withoutTimestamps()
-                .groupingKey(identity())
-                .filterUsingService(sharedService(ctx -> null), (s, k, v) -> true)
+                .rebalance()
                 .writeTo(sink);
 
         return pipeline;

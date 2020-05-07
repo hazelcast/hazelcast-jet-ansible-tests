@@ -29,8 +29,6 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import static com.hazelcast.function.Functions.wholeItem;
-import static com.hazelcast.jet.pipeline.ServiceFactories.sharedService;
 import static com.hazelcast.jet.tests.common.Util.sleepMillis;
 
 public class JobLevelSerializersTest extends AbstractSoakTest {
@@ -109,8 +107,7 @@ public class JobLevelSerializersTest extends AbstractSoakTest {
         Pipeline p = Pipeline.create();
         p.<Integer>readFrom(Sources.list(SOURCE_LIST_NAME))
                 .map(t -> new IntValue(t))
-                .groupingKey(wholeItem())
-                .filterUsingService(sharedService(ctx -> null), (s, k, v) -> true)
+                .rebalance()
                 .map(t -> t.getValue())
                 .writeTo(Sinks.list(SINK_LIST_NAME + jobCount));
         return p;

@@ -27,9 +27,7 @@ import com.hazelcast.jet.pipeline.SourceBuilder;
 import com.hazelcast.jet.pipeline.StreamSource;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
 
-import static com.hazelcast.function.FunctionEx.identity;
 import static com.hazelcast.jet.core.JobStatus.FAILED;
-import static com.hazelcast.jet.pipeline.ServiceFactories.sharedService;
 import static com.hazelcast.jet.tests.common.Util.getJobStatusWithRetry;
 import static com.hazelcast.jet.tests.common.Util.sleepMillis;
 import static com.hazelcast.jet.tests.common.Util.sleepMinutes;
@@ -116,8 +114,7 @@ public class FileSinkTest extends AbstractSoakTest {
 
         pipeline.readFrom(source)
                 .withoutTimestamps()
-                .groupingKey(identity())
-                .filterUsingService(sharedService(ctx -> null), (s, k, v) -> true)
+                .rebalance()
                 .writeTo(sink);
 
         return pipeline;

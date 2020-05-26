@@ -20,7 +20,7 @@ import com.hazelcast.collection.IList;
 import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.elastic.ElasticSinks;
-import com.hazelcast.jet.elastic.ElasticSources;
+import com.hazelcast.jet.elastic.ElasticSourceBuilder;
 import com.hazelcast.jet.pipeline.BatchSource;
 import com.hazelcast.jet.pipeline.Pipeline;
 import com.hazelcast.jet.pipeline.Sink;
@@ -71,11 +71,11 @@ public class ElasticTest extends AbstractSoakTest {
     @Override
     public void test(JetInstance client, String name) throws Exception {
         logger.info("Elastic ip: " + elasticIp);
-        clearSinkMap(client);
+        clearSinkList(client);
         int jobCounter = 0;
         long begin = System.currentTimeMillis();
         while (System.currentTimeMillis() - begin < durationInMillis) {
-            clearSinkMap(client);
+            clearSinkList(client);
 
             int indexCounter = jobCounter;
 
@@ -83,7 +83,7 @@ public class ElasticTest extends AbstractSoakTest {
             executeReadFromElasticPipeline(client, indexCounter);
             assertResults(client, jobCounter);
 
-            clearSinkMap(client);
+            clearSinkList(client);
 
             executeDeleteFromElasticPipeline(client, jobCounter);
             executeReadFromElasticPipeline(client, indexCounter);
@@ -122,13 +122,15 @@ public class ElasticTest extends AbstractSoakTest {
 
     private void executeReadFromElasticPipeline(JetInstance client, int indexCounter) {
         final String ip = elasticIp;
-        BatchSource elasticSource = ElasticSources.elastic(
-                () -> RestClient.builder(new HttpHost(ip, 9200, "http")),
-                () -> new SearchRequest("elastictest-index" + indexCounter),
-                hit -> {
+        BatchSource<String> elasticSource = new ElasticSourceBuilder<>()
+                .clientFn(() -> RestClient.builder(new HttpHost(ip, 9200, "http")))
+                .searchRequestFn(() -> new SearchRequest("elastictest-index" + indexCounter))
+                .mapToItemFn(hit -> {
                     Map<String, Object> sourceAsMap = hit.getSourceAsMap();
                     return sourceAsMap.get("id") + "_" + sourceAsMap.get("record");
-                });
+                })
+                .enableSlicing()
+                .build();
 
         Pipeline fromElastic = Pipeline.create();
         fromElastic.readFrom(elasticSource)
@@ -183,7 +185,7 @@ public class ElasticTest extends AbstractSoakTest {
         assertTrue(list.isEmpty());
     }
 
-    private void clearSinkMap(JetInstance client) {
+    private void clearSinkList(JetInstance client) {
         client.getList(SINK_LIST_NAME).clear();
     }
 

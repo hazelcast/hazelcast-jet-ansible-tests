@@ -14,6 +14,7 @@
         <module>attach-ml-model-test</module>
         <module>cooperative-map-cache-source-test</module>
         <module>early-results-test</module>
+        <module>elastic-test</module>
         <module>event-journal-test</module>
         <module>hdfs-test</module>
         <module>jdbc-test</module>

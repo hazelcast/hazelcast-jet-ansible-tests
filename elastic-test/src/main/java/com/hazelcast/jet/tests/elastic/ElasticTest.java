@@ -29,8 +29,6 @@ import com.hazelcast.jet.pipeline.test.TestSources;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
 
 import java.sql.SQLException;
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -50,7 +48,7 @@ public class ElasticTest extends AbstractSoakTest {
 
     private static final String SINK_LIST_NAME = ElasticTest.class.getSimpleName() + "_listSink";
     private static final int DEFAULT_ITEM_COUNT = 10_000;
-    private static final int LOG_JOB_COUNT_THRESHOLD = 100;
+    private static final int LOG_JOB_COUNT_THRESHOLD = 50;
     private static final int SLEEP_BETWEEN_TABLE_READS_SECONDS = 5;
 
     private String elasticIp;
@@ -77,16 +75,14 @@ public class ElasticTest extends AbstractSoakTest {
         while (System.currentTimeMillis() - begin < durationInMillis) {
             clearSinkList(client);
 
-            int indexCounter = jobCounter;
-
-            executeWriteToElasticPipeline(client, indexCounter);
-            executeReadFromElasticPipeline(client, indexCounter);
+            executeWriteToElasticPipeline(client, jobCounter);
+            executeReadFromElasticPipeline(client, jobCounter);
             assertResults(client, jobCounter);
 
             clearSinkList(client);
 
             executeDeleteFromElasticPipeline(client, jobCounter);
-            executeReadFromElasticPipeline(client, indexCounter);
+            executeReadFromElasticPipeline(client, jobCounter);
 
             assertEmptyResults(client);
 
@@ -162,22 +158,31 @@ public class ElasticTest extends AbstractSoakTest {
 
     private void assertResults(JetInstance client, int indexCounter) {
         IList<String> list = client.getList(SINK_LIST_NAME);
-        assertEquals(itemCount, list.size());
-        List<String> copiedList = new ArrayList<>(list);
-        Collections.sort(copiedList);
-        List<String> expectedList = prepareExpectedList(indexCounter);
-        assertEquals(expectedList, copiedList);
-    }
+        String expected = "_index-" + indexCounter + "_";
+        boolean firstElementIsInList = false;
+        boolean lastElementIsInList = false;
+        int lastElementNumber = itemCount - 1;
+        for (String item : list) {
+            assertTrue("Does not contain expected part: " + item, item.contains(expected));
+            if (item.equals("0" + expected + "0")) {
+                firstElementIsInList = true;
+            }
+            if (item.equals(lastElementNumber + expected + lastElementNumber)) {
+                lastElementIsInList = true;
+            }
+        }
 
-    private List<String> prepareExpectedList(int indexCounter) {
-        List<String> list = inputItems.stream()
-                .map(t -> {
-                    String parsed = Integer.toString(t);
-                    return parsed + "_index-" + indexCounter + "_" + parsed;
-                })
-                .collect(toList());
-        Collections.sort(list);
-        return list;
+        try {
+            assertEquals(itemCount, list.size());
+            assertTrue(firstElementIsInList);
+            assertTrue(lastElementIsInList);
+        } catch (Throwable ex) {
+            logger.info("Printing content of incorrect list:");
+            for (String item : list) {
+                logger.info(item);
+            }
+            throw ex;
+        }
     }
 
     private void assertEmptyResults(JetInstance client) {

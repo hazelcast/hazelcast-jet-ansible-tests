@@ -30,8 +30,10 @@ import com.hazelcast.jet.tests.common.AbstractSoakTest;
 
 import java.sql.SQLException;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.IntStream;
 import org.apache.http.HttpHost;
 import org.elasticsearch.action.bulk.BulkRequest;
@@ -158,24 +160,19 @@ public class ElasticTest extends AbstractSoakTest {
 
     private void assertResults(JetInstance client, int indexCounter) {
         IList<String> list = client.getList(SINK_LIST_NAME);
+        Set<String> set = new HashSet<>();
         String expected = "_index-" + indexCounter + "_";
-        boolean firstElementIsInList = false;
-        boolean lastElementIsInList = false;
-        int lastElementNumber = itemCount - 1;
         for (String item : list) {
             assertTrue("Does not contain expected part: " + item, item.contains(expected));
-            if (item.equals("0" + expected + "0")) {
-                firstElementIsInList = true;
-            }
-            if (item.equals(lastElementNumber + expected + lastElementNumber)) {
-                lastElementIsInList = true;
-            }
+            set.add(item);
         }
 
+        int lastElementNumber = itemCount - 1;
         try {
             assertEquals(itemCount, list.size());
-            assertTrue(firstElementIsInList);
-            assertTrue(lastElementIsInList);
+            assertEquals(itemCount, set.size());
+            assertTrue(set.contains("0" + expected + "0"));
+            assertTrue(set.contains(lastElementNumber + expected + lastElementNumber));
         } catch (Throwable ex) {
             logger.info("Printing content of incorrect list:");
             for (String item : list) {

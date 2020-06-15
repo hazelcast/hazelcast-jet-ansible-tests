@@ -22,8 +22,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.PriorityQueue;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -33,6 +36,8 @@ public class GeneratedFilesVerifier extends Thread {
 
     private static final String FILE_SINK_DIR_FOR_TEST_PATH = "/tmp/file_sink";
     private static final String FILE_SINK_ARCHIVE_PATH = "/tmp/file_sink_archive";
+    private static final String PROCESSING_DIRECTORY_PREFIX = "dir_";
+    private static final String PROCESSING_DIRECTORY_DONE_FILE = "done";
 
     private static final int SLEEP_AFTER_VERIFICATION_CYCLE_MS = 1000;
     private static final int ALLOWED_NO_INPUT_MS = 600000;
@@ -52,6 +57,7 @@ public class GeneratedFilesVerifier extends Thread {
     private final PriorityQueue<Long> verificationQueue = new PriorityQueue<>();
     private Path currentSubdirectory;
     private long archiveSuffixCounter;
+    private long directoryCounter;
 
     public GeneratedFilesVerifier(String name, ILogger logger) {
         this.name = name;
@@ -89,18 +95,32 @@ public class GeneratedFilesVerifier extends Thread {
     }
 
     private List<Long> processFiles() throws IOException {
-        prepareOrCheckCurrentArchiveDirectory();
-        try (Stream<Path> fileList = Files.list(testDirectory)) {
-            return fileList
-                    .map(path -> uncheckCall(() -> {
-                        List<String> lines = Files.readAllLines(path);
-                        archiveLoadedFile(path);
-                        return lines;
-                    }))
-                    .flatMap(Collection::stream)
-                    .map(Long::parseLong)
-                    .collect(Collectors.toList());
+        Path dirForProcessing = testDirectory.resolve(PROCESSING_DIRECTORY_PREFIX + directoryCounter);
+
+        if (!dataForProcessingAreReady(dirForProcessing)) {
+            return Collections.emptyList();
         }
+
+        prepareOrCheckCurrentArchiveDirectory();
+        List<Path> fileList;
+        try (Stream<Path> fileListStream = Files.list(dirForProcessing)) {
+            fileList = fileListStream.collect(Collectors.toList());
+        }
+        removeDuplicatesFromList(fileList);
+
+        List<Long> processedItems = fileList.stream()
+                .map(path -> uncheckCall(() -> {
+                    List<String> lines = Files.readAllLines(path);
+                    archiveLoadedFile(path);
+                    return lines;
+                }))
+                .flatMap(Collection::stream)
+                .map(Long::parseLong)
+                .collect(Collectors.toList());
+
+        Files.delete(dirForProcessing);
+        directoryCounter++;
+        return processedItems;
     }
 
     private void verifyQueue() {
@@ -145,6 +165,18 @@ public class GeneratedFilesVerifier extends Thread {
             Files.createDirectory(currentSubdirectory);
             archiveSuffixCounter = 0;
         }
+    }
+
+    private boolean dataForProcessingAreReady(Path dirForProcessing) {
+        Path doneFilePath = dirForProcessing.resolve(PROCESSING_DIRECTORY_DONE_FILE);
+        return Files.exists(doneFilePath);
+    }
+
+    private void removeDuplicatesFromList(List<Path> fileList) {
+        Set<Path> set = new HashSet<>();
+        set.addAll(fileList);
+        fileList.clear();
+        fileList.addAll(set);
     }
 
     public void finish() {

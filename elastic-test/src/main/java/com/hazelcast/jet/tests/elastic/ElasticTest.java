@@ -27,6 +27,7 @@ import com.hazelcast.jet.pipeline.Sink;
 import com.hazelcast.jet.pipeline.Sinks;
 import com.hazelcast.jet.pipeline.test.TestSources;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
+import java.io.IOException;
 
 import java.sql.SQLException;
 import java.util.HashMap;
@@ -36,12 +37,15 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.IntStream;
 import org.apache.http.HttpHost;
+import org.elasticsearch.action.admin.indices.delete.DeleteIndexRequest;
 import org.elasticsearch.action.bulk.BulkRequest;
 import org.elasticsearch.action.delete.DeleteRequest;
 import org.elasticsearch.action.index.IndexRequest;
 import org.elasticsearch.action.search.SearchRequest;
 import org.elasticsearch.action.support.WriteRequest;
+import org.elasticsearch.client.RequestOptions;
 import org.elasticsearch.client.RestClient;
+import org.elasticsearch.client.RestHighLevelClient;
 
 import static com.hazelcast.jet.tests.common.Util.sleepSeconds;
 import static java.util.stream.Collectors.toList;
@@ -87,6 +91,8 @@ public class ElasticTest extends AbstractSoakTest {
             executeReadFromElasticPipeline(client, jobCounter);
 
             assertEmptyResults(client);
+
+            deleteIndex(jobCounter);
 
             if (jobCounter % LOG_JOB_COUNT_THRESHOLD == 0) {
                 logger.info("Job count: " + jobCounter);
@@ -185,6 +191,13 @@ public class ElasticTest extends AbstractSoakTest {
     private void assertEmptyResults(JetInstance client) {
         IList<String> list = client.getList(SINK_LIST_NAME);
         assertTrue(list.isEmpty());
+    }
+
+    private void deleteIndex(int indexCounter) throws IOException {
+        try (RestHighLevelClient client = new RestHighLevelClient(
+                RestClient.builder(new HttpHost(elasticIp, 9200, "http")))) {
+            client.indices().delete(new DeleteIndexRequest("elastictest-index" + indexCounter), RequestOptions.DEFAULT);
+        }
     }
 
     private void clearSinkList(JetInstance client) {

@@ -23,10 +23,8 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.PriorityQueue;
-import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -72,9 +70,7 @@ public class GeneratedFilesVerifier extends Thread {
         while (!finished) {
             try {
                 List<Long> processFiles = processFiles();
-                for (Long processFile : processFiles) {
-                    verificationQueue.add(processFile);
-                }
+                verificationQueue.addAll(processFiles);
                 long now = System.currentTimeMillis();
                 if (processFiles.isEmpty()) {
                     if (now - lastInputTime > ALLOWED_NO_INPUT_MS) {
@@ -102,13 +98,12 @@ public class GeneratedFilesVerifier extends Thread {
         }
 
         prepareOrCheckCurrentArchiveDirectory();
-        List<Path> fileList;
+        Collection<Path> files;
         try (Stream<Path> fileListStream = Files.list(dirForProcessing)) {
-            fileList = fileListStream.collect(Collectors.toList());
+            files = fileListStream.collect(Collectors.toSet());
         }
-        removeDuplicatesFromList(fileList);
 
-        List<Long> processedItems = fileList.stream()
+        List<Long> processedItems = files.stream()
                 .map(path -> uncheckCall(() -> {
                     List<String> lines = Files.readAllLines(path);
                     archiveLoadedFile(path);
@@ -136,10 +131,10 @@ public class GeneratedFilesVerifier extends Thread {
                 // correct head of queue
                 verificationQueue.remove();
                 counter++;
-            } else if (peeked < counter) {
+            } else {
+                // peeked < counter
                 // duplicate key
-                throw new AssertionError(
-                        String.format("Duplicate key %d, but counter was %d", peeked, counter));
+                throw new AssertionError(String.format("Duplicate key %d, but counter was %d", peeked, counter));
             }
         }
         if (verificationQueue.size() >= QUEUE_SIZE_LIMIT) {
@@ -170,13 +165,6 @@ public class GeneratedFilesVerifier extends Thread {
     private boolean dataForProcessingAreReady(Path dirForProcessing) {
         Path doneFilePath = dirForProcessing.resolve(PROCESSING_DIRECTORY_DONE_FILE);
         return Files.exists(doneFilePath);
-    }
-
-    private void removeDuplicatesFromList(List<Path> fileList) {
-        Set<Path> set = new HashSet<>();
-        set.addAll(fileList);
-        fileList.clear();
-        fileList.addAll(set);
     }
 
     public void finish() {

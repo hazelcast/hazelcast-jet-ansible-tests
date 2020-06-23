@@ -30,6 +30,7 @@ public class MessageProducer {
 
     private final int sleepMs;
     private final Thread producerThread;
+    private final Connection connection;
     private final PreparedStatement insertStatement;
     private final PreparedStatement updateStatement;
     private final PreparedStatement deleteStatement;
@@ -39,11 +40,10 @@ public class MessageProducer {
     MessageProducer(String connectionUrl, String tableName, int sleepMs) throws SQLException {
         this.sleepMs = sleepMs;
         this.producerThread = new Thread(() -> Util.uncheckRun(this::run));
-        try (Connection connection = DriverManager.getConnection(connectionUrl, "root", "soak-test")) {
-            insertStatement = connection.prepareStatement("INSERT INTO " + tableName + " VALUES (?,?)");
-            updateStatement = connection.prepareStatement("UPDATE " + tableName + " SET value=? WHERE id=?");
-            deleteStatement = connection.prepareStatement("DELETE FROM " + tableName + " WHERE id=?");
-        }
+        connection = DriverManager.getConnection(connectionUrl, "root", "soak-test");
+        insertStatement = connection.prepareStatement("INSERT INTO " + tableName + " VALUES (?,?)");
+        updateStatement = connection.prepareStatement("UPDATE " + tableName + " SET value=? WHERE id=?");
+        deleteStatement = connection.prepareStatement("DELETE FROM " + tableName + " WHERE id=?");
     }
 
     private void run() throws Exception {
@@ -67,6 +67,7 @@ public class MessageProducer {
         insertStatement.close();
         updateStatement.close();
         deleteStatement.close();
+        connection.close();
         return producedItems;
     }
 

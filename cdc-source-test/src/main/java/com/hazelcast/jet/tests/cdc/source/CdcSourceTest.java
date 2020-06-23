@@ -16,7 +16,6 @@
 
 package com.hazelcast.jet.tests.cdc.source;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.cdc.ChangeRecord;
@@ -31,21 +30,18 @@ import com.hazelcast.jet.pipeline.Sinks;
 import com.hazelcast.jet.pipeline.StreamSource;
 import com.hazelcast.jet.pipeline.StreamStage;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
-import com.hazelcast.logging.ILogger;
+
 import java.sql.Connection;
 import java.sql.DriverManager;
-import java.sql.PreparedStatement;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.Map;
-import java.util.Objects;
 
 import static com.hazelcast.jet.core.JobStatus.FAILED;
 import static com.hazelcast.jet.core.JobStatus.RUNNING;
-import static com.hazelcast.jet.impl.util.Util.uncheckRun;
-import static com.hazelcast.jet.tests.common.Util.sleepMinutes;
 import static com.hazelcast.jet.tests.common.Util.entry;
 import static com.hazelcast.jet.tests.common.Util.getJobStatusWithRetry;
-import static com.hazelcast.jet.tests.common.Util.sleepMillis;
+import static com.hazelcast.jet.tests.common.Util.sleepMinutes;
 import static com.hazelcast.jet.tests.common.Util.sleepSeconds;
 import static com.hazelcast.jet.tests.common.Util.waitForJobStatus;
 
@@ -81,11 +77,7 @@ public class CdcSourceTest extends AbstractSoakTest {
         sleepMsBetweenItem = propertyInt("sleepMsBetweenItem", DEFAULT_SLEEP_MS_BETWEEN_ITEM);
         snapshotIntervalMs = propertyInt("snapshotIntervalMs", DEFAULT_SNAPSHOT_INTERVAL);
 
-        try (Connection connection = DriverManager.getConnection(connectionUrl, "root", "soak-test")) {
-            connection
-                    .prepareStatement("CREATE DATABASE " + DATABASE_NAME)
-                    .executeUpdate();
-        }
+        createDatabase();
     }
 
     @Override
@@ -96,11 +88,7 @@ public class CdcSourceTest extends AbstractSoakTest {
     @Override
     public void test(JetInstance client, String name) throws Exception {
         String tableName = TABLE_NAME + name.replace("-", "_");
-        try (Connection connection = DriverManager.getConnection(connectionUrlWithDb, "root", "soak-test")) {
-            connection.createStatement().execute("DROP TABLE IF EXISTS " + tableName);
-            connection.createStatement().execute("CREATE TABLE " + tableName
-                    + "(id int PRIMARY KEY AUTO_INCREMENT, value int)");
-        }
+        createTable(tableName);
 
         JobConfig jobConfig = new JobConfig();
         jobConfig.setName(name);
@@ -120,7 +108,7 @@ public class CdcSourceTest extends AbstractSoakTest {
         int cycles = 0;
         int latestCheckedCount = 0;
         long begin = System.currentTimeMillis();
-        int expectedTotalCount = 0;
+        int expectedTotalCount;
         try {
             while (System.currentTimeMillis() - begin < durationInMillis) {
                 if (getJobStatusWithRetry(job) == FAILED) {
@@ -129,7 +117,7 @@ public class CdcSourceTest extends AbstractSoakTest {
                 cycles++;
                 if (cycles % 10 == 0) {
                     latestCheckedCount = checkNewDataProcessed(client, name, latestCheckedCount);
-                    log(logger, "Check for insert changes succeeded, latestCheckedCount: " + latestCheckedCount, name);
+                    log("Check for insert changes succeeded, latestCheckedCount: " + latestCheckedCount, name);
                 }
                 sleepMinutes(1);
             }
@@ -137,10 +125,10 @@ public class CdcSourceTest extends AbstractSoakTest {
             expectedTotalCount = producer.stop();
         }
         assertTrue(expectedTotalCount > 0);
-        log(logger, "Producer stopped, expectedTotalCount: " + expectedTotalCount, name);
-        assertCountEventually(client, expectedTotalCount, logger, name);
+        log("Producer stopped, expectedTotalCount: " + expectedTotalCount, name);
+        assertCountEventually(client, name, expectedTotalCount);
         job.cancel();
-        log(logger, "Job completed", name);
+        log("Job completed", name);
     }
 
     private int checkNewDataProcessed(JetInstance client, String clusterName, int latestChecked) {
@@ -163,7 +151,8 @@ public class CdcSourceTest extends AbstractSoakTest {
 
         Pipeline pipeline = Pipeline.create();
 
-        StreamSource<ChangeRecord> source = MySqlCdcSources.mysql(tableName)
+        StreamSource<ChangeRecord> source = MySqlCdcSources
+                .mysql(tableName)
                 .setDatabaseAddress(connectionIp)
                 .setDatabasePort(3306)
                 .setDatabaseUser("debezium")
@@ -180,40 +169,68 @@ public class CdcSourceTest extends AbstractSoakTest {
         Sink<Integer> deleteSink = Sinks.fromProcessor("deleteVerificationProcessor",
                 VerificationProcessor.supplier(clusterName + "_delete"));
 
-        StreamStage<Map.Entry<Operation, Integer>> afterMappingStage = pipeline.readFrom(source)
-                .withNativeTimestamps(0)
-                .map(record -> {
-                    Operation operation = record.operation();
-                    RecordPart value = record.value();
-                    TableRow tableRow = value.toObject(TableRow.class);
-                    return entry(operation, tableRow.getId());
-                });
+        StreamStage<Map.Entry<Operation, Integer>> afterMappingStage
+                = pipeline.readFrom(source)
+                          .withNativeTimestamps(0)
+                          .map(record -> {
+                              RecordPart value = record.value();
+                              int id = (int) value.toMap().get("id");
+                              return entry(record.operation(), id);
+                          });
 
         afterMappingStage.filter(t -> t.getKey().equals(Operation.INSERT))
-                .map(t -> t.getValue())
-                .writeTo(insertSink);
+                         .map(Map.Entry::getValue)
+                         .writeTo(insertSink);
         afterMappingStage.filter(t -> t.getKey().equals(Operation.UPDATE))
-                .map(t -> t.getValue())
-                .writeTo(updateSink);
+                         .map(Map.Entry::getValue)
+                         .writeTo(updateSink);
         afterMappingStage.filter(t -> t.getKey().equals(Operation.DELETE))
-                .map(t -> t.getValue())
-                .writeTo(deleteSink);
+                         .map(Map.Entry::getValue)
+                         .writeTo(deleteSink);
 
         return pipeline;
     }
 
-    private static void assertCountEventually(JetInstance client, long expectedTotalCount, ILogger logger,
-            String clusterName) throws Exception {
+    @Override
+    protected void teardown(Throwable t) throws Exception {
+        try (
+                Connection connection = DriverManager.getConnection(connectionUrl, "root", "soak-test");
+                Statement statement = connection.createStatement()
+        ) {
+            statement.executeUpdate("DROP DATABASE " + DATABASE_NAME);
+        }
+    }
+
+    private void createDatabase() throws SQLException {
+        try (
+                Connection connection = DriverManager.getConnection(connectionUrl, "root", "soak-test");
+                Statement statement = connection.createStatement()
+        ) {
+            statement.executeUpdate("CREATE DATABASE " + DATABASE_NAME);
+        }
+    }
+
+    private void createTable(String tableName) throws SQLException {
+        try (
+                Connection connection = DriverManager.getConnection(connectionUrlWithDb, "root", "soak-test");
+                Statement statement = connection.createStatement()
+        ) {
+            statement.executeUpdate("DROP TABLE IF EXISTS " + tableName);
+            statement.executeUpdate("CREATE TABLE " + tableName + "(id int PRIMARY KEY AUTO_INCREMENT, value int)");
+        }
+    }
+
+    private void assertCountEventually(JetInstance client, String clusterName, long expectedTotalCount) {
         Map<String, Integer> latestCounterMap = client.getMap(VerificationProcessor.CONSUMED_MESSAGES_MAP_NAME);
         for (int i = 0; i < ASSERTION_RETRY_COUNT; i++) {
             int insertActualTotalCount = latestCounterMap.get(clusterName + "_insert");
             int updateActualTotalCount = latestCounterMap.get(clusterName + "_update");
             int deleteActualTotalCount = latestCounterMap.get(clusterName + "_delete");
-            log(logger, "expected: " + expectedTotalCount
-                    + ", actual insert: " + insertActualTotalCount
-                    + ", actual update: " + updateActualTotalCount
-                    + ", actual delete: " + deleteActualTotalCount,
-                     clusterName);
+            log("expected: " + expectedTotalCount
+                            + ", actual insert: " + insertActualTotalCount
+                            + ", actual update: " + updateActualTotalCount
+                            + ", actual delete: " + deleteActualTotalCount,
+                    clusterName);
             if (expectedTotalCount == insertActualTotalCount
                     && expectedTotalCount == updateActualTotalCount
                     && expectedTotalCount == deleteActualTotalCount) {
@@ -229,119 +246,8 @@ public class CdcSourceTest extends AbstractSoakTest {
         assertEquals(expectedTotalCount, deleteActualTotalCount);
     }
 
-    @Override
-    protected void teardown(Throwable t) throws Exception {
-        try (Connection connection = DriverManager.getConnection(connectionUrl, "root", "soak-test")) {
-            connection
-                    .prepareStatement("DROP DATABASE " + DATABASE_NAME)
-                    .executeUpdate();
-        }
-    }
-
-    private static void log(ILogger logger, String message, String clusterName) {
+    private void log(String message, String clusterName) {
         logger.info("Cluster" + clusterName + "\t\t" + message);
     }
 
-    static class TableRow {
-
-        @JsonProperty("id")
-        private int id;
-
-        @JsonProperty("value")
-        private int value;
-
-        TableRow() {
-        }
-
-        public int getId() {
-            return id;
-        }
-
-        public void setId(int id) {
-            this.id = id;
-        }
-
-        public int getValue() {
-            return value;
-        }
-
-        public void setValue(int value) {
-            this.value = value;
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(id, value);
-        }
-
-        @Override
-        public boolean equals(Object obj) {
-            if (this == obj) {
-                return true;
-            }
-            if (obj == null || getClass() != obj.getClass()) {
-                return false;
-            }
-            TableRow other = (TableRow) obj;
-            return id == other.id
-                    && Objects.equals(value, other.value);
-        }
-
-        @Override
-        public String toString() {
-            return "TableRow {id=" + id + ", value=" + value + "}";
-        }
-    }
-
-    private static class MessageProducer {
-
-        private final String connectionUrl;
-        private final String tableName;
-        private final int sleepMs;
-        private final Thread producerThread;
-        private volatile boolean running = true;
-        private volatile int producedItems;
-
-        MessageProducer(String connectionUrl, String tableName, int sleepMs) {
-            this.connectionUrl = connectionUrl;
-            this.tableName = tableName;
-            this.sleepMs = sleepMs;
-            this.producerThread = new Thread(() -> uncheckRun(this::run));
-        }
-
-        private void run() throws Exception {
-            try (Connection connection = DriverManager.getConnection(connectionUrl, "root", "soak-test")) {
-                int id = 1;
-                while (running) {
-                    executeAndCloseStatement(connection,
-                            "INSERT INTO " + tableName + " VALUES (" + id + ", " + id + ")");
-                    sleepMillis(sleepMs);
-                    executeAndCloseStatement(connection,
-                            "UPDATE " + tableName + " SET value=" + (id + 1) + " WHERE id=" + id);
-                    sleepMillis(sleepMs);
-                    executeAndCloseStatement(connection,
-                            "DELETE FROM " + tableName + " WHERE id=" + id);
-                    sleepMillis(sleepMs);
-                    id++;
-                }
-                producedItems = id;
-            }
-        }
-
-        public void start() {
-            producerThread.start();
-        }
-
-        public int stop() throws InterruptedException {
-            running = false;
-            producerThread.join();
-            return producedItems;
-        }
-
-        private void executeAndCloseStatement(Connection connection, String statement) throws SQLException {
-            try (PreparedStatement prepareStatement = connection.prepareStatement(statement)) {
-                prepareStatement.executeUpdate();
-            }
-        }
-    }
 }

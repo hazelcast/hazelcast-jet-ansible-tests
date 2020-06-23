@@ -17,14 +17,15 @@
 package com.hazelcast.jet.tests.snapshot.jdbc;
 
 import com.hazelcast.logging.ILogger;
+
 import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
-import java.util.ArrayList;
-import java.util.List;
+import java.sql.SQLException;
 import java.util.PriorityQueue;
-import javax.sql.DataSource;
 
 import static com.hazelcast.jet.impl.util.Util.uncheckRun;
+import static com.hazelcast.jet.tests.common.Util.sleepMillis;
 import static com.hazelcast.jet.tests.snapshot.jdbc.JdbcSinkTest.DataSourceSupplier.getDataSourceSupplier;
 import static com.hazelcast.jet.tests.snapshot.jdbc.JdbcSinkTest.TABLE_PREFIX;
 
@@ -36,53 +37,55 @@ public class JdbcSinkVerifier {
     private static final int PRINT_LOG_ITEMS = 10_000;
     private static final int SELECT_SIZE_LIMIT = 1000;
 
-    private final String tableName;
-
     private final Thread consumerThread;
     private final String name;
     private final ILogger logger;
-    private final String connectionUrl;
-
+    private final PriorityQueue<Integer> verificationQueue = new PriorityQueue<>();
+    private final Connection connection;
+    private final PreparedStatement selectStatement;
+    private final PreparedStatement deleteStatement;
     private volatile boolean finished;
     private volatile Throwable error;
     private long counter;
-    private final PriorityQueue<Integer> verificationQueue = new PriorityQueue<>();
 
-    public JdbcSinkVerifier(String name, ILogger logger, String connectionUrl) {
+    public JdbcSinkVerifier(String name, ILogger logger, String connectionUrl) throws SQLException {
         this.consumerThread = new Thread(() -> uncheckRun(this::run));
         this.name = name;
-        this.tableName = (TABLE_PREFIX + name).replaceAll("-", "_");
         this.logger = logger;
-        this.connectionUrl = connectionUrl;
+
+        String tableName = TABLE_PREFIX + name.replaceAll("-", "_");
+
+        connection = getDataSourceSupplier(connectionUrl).get().getConnection();
+        selectStatement = connection.prepareStatement("SELECT * FROM " + tableName +
+                "ORDER BY id LIMIT " + SELECT_SIZE_LIMIT);
+        deleteStatement = connection.prepareStatement("DELETE FROM " + tableName + "WHERE id <= ?");
     }
 
-    private void run() throws Exception {
+    private void run() {
         long lastInputTime = System.currentTimeMillis();
+        int lastId = -1;
         while (!finished) {
             try {
-                List<Integer> ids = new ArrayList<>();
-                try (Connection connection
-                        = ((DataSource) getDataSourceSupplier(connectionUrl).get()).getConnection()) {
-                    ResultSet resultSet = connection.createStatement()
-                            .executeQuery("SELECT * FROM " + tableName + " limit " + SELECT_SIZE_LIMIT);
-                    while (resultSet.next()) {
-                        ids.add(resultSet.getInt(1));
-                        verificationQueue.add(resultSet.getInt(2));
-                    }
+                int rowCount = 0;
+                ResultSet resultSet = selectStatement.executeQuery();
+                while (resultSet.next()) {
+                    rowCount++;
+                    lastId = resultSet.getInt(1);
+                    verificationQueue.add(resultSet.getInt(2));
                 }
 
                 long now = System.currentTimeMillis();
-                if (ids.isEmpty()) {
+                if (rowCount == 0) {
                     if (now - lastInputTime > ALLOWED_NO_INPUT_MS) {
                         throw new AssertionError(
                                 String.format("[%s] No new data was added during last %s", name, ALLOWED_NO_INPUT_MS));
                     }
                 } else {
                     verifyQueue();
-                    removeLoaded(ids);
+                    removeLoaded(lastId, rowCount);
                     lastInputTime = now;
                 }
-                Thread.sleep(SLEEP_AFTER_VERIFICATION_CYCLE_MS);
+                sleepMillis(SLEEP_AFTER_VERIFICATION_CYCLE_MS);
             } catch (Throwable e) {
                 logger.severe("[" + name + "] Exception thrown during processing files.", e);
                 error = e;
@@ -93,7 +96,7 @@ public class JdbcSinkVerifier {
 
     private void verifyQueue() {
         // try to verify head of verification queue
-        for (Integer peeked; (peeked = verificationQueue.peek()) != null;) {
+        for (Integer peeked; (peeked = verificationQueue.peek()) != null; ) {
             if (peeked > counter) {
                 // the item might arrive later
                 break;
@@ -112,17 +115,18 @@ public class JdbcSinkVerifier {
         }
         if (verificationQueue.size() >= QUEUE_SIZE_LIMIT) {
             throw new AssertionError(String.format("[%s] Queue size exceeded while waiting for the next "
-                    + "item. Limit=%d, expected next=%d, next in queue: %s, %s, %s, %s, ...",
+                            + "item. Limit=%d, expected next=%d, next in queue: %s, %s, %s, %s, ...",
                     name, QUEUE_SIZE_LIMIT, counter, verificationQueue.poll(), verificationQueue.poll(),
                     verificationQueue.poll(), verificationQueue.poll()));
         }
     }
 
-    private void removeLoaded(List<Integer> ids) throws Exception {
-        try (Connection connection = ((DataSource) getDataSourceSupplier(connectionUrl).get()).getConnection()) {
-            for (Integer id : ids) {
-                connection.createStatement().execute("DELETE FROM " + tableName + " WHERE id=" + id);
-            }
+    private void removeLoaded(int lastId, int rowCount) throws Exception {
+        deleteStatement.clearParameters();
+        deleteStatement.setInt(1, lastId);
+        int deletedRowCount = deleteStatement.executeUpdate();
+        if (deletedRowCount != rowCount) {
+            throw new IllegalStateException("Expected deleted row count: " + rowCount + ", actual: " + deletedRowCount);
         }
     }
 
@@ -130,9 +134,12 @@ public class JdbcSinkVerifier {
         consumerThread.start();
     }
 
-    public void finish() throws InterruptedException {
+    public void finish() throws Exception {
         finished = true;
         consumerThread.join();
+        selectStatement.close();
+        deleteStatement.close();
+        connection.close();
     }
 
     public void checkStatus() {

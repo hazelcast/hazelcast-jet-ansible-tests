@@ -34,6 +34,7 @@ public class JdbcSinkVerifier {
     private static final int ALLOWED_NO_INPUT_MS = 600000;
     private static final int QUEUE_SIZE_LIMIT = 20_000;
     private static final int PRINT_LOG_ITEMS = 10_000;
+    private static final int SELECT_SIZE_LIMIT = 1000;
 
     private final String tableName;
 
@@ -63,7 +64,7 @@ public class JdbcSinkVerifier {
                 try (Connection connection
                         = ((DataSource) getDataSourceSupplier(connectionUrl).get()).getConnection()) {
                     ResultSet resultSet = connection.createStatement()
-                            .executeQuery("SELECT * FROM " + tableName);
+                            .executeQuery("SELECT * FROM " + tableName + " limit " + SELECT_SIZE_LIMIT);
                     while (resultSet.next()) {
                         ids.add(resultSet.getInt(1));
                         verificationQueue.add(resultSet.getInt(2));

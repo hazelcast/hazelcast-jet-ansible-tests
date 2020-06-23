@@ -12,6 +12,7 @@
     <modules>
         <module>async-transform-test</module>
         <module>attach-ml-model-test</module>
+        <module>cdc-source-test</module>
         <module>cooperative-map-cache-source-test</module>
         <module>early-results-test</module>
         <module>elastic-test</module>

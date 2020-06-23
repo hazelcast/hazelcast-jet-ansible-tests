@@ -28,9 +28,11 @@ import com.hazelcast.jet.pipeline.SourceBuilder;
 import com.hazelcast.jet.pipeline.StreamSource;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
 import com.mysql.cj.jdbc.MysqlXADataSource;
-import java.sql.Connection;
-import javax.sql.CommonDataSource;
+
 import javax.sql.DataSource;
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.sql.Statement;
 
 import static com.hazelcast.jet.core.JobStatus.FAILED;
 import static com.hazelcast.jet.tests.common.Util.getJobStatusWithRetry;
@@ -71,12 +73,9 @@ public class JdbcSinkTest extends AbstractSoakTest {
 
     @Override
     public void test(JetInstance client, String name) throws Exception {
-        String tableName = (TABLE_PREFIX + name).replaceAll("-", "_");
-        try (Connection connection = ((DataSource) getDataSourceSupplier(connectionUrl).get()).getConnection()) {
-            connection.createStatement().execute("DROP TABLE IF EXISTS " + tableName);
-            connection.createStatement().execute("CREATE TABLE " + tableName
-                    + "(id int PRIMARY KEY AUTO_INCREMENT, value int)");
-        }
+        String tableName = TABLE_PREFIX + name.replaceAll("-", "_");
+        createTable(tableName);
+
         JdbcSinkVerifier verifier = new JdbcSinkVerifier(name, logger, connectionUrl);
         verifier.start();
 
@@ -117,7 +116,7 @@ public class JdbcSinkTest extends AbstractSoakTest {
         Pipeline pipeline = Pipeline.create();
 
         StreamSource<Integer> source = SourceBuilder
-                .stream("srcForJmsSink", procCtx -> new int[1])
+                .stream("srcForJdbcSink", procCtx -> new int[1])
                 .<Integer>fillBufferFn((ctx, buf) -> {
                     buf.add(ctx[0]++);
                     sleepMillis(sleep);
@@ -144,9 +143,19 @@ public class JdbcSinkTest extends AbstractSoakTest {
         return pipeline;
     }
 
+    private void createTable(String tableName) throws SQLException {
+        try (
+                Connection connection = getDataSourceSupplier(connectionUrl).get().getConnection();
+                Statement statement = connection.createStatement()
+        ) {
+            statement.execute("DROP TABLE IF EXISTS " + tableName);
+            statement.execute("CREATE TABLE " + tableName + "(id int PRIMARY KEY AUTO_INCREMENT, value int)");
+        }
+    }
+
     static class DataSourceSupplier {
 
-        public static SupplierEx<CommonDataSource> getDataSourceSupplier(String connectionUrl) {
+        public static SupplierEx<DataSource> getDataSourceSupplier(String connectionUrl) {
             return () -> {
                 MysqlXADataSource ds = new MysqlXADataSource();
                 ds.setUrl(connectionUrl);

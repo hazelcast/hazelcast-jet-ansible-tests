@@ -158,6 +158,7 @@ public class CdcSourceTest extends AbstractSoakTest {
                 .setDatabaseUser("debezium")
                 .setDatabasePassword("dbz")
                 .setClusterName("dbserver1")
+                .setDatabaseClientId(clusterName.contains(STABLE_CLUSTER) ? 444444 : 555555)
                 .setDatabaseWhitelist(DATABASE_NAME)
                 .setTableWhitelist(DATABASE_NAME + "." + tableName)
                 .build();

@@ -207,6 +207,7 @@ public class CdcSourceTest extends AbstractSoakTest {
                 Connection connection = DriverManager.getConnection(connectionUrl, "root", "soak-test");
                 Statement statement = connection.createStatement()
         ) {
+            statement.executeUpdate("DROP DATABASE IF EXISTS " + DATABASE_NAME);
             statement.executeUpdate("CREATE DATABASE " + DATABASE_NAME);
         }
     }

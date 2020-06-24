@@ -57,8 +57,8 @@ public class JdbcSinkVerifier {
 
         connection = getDataSourceSupplier(connectionUrl).get().getConnection();
         selectStatement = connection.prepareStatement("SELECT * FROM " + tableName +
-                "ORDER BY id LIMIT " + SELECT_SIZE_LIMIT);
-        deleteStatement = connection.prepareStatement("DELETE FROM " + tableName + "WHERE id <= ?");
+                " ORDER BY id LIMIT " + SELECT_SIZE_LIMIT);
+        deleteStatement = connection.prepareStatement("DELETE FROM " + tableName + " WHERE id <= ?");
     }
 
     private void run() {

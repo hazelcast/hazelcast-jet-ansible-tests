@@ -29,8 +29,6 @@ import com.hazelcast.jet.pipeline.SourceBuilder;
 import com.hazelcast.jet.pipeline.StreamSource;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
 import com.hazelcast.map.IMap;
-import java.util.Map;
-import java.util.stream.Collectors;
 
 import static com.hazelcast.jet.core.JobStatus.FAILED;
 import static com.hazelcast.jet.core.JobStatus.RUNNING;
@@ -39,16 +37,19 @@ import static com.hazelcast.jet.tests.common.Util.sleepMillis;
 import static com.hazelcast.jet.tests.common.Util.sleepMinutes;
 import static com.hazelcast.jet.tests.common.Util.sleepSeconds;
 import static com.hazelcast.jet.tests.common.Util.waitForJobStatus;
-import static org.junit.Assert.assertNotNull;
 
 public class CdcSinkTest extends AbstractSoakTest {
 
     public static final String SINK_MAP_NAME = "CdcSinkTestSinkMap";
+    public static final String EXPECTED_VALUE_PATTERN = "name_%d_1_1";
 
     private static final int DEFAULT_SLEEP_MS_BETWEEN_ITEM = 1;
     private static final int DEFAULT_PRESERVE_ITEM_MOD = 20_000;
     private static final int DEFAULT_SNAPSHOT_INTERVAL = 5000;
     private static final int ASSERTION_RETRY_COUNT = 60;
+    private static final String KEY_PATTERN = "{\"id\":%d}";
+    private static final String VALUE_PATTERN = "{\"id\":%d,\"name\":\"name_%d_%d_%d\"," +
+            "\"__op\":\"%s\",\"__ts_ms\":1588927306264,\"__deleted\":\"%b\"}";
 
     private int sleepMsBetweenItem;
     private int preserveItemMod;
@@ -97,10 +98,10 @@ public class CdcSinkTest extends AbstractSoakTest {
         }
         log("Going to do final checks.", name);
         verifier.checkStatus();
-        int checkedItems = verifier.finish();
-        log("Verifier stopped. Checked items: " + checkedItems, name);
-        assertTrue(checkedItems > 0);
-        assertMap(name, checkedItems);
+        int lastPreservedItem = verifier.finish();
+        log("Verifier stopped. Checked items: " + lastPreservedItem, name);
+        assertTrue(lastPreservedItem > 0);
+        assertMap(name, lastPreservedItem);
         job.cancel();
     }
 
@@ -113,39 +114,12 @@ public class CdcSinkTest extends AbstractSoakTest {
         StreamSource<ChangeRecord> source = SourceBuilder
                 .stream("srcForCdcSink", procCtx -> new int[1])
                 .<ChangeRecord>fillBufferFn((ctx, buf) -> {
-                    int messageId = ctx[0];
-                    int entryId = messageId / 3;
-                    int messageType = messageId % 3;
-                    ChangeRecord changeRecord;
-                    if (messageType == 0) {
-                        // insert
-                        changeRecord = new ChangeRecordImpl(0, messageId, "{\"id\":" + entryId + "}",
-                                "{\"id\":" + entryId + ",\"name\":\"name" + entryId + "\","
-                                + "\"__op\":\"c\",\"__ts_ms\":1588927306264,\"__deleted\":\"false\"}");
-                    } else {
-                        if (messageType == 1) {
-                            // update
-                            changeRecord = new ChangeRecordImpl(0, messageId, "{\"id\":" + entryId + "}",
-                                    "{\"id\":" + entryId + ",\"name\":\"name" + entryId + "_" + entryId + "\","
-                                    + "\"__op\":\"u\",\"__ts_ms\":1588927306264,\"__deleted\":\"false\"}");
-                        } else {
-                            if (entryId % preserveItem == 0) {
-                                // For every "preserveItemMod" item do not remove it from the map.
-                                // This should happen ~ once per minute when default params are used.
-                                changeRecord = new ChangeRecordImpl(0, messageId, "{\"id\":" + entryId + "}",
-                                        "{\"id\":" + entryId + ","
-                                        + "\"name\":\"name" + entryId + "_" + entryId + "_" + entryId + "\","
-                                        + "\"__op\":\"u\",\"__ts_ms\":1588927306264,\"__deleted\":\"false\"}");
-                            } else {
-                                // delete
-                                changeRecord = new ChangeRecordImpl(0, messageId, "{\"id\":" + entryId + "}",
-                                        "{\"id\":" + entryId + ",\"name\":\"name" + entryId + "_" + entryId + "\","
-                                        + "\"__op\":\"d\",\"__ts_ms\":1588927306264,\"__deleted\":\"true\"}");
-                            }
-                        }
-                    }
-                    buf.add(changeRecord);
-                    ctx[0]++;
+                    int entryId = ctx[0];
+                    String key = String.format(KEY_PATTERN, entryId);
+                    buf.add(insert(key, entryId));
+                    buf.add(update(key, entryId));
+                    buf.add(delete(key, entryId, preserveItem));
+                    ctx[0] += 3;
                     sleepMillis(sleep);
                 })
                 .createSnapshotFn(ctx -> ctx[0])
@@ -172,59 +146,43 @@ public class CdcSinkTest extends AbstractSoakTest {
         return pipeline;
     }
 
-    private void assertMap(String clusterName, int checkedItems) {
+    private void assertMap(String clusterName, int lastPreservedItem) {
         IMap<Integer, String> map = stableClusterClient.getMap(SINK_MAP_NAME + clusterName);
+        int expectedSize = lastPreservedItem / preserveItemMod + 1;
         // We want to check only items to latest verified
+        int failedItemId = -1;
         for (int i = 0; i < ASSERTION_RETRY_COUNT; i++) {
-            Map<Integer, String> mapForCheck = map.entrySet().stream()
-                    .filter((entry) -> (entry.getKey() < checkedItems * preserveItemMod))
-                    .collect(Collectors.toMap(t -> t.getKey(), t -> t.getValue()));
-            if (mapForCheck.size() == checkedItems) {
-                boolean checkFailed = false;
-                for (int j = 0; j < checkedItems; j++) {
-                    int checkId = j * preserveItemMod;
-                    String value = mapForCheck.get(checkId);
-                    if (value == null || !value.equals(prepareExpectedValue(checkId))) {
-                        checkFailed = true;
-                        break;
-                    }
-                }
-                if (!checkFailed) {
-                    return;
-                }
+            failedItemId = assertItems(expectedSize, lastPreservedItem, map);
+            if (failedItemId == -1) {
+                log("Asserted map with size: " + expectedSize, clusterName);
+                return;
             }
             sleepSeconds(1);
         }
+        log("Expected size: " + expectedSize + ", actual size:" + map.size() + ", failedItemId: " + failedItemId,
+                clusterName);
 
-        Map<Integer, String> mapForCheck = map.entrySet().stream()
-                .filter((entry) -> (entry.getKey() < checkedItems * preserveItemMod))
-                .collect(Collectors.toMap(t -> t.getKey(), t -> t.getValue()));
-        // log it, test will fail in following assert
-        if (checkedItems != mapForCheck.size()) {
-            int printLimit = 10_000;
-            int printLimitCounter = 0;
-            log("There are " + mapForCheck.size() + " entries in checked Map.", clusterName);
-            for (Map.Entry<Integer, String> entry : mapForCheck.entrySet()) {
-                log(entry.getKey() + ":" + entry.getValue(), clusterName);
-                if (printLimitCounter > printLimit) {
-                    log("There are more entries in map. Truncated.", clusterName);
-                    break;
-                }
-                printLimitCounter++;
-            }
+        for (int itemId = 0; itemId < lastPreservedItem; itemId += preserveItemMod) {
+            String expectedValue = prepareExpectedValue(itemId);
+            String value = map.get(itemId);
+            log("Expected: " + expectedValue + ", actual: " + value, clusterName);
         }
-        assertEquals(checkedItems, mapForCheck.size());
-
-        for (int i = 0; i < checkedItems; i++) {
-            int checkId = i * preserveItemMod;
-            String value = mapForCheck.get(checkId);
-            assertNotNull("Null value for key " + checkId, value);
-            assertEquals(prepareExpectedValue(checkId), value);
-        }
+        throw new AssertionError();
     }
 
-    public static String prepareExpectedValue(int entryId) {
-        return "name" + entryId + "_" + entryId + "_" + entryId;
+    private int assertItems(int expectedSize, int lastPreservedItem, IMap<Integer, String> map) {
+        int failedItemId = -1;
+        if (expectedSize == map.size()) {
+            for (int itemId = 0; itemId < lastPreservedItem; itemId += preserveItemMod) {
+                String expectedValue = prepareExpectedValue(itemId);
+                String value = map.get(itemId);
+                if (!expectedValue.equals(value)) {
+                    failedItemId = itemId;
+                    break;
+                }
+            }
+        }
+        return failedItemId;
     }
 
     @Override
@@ -233,6 +191,43 @@ public class CdcSinkTest extends AbstractSoakTest {
 
     private void log(String message, String clusterName) {
         logger.info("Cluster" + clusterName + "\t\t" + message);
+    }
+
+    /**
+     * key   = {"id":entryId}
+     * value = {"id":entryId, "name":"name_entryId_0_0", "__op":"c", "__ts_ms":1588927306264, "__deleted":false}
+     */
+    private static ChangeRecord insert(String key, int entryId) {
+        return record(entryId, key, String.format(VALUE_PATTERN, entryId, entryId, 0, 0, "c", false));
+    }
+
+    /**
+     * key   = {"id":entryId}
+     * value = {"id":entryId, "name":"name_entryId_1_0", "__op":"u", "__ts_ms":1588927306264, "__deleted":false}
+     */
+    private static ChangeRecord update(String key, int entryId) {
+        return record(entryId + 1, key, String.format(VALUE_PATTERN, entryId, entryId, 1, 0, "u", false));
+    }
+
+    /**
+     * key   = {"id":entryId}
+     * preserved-value = {"id":entryId, "name":"name_entryId_1_1", "__op":"u", "__ts_ms":1588927306264, "__deleted":false}
+     * deleted-value = {"id":entryId, "name":"name_entryId_1_0", "__op":"d", "__ts_ms":1588927306264, "__deleted":true}
+     */
+    private static ChangeRecord delete(String key, int entryId, int preserveItem) {
+        int messageId = entryId + 2;
+        if (entryId / 3 % preserveItem == 0) {
+            return record(messageId, key, String.format(VALUE_PATTERN, entryId, entryId, 1, 1, "u", false));
+        }
+        return record(messageId, key, String.format(VALUE_PATTERN, entryId, entryId, entryId, 0, "d", true));
+    }
+
+    private static ChangeRecord record(int messageId, String key, String value) {
+        return new ChangeRecordImpl(0, messageId, key, value);
+    }
+
+    private static String prepareExpectedValue(int entryId) {
+        return String.format(EXPECTED_VALUE_PATTERN, entryId);
     }
 
 }

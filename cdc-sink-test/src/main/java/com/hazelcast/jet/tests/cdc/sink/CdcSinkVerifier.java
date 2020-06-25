@@ -23,54 +23,52 @@ import com.hazelcast.map.IMap;
 import java.sql.SQLException;
 
 import static com.hazelcast.jet.impl.util.Util.uncheckRun;
+import static com.hazelcast.jet.tests.cdc.sink.CdcSinkTest.EXPECTED_VALUE_PATTERN;
 import static com.hazelcast.jet.tests.cdc.sink.CdcSinkTest.SINK_MAP_NAME;
-import static com.hazelcast.jet.tests.cdc.sink.CdcSinkTest.prepareExpectedValue;
 import static com.hazelcast.jet.tests.common.Util.sleepSeconds;
 
 public class CdcSinkVerifier {
 
     private static final int SLEEP_AFTER_VERIFICATION_CYCLE_SECONDS = 10;
     private static final int MAX_ALLOWED_TIME_WITHOUT_NEW_ITEM_MS = 600_000;
-    private static final int PRINT_LOG_ITEMS = 10;
 
     private final Thread consumerThread;
-    private final JetInstance client;
+    private final IMap<Integer, String> map;
     private final String name;
-    private final int checkedItem;
+    private final int preserveItem;
     private final ILogger logger;
     private volatile boolean finished;
     private volatile Throwable error;
-    private int counter;
+    private volatile int lastCount;
 
-    public CdcSinkVerifier(JetInstance client, String name, int checkedItem, ILogger logger) throws SQLException {
+    public CdcSinkVerifier(JetInstance client, String name, int preserveItem, ILogger logger) throws SQLException {
         this.consumerThread = new Thread(() -> uncheckRun(this::run));
-        this.client = client;
+        this.map = client.getMap(SINK_MAP_NAME + name);
         this.name = name;
-        this.checkedItem = checkedItem;
+        this.preserveItem = preserveItem;
         this.logger = logger;
     }
 
     private void run() {
+        int counter = 0;
+        String expectedValue = prepareExpectedValue(counter);
         long lastCorrectCheckTime = System.currentTimeMillis();
         while (!finished) {
             try {
-                int checkId = counter * checkedItem;
-                IMap<Integer, String> map = client.getMap(SINK_MAP_NAME + name);
-                String value = map.get(checkId);
-                if (value != null && value.equals(prepareExpectedValue(checkId))) {
-                    if (counter % PRINT_LOG_ITEMS == 0) {
-                        logger.info(String.format("[%s] Processed correctly item %d", name, checkId));
-                    }
+                String value = map.get(counter);
+                if (expectedValue.equals(value)) {
+                    logger.info(String.format("[%s] Processed correctly item %d", name, counter));
                     lastCorrectCheckTime = System.currentTimeMillis();
-                    counter++;
+                    counter += 3 * preserveItem;
+                    expectedValue = prepareExpectedValue(counter);
                 } else {
                     long currentTime = System.currentTimeMillis();
                     // check whether time for the new issue was not elapsed
                     if (currentTime - lastCorrectCheckTime > MAX_ALLOWED_TIME_WITHOUT_NEW_ITEM_MS) {
                         throw new AssertionError(String.format(
                                 "[%s] No new item was processed during the last %d ms. Missing item is %d. "
-                                + "Item with this key is %s.",
-                                name, MAX_ALLOWED_TIME_WITHOUT_NEW_ITEM_MS, checkId, value));
+                                        + "Item with this key is %s.",
+                                name, MAX_ALLOWED_TIME_WITHOUT_NEW_ITEM_MS, counter, value));
                     }
                     sleepSeconds(SLEEP_AFTER_VERIFICATION_CYCLE_SECONDS);
                 }
@@ -80,6 +78,7 @@ public class CdcSinkVerifier {
                 finished = true;
             }
         }
+        lastCount = counter;
     }
 
     void start() {
@@ -89,7 +88,10 @@ public class CdcSinkVerifier {
     public int finish() throws Exception {
         finished = true;
         consumerThread.join();
-        return counter;
+        if (error != null) {
+            throw new RuntimeException(error);
+        }
+        return lastCount;
     }
 
     public void checkStatus() {
@@ -99,6 +101,10 @@ public class CdcSinkVerifier {
         if (finished) {
             throw new RuntimeException("[" + name + "] Verifier is not running");
         }
+    }
+
+    private static String prepareExpectedValue(int entryId) {
+        return String.format(EXPECTED_VALUE_PATTERN, entryId);
     }
 
 }

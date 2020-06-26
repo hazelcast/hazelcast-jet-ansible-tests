@@ -29,6 +29,9 @@ import com.hazelcast.jet.pipeline.SourceBuilder;
 import com.hazelcast.jet.pipeline.StreamSource;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
 import com.hazelcast.map.IMap;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 import static com.hazelcast.jet.core.JobStatus.FAILED;
 import static com.hazelcast.jet.core.JobStatus.RUNNING;
@@ -44,7 +47,7 @@ public class CdcSinkTest extends AbstractSoakTest {
     public static final String EXPECTED_VALUE_PATTERN = "name_%d_1_1";
 
     private static final int DEFAULT_SLEEP_MS_BETWEEN_ITEM = 1;
-    private static final int DEFAULT_PRESERVE_ITEM_MOD = 20_000;
+    private static final int DEFAULT_PRESERVE_ITEM_MOD = 60_000;
     private static final int DEFAULT_SNAPSHOT_INTERVAL = 5000;
     private static final int ASSERTION_RETRY_COUNT = 60;
     private static final String KEY_PATTERN = "{\"id\":%d}";
@@ -148,39 +151,51 @@ public class CdcSinkTest extends AbstractSoakTest {
 
     private void assertMap(String clusterName, int lastPreservedItem) {
         IMap<Integer, String> map = stableClusterClient.getMap(SINK_MAP_NAME + clusterName);
-        int expectedSize = lastPreservedItem / preserveItemMod + 1;
+        int expectedSize = lastPreservedItem / preserveItemMod / 3 + 1;
         // We want to check only items to latest verified
         int failedItemId = -1;
+        Map<Integer, String> mapForCheck = new HashMap<>();
         for (int i = 0; i < ASSERTION_RETRY_COUNT; i++) {
-            failedItemId = assertItems(expectedSize, lastPreservedItem, map);
+            mapForCheck = map.entrySet().stream()
+                    .filter((entry) -> (entry.getKey() <= lastPreservedItem))
+                    .collect(Collectors.toMap(t -> t.getKey(), t -> t.getValue()));
+            failedItemId = assertItems(expectedSize, lastPreservedItem, mapForCheck);
             if (failedItemId == -1) {
                 log("Asserted map with size: " + expectedSize, clusterName);
                 return;
             }
             sleepSeconds(1);
         }
-        log("Expected size: " + expectedSize + ", actual size:" + map.size() + ", failedItemId: " + failedItemId,
+        log("Expected size: " + expectedSize + ", actual size:" + mapForCheck.size() + ", failedItemId: " + failedItemId,
                 clusterName);
 
-        for (int itemId = 0; itemId < lastPreservedItem; itemId += preserveItemMod) {
-            String expectedValue = prepareExpectedValue(itemId);
-            String value = map.get(itemId);
-            log("Expected: " + expectedValue + ", actual: " + value, clusterName);
+        int printLimit = 10_000;
+        int printLimitCounter = 0;
+        log("There are " + mapForCheck.size() + " entries in checked Map.", clusterName);
+        for (Map.Entry<Integer, String> entry : mapForCheck.entrySet()) {
+            log(entry.getKey() + ":" + entry.getValue(), clusterName);
+            if (printLimitCounter > printLimit) {
+                log("There are more entries in map. Truncated.", clusterName);
+                break;
+            }
+            printLimitCounter++;
         }
+
         throw new AssertionError();
     }
 
-    private int assertItems(int expectedSize, int lastPreservedItem, IMap<Integer, String> map) {
+    private int assertItems(int expectedSize, int lastPreservedItem, Map<Integer, String> map) {
         int failedItemId = -1;
         if (expectedSize == map.size()) {
-            for (int itemId = 0; itemId < lastPreservedItem; itemId += preserveItemMod) {
+            for (int itemId = 0; itemId <= lastPreservedItem; itemId += preserveItemMod * 3) {
                 String expectedValue = prepareExpectedValue(itemId);
                 String value = map.get(itemId);
                 if (!expectedValue.equals(value)) {
-                    failedItemId = itemId;
-                    break;
+                    return itemId;
                 }
             }
+        } else {
+            failedItemId = -2;
         }
         return failedItemId;
     }

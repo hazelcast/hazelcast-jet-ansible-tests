@@ -39,7 +39,7 @@ public class CdcSinkVerifier {
     private final ILogger logger;
     private volatile boolean finished;
     private volatile Throwable error;
-    private volatile int lastCount;
+    private volatile int lastPreserved;
 
     public CdcSinkVerifier(JetInstance client, String name, int preserveItem, ILogger logger) throws SQLException {
         this.consumerThread = new Thread(() -> uncheckRun(this::run));
@@ -78,7 +78,7 @@ public class CdcSinkVerifier {
                 finished = true;
             }
         }
-        lastCount = counter;
+        lastPreserved = counter - 3 * preserveItem;
     }
 
     void start() {
@@ -91,7 +91,7 @@ public class CdcSinkVerifier {
         if (error != null) {
             throw new RuntimeException(error);
         }
-        return lastCount;
+        return lastPreserved;
     }
 
     public void checkStatus() {

@@ -22,7 +22,11 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.PriorityQueue;
+import java.util.stream.Collectors;
 
 import static com.hazelcast.jet.impl.util.Util.uncheckRun;
 import static com.hazelcast.jet.tests.common.Util.sleepMillis;
@@ -43,7 +47,8 @@ public class JdbcSinkVerifier {
     private final PriorityQueue<Integer> verificationQueue = new PriorityQueue<>();
     private final Connection connection;
     private final PreparedStatement selectStatement;
-    private final PreparedStatement deleteStatement;
+    private final Statement deleteStatement;
+    private final String deleteQuery;
     private volatile boolean finished;
     private volatile Throwable error;
     private long counter;
@@ -58,31 +63,30 @@ public class JdbcSinkVerifier {
         connection = getDataSourceSupplier(connectionUrl).get().getConnection();
         selectStatement = connection.prepareStatement("SELECT * FROM " + tableName +
                 " ORDER BY id LIMIT " + SELECT_SIZE_LIMIT);
-        deleteStatement = connection.prepareStatement("DELETE FROM " + tableName + " WHERE id <= ?");
+        deleteStatement = connection.createStatement();
+        deleteQuery = "DELETE FROM " + tableName + " WHERE id IN (%s)";
     }
 
     private void run() {
         long lastInputTime = System.currentTimeMillis();
-        int lastId = -1;
         while (!finished) {
             try {
-                int rowCount = 0;
                 ResultSet resultSet = selectStatement.executeQuery();
+                List<Integer> idList = new ArrayList<>();
                 while (resultSet.next()) {
-                    rowCount++;
-                    lastId = resultSet.getInt(1);
+                    idList.add(resultSet.getInt(1));
                     verificationQueue.add(resultSet.getInt(2));
                 }
 
                 long now = System.currentTimeMillis();
-                if (rowCount == 0) {
+                if (idList.isEmpty()) {
                     if (now - lastInputTime > ALLOWED_NO_INPUT_MS) {
                         throw new AssertionError(
                                 String.format("[%s] No new data was added during last %s", name, ALLOWED_NO_INPUT_MS));
                     }
                 } else {
                     verifyQueue();
-                    removeLoaded(lastId, rowCount);
+                    removeLoaded(idList);
                     lastInputTime = now;
                 }
                 sleepMillis(SLEEP_AFTER_VERIFICATION_CYCLE_MS);
@@ -121,12 +125,12 @@ public class JdbcSinkVerifier {
         }
     }
 
-    private void removeLoaded(int lastId, int rowCount) throws Exception {
-        deleteStatement.clearParameters();
-        deleteStatement.setInt(1, lastId);
-        int deletedRowCount = deleteStatement.executeUpdate();
-        if (deletedRowCount != rowCount) {
-            throw new IllegalStateException("Expected deleted row count: " + rowCount + ", actual: " + deletedRowCount);
+    private void removeLoaded(List<Integer> idList) throws Exception {
+        String idString = idList.stream().map(String::valueOf).collect(Collectors.joining(","));
+        int deletedRowCount = deleteStatement.executeUpdate(String.format(deleteQuery, idString));
+        if (deletedRowCount != idList.size()) {
+            throw new IllegalStateException("Expected deleted row count: " + idList.size()
+                    + ", actual: " + deletedRowCount);
         }
     }
 

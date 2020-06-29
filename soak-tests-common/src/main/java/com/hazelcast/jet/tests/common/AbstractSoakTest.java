@@ -38,7 +38,7 @@ public abstract class AbstractSoakTest {
     public static final String STABLE_CLUSTER = "Stable";
     public static final String DYNAMIC_CLUSTER = "Dynamic";
 
-    private static final int DEFAULT_DURATION_MINUTES = 30;
+    private static final int DEFAULT_DURATION_MINUTES = 1;
     private static final int CACHE_EVICTION_SIZE = 2000000;
     private static final double WAIT_TIMEOUT_FACTOR = 1.1;
 
@@ -152,14 +152,14 @@ public abstract class AbstractSoakTest {
         String dynamicName = DYNAMIC_CLUSTER + "-" + getClass().getSimpleName();
         String stableName = STABLE_CLUSTER + "-" + getClass().getSimpleName();
         ExecutorService executorService = Executors.newFixedThreadPool(2);
-        executorService.execute(() -> {
-            try {
-                test(jet, dynamicName);
-            } catch (Throwable t) {
-                logger.severe("Exception in " + dynamicName, t);
-                exceptions[0] = t;
-            }
-        });
+//        executorService.execute(() -> {
+//            try {
+//                test(jet, dynamicName);
+//            } catch (Throwable t) {
+//                logger.severe("Exception in " + dynamicName, t);
+//                exceptions[0] = t;
+//            }
+//        });
         executorService.execute(() -> {
             try {
                 test(stableClusterClient, stableName);

@@ -29,9 +29,11 @@ import com.hazelcast.jet.pipeline.SourceBuilder;
 import com.hazelcast.jet.pipeline.StreamSource;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
 import com.hazelcast.map.IMap;
-import java.util.HashMap;
+import com.hazelcast.query.Predicate;
+import com.hazelcast.query.Predicates;
+
 import java.util.Map;
-import java.util.stream.Collectors;
+import java.util.Set;
 
 import static com.hazelcast.jet.core.JobStatus.FAILED;
 import static com.hazelcast.jet.core.JobStatus.RUNNING;
@@ -47,7 +49,7 @@ public class CdcSinkTest extends AbstractSoakTest {
     public static final String EXPECTED_VALUE_PATTERN = "name_%d_1_1";
 
     private static final int DEFAULT_SLEEP_MS_BETWEEN_ITEM = 1;
-    private static final int DEFAULT_PRESERVE_ITEM_MOD = 60_000;
+    private static final int DEFAULT_PRESERVE_ITEM_MOD = 20_000;
     private static final int DEFAULT_SNAPSHOT_INTERVAL = 5000;
     private static final int ASSERTION_RETRY_COUNT = 60;
     private static final String KEY_PATTERN = "{\"id\":%d}";
@@ -104,8 +106,8 @@ public class CdcSinkTest extends AbstractSoakTest {
         int lastPreservedItem = verifier.finish();
         log("Verifier stopped. Checked items: " + lastPreservedItem, name);
         assertTrue(lastPreservedItem > 0);
-        assertMap(name, lastPreservedItem);
         job.cancel();
+        assertMap(name, lastPreservedItem);
     }
 
     private Pipeline pipeline(String clusterName) {
@@ -117,11 +119,12 @@ public class CdcSinkTest extends AbstractSoakTest {
         StreamSource<ChangeRecord> source = SourceBuilder
                 .stream("srcForCdcSink", procCtx -> new int[1])
                 .<ChangeRecord>fillBufferFn((ctx, buf) -> {
-                    int entryId = ctx[0];
+                    int messageId = ctx[0];
+                    int entryId = messageId / 3;
                     String key = String.format(KEY_PATTERN, entryId);
-                    buf.add(insert(key, entryId));
-                    buf.add(update(key, entryId));
-                    buf.add(delete(key, entryId, preserveItem));
+                    buf.add(insert(key, entryId, messageId));
+                    buf.add(update(key, entryId, messageId + 1));
+                    buf.add(delete(key, entryId, messageId + 2, preserveItem));
                     ctx[0] += 3;
                     sleepMillis(sleep);
                 })
@@ -151,53 +154,39 @@ public class CdcSinkTest extends AbstractSoakTest {
 
     private void assertMap(String clusterName, int lastPreservedItem) {
         IMap<Integer, String> map = stableClusterClient.getMap(SINK_MAP_NAME + clusterName);
-        int expectedSize = lastPreservedItem / preserveItemMod / 3 + 1;
-        // We want to check only items to latest verified
-        int failedItemId = -1;
-        Map<Integer, String> mapForCheck = new HashMap<>();
         for (int i = 0; i < ASSERTION_RETRY_COUNT; i++) {
-            mapForCheck = map.entrySet().stream()
-                    .filter((entry) -> (entry.getKey() <= lastPreservedItem))
-                    .collect(Collectors.toMap(t -> t.getKey(), t -> t.getValue()));
-            failedItemId = assertItems(expectedSize, lastPreservedItem, mapForCheck);
-            if (failedItemId == -1) {
-                log("Asserted map with size: " + expectedSize, clusterName);
+            log("Asserting items with retry[" + i + "], lastPreservedItem: " + lastPreservedItem, clusterName);
+            if (assertItems(clusterName, lastPreservedItem, map)) {
                 return;
             }
             sleepSeconds(1);
         }
-        log("Expected size: " + expectedSize + ", actual size:" + mapForCheck.size() + ", failedItemId: " + failedItemId,
-                clusterName);
-
-        int printLimit = 10_000;
-        int printLimitCounter = 0;
-        log("There are " + mapForCheck.size() + " entries in checked Map.", clusterName);
-        for (Map.Entry<Integer, String> entry : mapForCheck.entrySet()) {
-            log(entry.getKey() + ":" + entry.getValue(), clusterName);
-            if (printLimitCounter > printLimit) {
-                log("There are more entries in map. Truncated.", clusterName);
-                break;
-            }
-            printLimitCounter++;
-        }
-
         throw new AssertionError();
     }
 
-    private int assertItems(int expectedSize, int lastPreservedItem, Map<Integer, String> map) {
-        int failedItemId = -1;
-        if (expectedSize == map.size()) {
-            for (int itemId = 0; itemId <= lastPreservedItem; itemId += preserveItemMod * 3) {
-                String expectedValue = prepareExpectedValue(itemId);
-                String value = map.get(itemId);
-                if (!expectedValue.equals(value)) {
-                    return itemId;
+    private boolean assertItems(String clusterName, int lastPreservedItem, IMap<Integer, String> map) {
+        for (int itemId = 0; itemId <= lastPreservedItem; itemId += preserveItemMod) {
+            String expectedValue = prepareExpectedValue(itemId);
+            String value = map.get(itemId);
+            if (!expectedValue.equals(value)) {
+                log("expected value:" + expectedValue + ", actual value: " + value, clusterName);
+                return false;
+            }
+        }
+        Predicate<Integer, String> predicate = Predicates.lessEqual("__key", lastPreservedItem);
+        int expectedSize = lastPreservedItem / preserveItemMod + 1;
+        Set<Map.Entry<Integer, String>> entries = map.entrySet(predicate);
+        int actualSize = entries.size();
+        log("expected size:" + expectedSize + ", actual size: " + actualSize, clusterName);
+        if (expectedSize != actualSize) {
+            for (Map.Entry<Integer, String> entry : entries) {
+                if (entry.getKey() % preserveItemMod != 0) {
+                    log("unexpected entry in map : " + entry.getKey() + " - " + entry.getValue(), clusterName);
                 }
             }
-        } else {
-            failedItemId = -2;
+            return false;
         }
-        return failedItemId;
+        return true;
     }
 
     @Override
@@ -212,16 +201,16 @@ public class CdcSinkTest extends AbstractSoakTest {
      * key   = {"id":entryId}
      * value = {"id":entryId, "name":"name_entryId_0_0", "__op":"c", "__ts_ms":1588927306264, "__deleted":false}
      */
-    private static ChangeRecord insert(String key, int entryId) {
-        return record(entryId, key, String.format(VALUE_PATTERN, entryId, entryId, 0, 0, "c", false));
+    private static ChangeRecord insert(String key, int entryId, int messageId) {
+        return record(messageId, key, String.format(VALUE_PATTERN, entryId, entryId, 0, 0, "c", false));
     }
 
     /**
      * key   = {"id":entryId}
      * value = {"id":entryId, "name":"name_entryId_1_0", "__op":"u", "__ts_ms":1588927306264, "__deleted":false}
      */
-    private static ChangeRecord update(String key, int entryId) {
-        return record(entryId + 1, key, String.format(VALUE_PATTERN, entryId, entryId, 1, 0, "u", false));
+    private static ChangeRecord update(String key, int entryId, int messageId) {
+        return record(messageId, key, String.format(VALUE_PATTERN, entryId, entryId, 1, 0, "u", false));
     }
 
     /**
@@ -229,9 +218,8 @@ public class CdcSinkTest extends AbstractSoakTest {
      * preserved-value = {"id":entryId, "name":"name_entryId_1_1", "__op":"u", "__ts_ms":1588927306264, "__deleted":false}
      * deleted-value = {"id":entryId, "name":"name_entryId_1_0", "__op":"d", "__ts_ms":1588927306264, "__deleted":true}
      */
-    private static ChangeRecord delete(String key, int entryId, int preserveItem) {
-        int messageId = entryId + 2;
-        if (entryId / 3 % preserveItem == 0) {
+    private static ChangeRecord delete(String key, int entryId, int messageId, int preserveItem) {
+        if (entryId % preserveItem == 0) {
             return record(messageId, key, String.format(VALUE_PATTERN, entryId, entryId, 1, 1, "u", false));
         }
         return record(messageId, key, String.format(VALUE_PATTERN, entryId, entryId, entryId, 0, "d", true));

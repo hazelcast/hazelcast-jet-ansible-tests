@@ -59,7 +59,7 @@ public class CdcSinkVerifier {
                 if (expectedValue.equals(value)) {
                     logger.info(String.format("[%s] Processed correctly item %d", name, counter));
                     lastCorrectCheckTime = System.currentTimeMillis();
-                    counter += 3 * preserveItem;
+                    counter += preserveItem;
                     expectedValue = prepareExpectedValue(counter);
                 } else {
                     long currentTime = System.currentTimeMillis();
@@ -78,7 +78,7 @@ public class CdcSinkVerifier {
                 finished = true;
             }
         }
-        lastPreserved = counter - 3 * preserveItem;
+        lastPreserved = counter - preserveItem;
     }
 
     void start() {

@@ -61,7 +61,7 @@ public class JdbcSinkVerifier {
         String tableName = TABLE_PREFIX + name.replaceAll("-", "_");
 
         connection = getDataSourceSupplier(connectionUrl).get().getConnection();
-        selectStatement = connection.prepareStatement("SELECT * FROM " + tableName +
+        selectStatement = connection.prepareStatement("SELECT id, value FROM " + tableName +
                 " ORDER BY id LIMIT " + SELECT_SIZE_LIMIT);
         deleteStatement = connection.createStatement();
         deleteQuery = "DELETE FROM " + tableName + " WHERE id IN (%s)";

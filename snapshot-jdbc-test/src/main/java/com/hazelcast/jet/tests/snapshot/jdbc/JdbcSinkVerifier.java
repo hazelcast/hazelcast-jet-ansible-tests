@@ -22,11 +22,10 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Statement;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.PriorityQueue;
-import java.util.stream.Collectors;
 
 import static com.hazelcast.jet.impl.util.Util.uncheckRun;
 import static com.hazelcast.jet.tests.common.Util.sleepMillis;
@@ -47,8 +46,7 @@ public class JdbcSinkVerifier {
     private final PriorityQueue<Integer> verificationQueue = new PriorityQueue<>();
     private final Connection connection;
     private final PreparedStatement selectStatement;
-    private final Statement deleteStatement;
-    private final String deleteQuery;
+    private final PreparedStatement deleteStatement;
     private volatile boolean finished;
     private volatile Throwable error;
     private long counter;
@@ -61,10 +59,9 @@ public class JdbcSinkVerifier {
         String tableName = TABLE_PREFIX + name.replaceAll("-", "_");
 
         connection = getDataSourceSupplier(connectionUrl).get().getConnection();
-        selectStatement = connection.prepareStatement("SELECT * FROM " + tableName +
+        selectStatement = connection.prepareStatement("SELECT id, value FROM " + tableName +
                 " ORDER BY id LIMIT " + SELECT_SIZE_LIMIT);
-        deleteStatement = connection.createStatement();
-        deleteQuery = "DELETE FROM " + tableName + " WHERE id IN (%s)";
+        deleteStatement = connection.prepareStatement("DELETE FROM " + tableName + " WHERE id=?");
     }
 
     private void run() {
@@ -126,8 +123,13 @@ public class JdbcSinkVerifier {
     }
 
     private void removeLoaded(List<Integer> idList) throws Exception {
-        String idString = idList.stream().map(String::valueOf).collect(Collectors.joining(","));
-        int deletedRowCount = deleteStatement.executeUpdate(String.format(deleteQuery, idString));
+        deleteStatement.clearParameters();
+        for (Integer id : idList) {
+            deleteStatement.setInt(1, id);
+            deleteStatement.addBatch();
+        }
+        int[] batchResults = deleteStatement.executeBatch();
+        int deletedRowCount = Arrays.stream(batchResults).sum();
         if (deletedRowCount != idList.size()) {
             throw new IllegalStateException("Expected deleted row count: " + idList.size()
                     + ", actual: " + deletedRowCount);

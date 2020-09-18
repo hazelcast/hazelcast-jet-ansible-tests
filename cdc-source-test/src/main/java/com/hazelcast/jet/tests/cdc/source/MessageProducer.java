@@ -18,6 +18,7 @@
 package com.hazelcast.jet.tests.cdc.source;
 
 import com.hazelcast.jet.impl.util.Util;
+import com.hazelcast.logging.ILogger;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -28,7 +29,11 @@ import static com.hazelcast.jet.tests.common.Util.sleepMillis;
 
 public class MessageProducer {
 
+    private static final int PRINT_LOG_INSERT_ITEMS = 1_000;
+
     private final int sleepMs;
+    private ILogger logger;
+    private String tableName;
     private final Thread producerThread;
     private final Connection connection;
     private final PreparedStatement insertStatement;
@@ -37,8 +42,10 @@ public class MessageProducer {
     private volatile boolean running = true;
     private volatile int producedItems;
 
-    MessageProducer(String connectionUrl, String tableName, int sleepMs) throws SQLException {
+    MessageProducer(String connectionUrl, String tableName, int sleepMs, ILogger logger) throws SQLException {
         this.sleepMs = sleepMs;
+        this.logger = logger;
+        this.tableName = tableName;
         this.producerThread = new Thread(() -> Util.uncheckRun(this::run));
         connection = DriverManager.getConnection(connectionUrl, "root", "soak-test");
         insertStatement = connection.prepareStatement("INSERT INTO " + tableName + " VALUES (?,?)");
@@ -76,6 +83,9 @@ public class MessageProducer {
         insertStatement.setInt(1, id);
         insertStatement.setInt(2, id);
         insertStatement.executeUpdate();
+        if (id % PRINT_LOG_INSERT_ITEMS == 0) {
+            logger.info(String.format("[%s] Inserted item with id %d", tableName, id));
+        }
         sleepMillis(sleepMs);
     }
 

@@ -29,8 +29,8 @@ import static com.hazelcast.jet.core.ProcessorMetaSupplier.preferLocalParallelis
 public class VerificationProcessor extends AbstractProcessor {
 
     public static final String CONSUMED_MESSAGES_MAP_NAME = "CdcSourceTest_latestCounter";
-    private static final int QUEUE_SIZE_LIMIT = 10_000;
-    private static final int PRINT_LOG_ITEMS = 5_000;
+    private static final int QUEUE_SIZE_LIMIT = 4_000;
+    private static final int PRINT_LOG_ITEMS = 1_000;
 
     private final String name;
 

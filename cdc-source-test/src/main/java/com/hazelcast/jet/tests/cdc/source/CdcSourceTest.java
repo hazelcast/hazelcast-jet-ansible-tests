@@ -102,7 +102,7 @@ public class CdcSourceTest extends AbstractSoakTest {
 
         waitForJobStatus(job, RUNNING);
 
-        MessageProducer producer = new MessageProducer(connectionUrlWithDb, tableName, sleepMsBetweenItem);
+        MessageProducer producer = new MessageProducer(connectionUrlWithDb, tableName, sleepMsBetweenItem, logger);
         producer.start();
 
         int cycles = 0;
@@ -115,7 +115,7 @@ public class CdcSourceTest extends AbstractSoakTest {
                     job.join();
                 }
                 cycles++;
-                if (cycles % 10 == 0) {
+                if (cycles % 20 == 0) {
                     latestCheckedCount = checkNewDataProcessed(client, name, latestCheckedCount);
                     log("Check for insert changes succeeded, latestCheckedCount: " + latestCheckedCount, name);
                 }
@@ -142,7 +142,7 @@ public class CdcSourceTest extends AbstractSoakTest {
             }
             sleepSeconds(1);
         }
-        assertTrue("LatestChecked was: " + latestChecked + ", but after 10minutes latest is: " + latest,
+        assertTrue("LatestChecked was: " + latestChecked + ", but after 20minutes latest is: " + latest,
                 latest > latestChecked);
         return latest;
     }
@@ -194,11 +194,14 @@ public class CdcSourceTest extends AbstractSoakTest {
 
     @Override
     protected void teardown(Throwable t) throws Exception {
-        try (
-                Connection connection = DriverManager.getConnection(connectionUrl, "root", "soak-test");
-                Statement statement = connection.createStatement()
-        ) {
-            statement.executeUpdate("DROP DATABASE " + DATABASE_NAME);
+        // remove database only if test finished without failure
+        if (t == null) {
+            try (
+                    Connection connection = DriverManager.getConnection(connectionUrl, "root", "soak-test");
+                    Statement statement = connection.createStatement()
+            ) {
+                statement.executeUpdate("DROP DATABASE " + DATABASE_NAME);
+            }
         }
     }
 

@@ -34,11 +34,12 @@ import static com.hazelcast.jet.tests.snapshot.jdbc.JdbcSinkTest.TABLE_PREFIX;
 
 public class JdbcSinkVerifier {
 
-    private static final int SLEEP_AFTER_VERIFICATION_CYCLE_MS = 1000;
-    private static final int ALLOWED_NO_INPUT_MS = 600000;
+    private static final int LOCK_WAIT_TIMEOUT_SECONDS = 20;
+    private static final int SLEEP_AFTER_VERIFICATION_CYCLE_MS = 1_000;
+    private static final int ALLOWED_NO_INPUT_MS = 600_000;
     private static final int QUEUE_SIZE_LIMIT = 20_000;
     private static final int PRINT_LOG_ITEMS = 10_000;
-    private static final int SELECT_SIZE_LIMIT = 1000;
+    private static final int SELECT_SIZE_LIMIT = 1_000;
 
     private final Thread consumerThread;
     private final String name;
@@ -59,6 +60,9 @@ public class JdbcSinkVerifier {
         String tableName = TABLE_PREFIX + name.replaceAll("-", "_");
 
         connection = getDataSourceSupplier(connectionUrl).get().getConnection();
+        // lower the default lock wait timeout, in case of a deadlock, verifier's statements will
+        // terminate sooner than Jet ones, allowing the latter ones to proceed and hopefully succeed
+        connection.createStatement().execute("SET innodb_lock_wait_timeout = " + LOCK_WAIT_TIMEOUT_SECONDS);
         selectStatement = connection.prepareStatement("SELECT id, value FROM " + tableName +
                 " ORDER BY id LIMIT " + SELECT_SIZE_LIMIT);
         deleteStatement = connection.prepareStatement("DELETE FROM " + tableName + " WHERE id=?");
@@ -67,8 +71,7 @@ public class JdbcSinkVerifier {
     private void run() {
         long lastInputTime = System.currentTimeMillis();
         while (!finished) {
-            try {
-                ResultSet resultSet = selectStatement.executeQuery();
+            try (ResultSet resultSet = selectStatement.executeQuery()) {
                 List<Integer> idList = new ArrayList<>();
                 while (resultSet.next()) {
                     idList.add(resultSet.getInt(1));
@@ -156,5 +159,4 @@ public class JdbcSinkVerifier {
             throw new RuntimeException("[" + name + "] Verifier is not running");
         }
     }
-
 }

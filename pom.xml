@@ -38,6 +38,7 @@
         <module>stateful-map-test</module>
         <module>s3-test</module>
         <module>grpc-test</module>
+        <module>sort-test</module>
     </modules>
 
     <properties>

@@ -9,7 +9,7 @@
     <parent>
         <artifactId>hazelcast-jet-ansible-tests</artifactId>
         <groupId>com.hazelcast.jet.tests</groupId>
-        <version>4.3-SNAPSHOT</version>
+        <version>4.3</version>
     </parent>
     <properties>
         <main.basedir>${project.parent.basedir}</main.basedir>

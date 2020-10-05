@@ -121,7 +121,7 @@ public final class RemoteControllerClient {
         String host = member.getAddress().getHost();
         int port = member.getAddress().getPort();
         call(member, jetHome + "/bin/jet-cluster-admin -a " + host + " -p " + port +
-                " -o shutdown -c jet -P jet-pass");
+                " -o shutdown -c jet-isolated -P jet-pass");
         sleepSeconds(1);
         members.forEach(m -> uncheckRun(() -> rollLogs(m, jetHome)));
     }

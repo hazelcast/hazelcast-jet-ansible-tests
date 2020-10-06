@@ -123,8 +123,8 @@ public class EarlyResultsTest extends AbstractSoakTest {
             if (result.start() > tickerWindow.nextWindowStart) {
                 logger.severe("Did not receive the final result for the previous window:\n" +
                         "Current result: " + result + "\n" +
-                        "Start index of tickerWindow=" + tickerWindow.nextWindowStart +
-                        ", start index of current result=" + result.start());
+                        "Expected window start: " + tickerWindow.nextWindowStart +
+                        ", actual window start: " + result.start());
             }
             if (result.isEarly()) {
                 assertTrue(result.getValue() <= windowSize);

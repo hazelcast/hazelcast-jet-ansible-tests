@@ -35,15 +35,15 @@ import java.util.Map;
 import static com.hazelcast.jet.core.JobStatus.FAILED;
 import static com.hazelcast.jet.tests.common.Util.getJobStatusWithRetry;
 import static com.hazelcast.jet.tests.common.Util.sleepMinutes;
+import static java.util.concurrent.TimeUnit.SECONDS;
 
 public class EarlyResultsTest extends AbstractSoakTest {
 
-    private static final int ONE_THOUSAND = 1000;
     private static final int DEFAULT_WINDOW_SIZE = 100;
-    private static final int DEFAULT_TRADE_PER_SECOND = 20;
+    private static final int DEFAULT_TRADE_BATCHES_PER_SECOND = 20;
 
-    private int windowSize;
-    private int tradePerSecond;
+    private int windowSizeSeconds;
+    private int tradeBatchesPerSecond;
     private long earlyResultsPeriod;
 
     public static void main(String[] args) throws Exception {
@@ -52,9 +52,9 @@ public class EarlyResultsTest extends AbstractSoakTest {
 
     @Override
     protected void init(JetInstance client) {
-        windowSize = propertyInt("windowSize", DEFAULT_WINDOW_SIZE);
-        tradePerSecond = propertyInt("tradePerSecond", DEFAULT_TRADE_PER_SECOND);
-        earlyResultsPeriod = windowSize * ONE_THOUSAND / tradePerSecond / 3;
+        windowSizeSeconds = propertyInt("windowSize", DEFAULT_WINDOW_SIZE);
+        tradeBatchesPerSecond = propertyInt("tradePerSecond", DEFAULT_TRADE_BATCHES_PER_SECOND);
+        earlyResultsPeriod = SECONDS.toMillis(windowSizeSeconds) / tradeBatchesPerSecond / 3;
     }
 
     @Override
@@ -77,18 +77,18 @@ public class EarlyResultsTest extends AbstractSoakTest {
     private Pipeline pipeline() {
         Pipeline p = Pipeline.create();
 
-        int windowSizeLocal = windowSize;
+        int windowSizeLocal = windowSizeSeconds;
         Sink<KeyedWindowResult<String, Long>> verificationSink = SinkBuilder
                 .sinkBuilder("verification", c -> new VerificationContext(c.logger(), windowSizeLocal))
                 .receiveFn(VerificationContext::verify)
                 .build();
 
-        StreamStage<Map.Entry<String, Long>> sourceStage = p.readFrom(TradeGenerator.tradeSource(tradePerSecond))
+        StreamStage<Map.Entry<String, Long>> sourceStage = p.readFrom(TradeGenerator.tradeSource(tradeBatchesPerSecond))
                                                             .withNativeTimestamps(0)
                                                             .setName("Stream from EarlyResult-TradeGenerator");
 
         sourceStage.groupingKey(Map.Entry::getKey)
-                   .window(WindowDefinition.tumbling(windowSize).setEarlyResultsPeriod(earlyResultsPeriod))
+                   .window(WindowDefinition.tumbling(windowSizeSeconds).setEarlyResultsPeriod(earlyResultsPeriod))
                    .aggregate(AggregateOperations.counting())
                    .writeTo(verificationSink);
 
@@ -96,7 +96,7 @@ public class EarlyResultsTest extends AbstractSoakTest {
     }
 
     @Override
-    protected void teardown(Throwable t) throws Exception {
+    protected void teardown(Throwable t) {
     }
 
     static class VerificationContext {
@@ -113,14 +113,14 @@ public class EarlyResultsTest extends AbstractSoakTest {
 
         void verify(KeyedWindowResult<String, Long> result) {
             TickerWindow tickerWindow = tickerMap.computeIfAbsent(result.getKey(), TickerWindow::new);
-            // we have a result after the window advanced
-            // ignore if it is an early result, fail otherwise
             if (result.start() < tickerWindow.start) {
+                // we have a result after the window advanced
+                // ignore if it is an early result, fail otherwise
                 logger.warning("Received a result after window advanced: " + result);
                 assertTrue(result.isEarly());
                 return;
             }
-            if (tickerWindow.start != result.start()){
+            if (result.start() > tickerWindow.start) {
                 logger.severe("Did not receive the final result for the previous window:\n" +
                         "Current result: " + result + "\n" +
                         "Start index of tickerWindow=" + tickerWindow.start +
@@ -131,7 +131,7 @@ public class EarlyResultsTest extends AbstractSoakTest {
                 tickerWindow.hasEarly = true;
             } else {
                 if (!tickerWindow.hasEarly) {
-                    logger.warning("Not received any early-result for the final-result: " + result);
+                    logger.warning("Did not receive early result for final result " + result);
                 }
                 assertEquals(windowSize, (long) result.getValue());
                 tickerWindow.advance();
@@ -140,12 +140,10 @@ public class EarlyResultsTest extends AbstractSoakTest {
 
         class TickerWindow {
 
-            private final String key;
-            private long start;
-            private boolean hasEarly;
+            long start;
+            boolean hasEarly;
 
             TickerWindow(String key) {
-                this.key = key;
             }
 
             void advance() {

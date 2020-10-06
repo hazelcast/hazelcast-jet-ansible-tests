@@ -33,18 +33,18 @@ final class TradeGenerator {
 
     private final List<String> tickerList;
 
-    private final long produceThreshold;
+    private final long emitPeriod;
     private long timestamp;
     private long lastEmit = System.currentTimeMillis();
 
-    private TradeGenerator(int tradesPerSec) {
+    private TradeGenerator(int tradeBatchesPerSec) {
         this.tickerList = loadTickers();
-        this.produceThreshold = SECONDS.toMillis(1) / tradesPerSec;
+        this.emitPeriod = SECONDS.toMillis(1) / tradeBatchesPerSec;
     }
 
     private void generateTrades(TimestampedSourceBuffer<Map.Entry<String, Long>> buf) {
         long now = System.currentTimeMillis();
-        if (now - lastEmit > produceThreshold) {
+        if (now - lastEmit > emitPeriod) {
             tickerList.stream().map(ticker -> entry(ticker, timestamp)).forEach(trade -> buf.add(trade, timestamp));
             timestamp++;
             lastEmit = now;

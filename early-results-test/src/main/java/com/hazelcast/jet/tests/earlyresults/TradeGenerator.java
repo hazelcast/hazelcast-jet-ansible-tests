@@ -37,12 +37,12 @@ final class TradeGenerator {
     private long timestamp;
     private long lastEmit = System.currentTimeMillis();
 
-    private TradeGenerator(int tradesPerSec) {
+    private TradeGenerator(int tradeBatchesPerSecond) {
         this.tickerList = loadTickers();
-        this.produceThreshold = SECONDS.toMillis(1) / tradesPerSec;
+        this.produceThreshold = SECONDS.toMillis(1) / tradeBatchesPerSecond;
     }
 
-    private void generateTrades(TimestampedSourceBuffer<Map.Entry<String, Long>> buf) {
+    private void generateTradeBatches(TimestampedSourceBuffer<Map.Entry<String, Long>> buf) {
         long now = System.currentTimeMillis();
         if (now - lastEmit > produceThreshold) {
             tickerList.stream().map(ticker -> entry(ticker, timestamp)).forEach(trade -> buf.add(trade, timestamp));
@@ -63,7 +63,7 @@ final class TradeGenerator {
     static StreamSource<Map.Entry<String, Long>> tradeSource(int tradesPerSec) {
         return SourceBuilder
                 .timestampedStream("trade-source", x -> new TradeGenerator(tradesPerSec))
-                .fillBufferFn(TradeGenerator::generateTrades)
+                .fillBufferFn(TradeGenerator::generateTradeBatches)
                 .build();
     }
 }

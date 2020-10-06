@@ -40,10 +40,10 @@ public class EarlyResultsTest extends AbstractSoakTest {
 
     private static final int ONE_THOUSAND = 1000;
     private static final int DEFAULT_WINDOW_SIZE = 100;
-    private static final int DEFAULT_TRADE_PER_SECOND = 20;
+    private static final int DEFAULT_TRADE_BATCHES_PER_SECOND = 20;
 
     private int windowSize;
-    private int tradePerSecond;
+    private int tradeBatchesPerSecond;
     private long earlyResultsPeriod;
 
     public static void main(String[] args) throws Exception {
@@ -53,8 +53,8 @@ public class EarlyResultsTest extends AbstractSoakTest {
     @Override
     protected void init(JetInstance client) {
         windowSize = propertyInt("windowSize", DEFAULT_WINDOW_SIZE);
-        tradePerSecond = propertyInt("tradePerSecond", DEFAULT_TRADE_PER_SECOND);
-        earlyResultsPeriod = windowSize * ONE_THOUSAND / tradePerSecond / 3;
+        tradeBatchesPerSecond = propertyInt("tradeBatchesPerSecond", DEFAULT_TRADE_BATCHES_PER_SECOND);
+        earlyResultsPeriod = windowSize * ONE_THOUSAND / tradeBatchesPerSecond / 3;
     }
 
     @Override
@@ -83,7 +83,7 @@ public class EarlyResultsTest extends AbstractSoakTest {
                 .receiveFn(VerificationContext::verify)
                 .build();
 
-        StreamStage<Map.Entry<String, Long>> sourceStage = p.readFrom(TradeGenerator.tradeSource(tradePerSecond))
+        StreamStage<Map.Entry<String, Long>> sourceStage = p.readFrom(TradeGenerator.tradeSource(tradeBatchesPerSecond))
                                                             .withNativeTimestamps(0)
                                                             .setName("Stream from EarlyResult-TradeGenerator");
 

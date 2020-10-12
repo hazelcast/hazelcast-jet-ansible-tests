@@ -96,7 +96,7 @@ public class EarlyResultsTest extends AbstractSoakTest {
     }
 
     @Override
-    protected void teardown(Throwable t) throws Exception {
+    protected void teardown(Throwable t) {
     }
 
     static class VerificationContext {
@@ -112,21 +112,13 @@ public class EarlyResultsTest extends AbstractSoakTest {
         }
 
         void verify(KeyedWindowResult<String, Long> result) {
-            TickerWindow tickerWindow = tickerMap.computeIfAbsent(result.getKey(), TickerWindow::new);
-            // we have a result after the window advanced
-            // ignore if it is an early result, fail otherwise
-            if (result.start() < tickerWindow.start) {
-                logger.warning("Received a result after window advanced: " + result);
-                assertTrue(result.isEarly());
-                return;
-            }
-            //assertEquals(tickerWindow.start, result.start());
-            if (tickerWindow.start != result.start()) {
-                logger.severe("Did not receive the final result for the previous window:\n" +
-                        "Current result: " + result + "\n" +
-                        "Start index of tickerWindow=" + tickerWindow.start +
-                        ", start index of current result=" + result.start());
-                tickerWindow.resetTo(result.start());
+            TickerWindow tickerWindow = tickerMap.computeIfAbsent(result.getKey(), k -> new TickerWindow());
+
+            assertFalse("Received a result for the previous window: " + result,
+                    result.start() < tickerWindow.start);
+
+            if (result.start() > tickerWindow.start) {
+                assertTrue("Received a final result for the next window: " + result, result.isEarly());
             }
 
             if (result.isEarly()) {
@@ -143,21 +135,14 @@ public class EarlyResultsTest extends AbstractSoakTest {
 
         class TickerWindow {
 
-            private final String key;
             private long start;
             private boolean hasEarly;
 
-            TickerWindow(String key) {
-                this.key = key;
+            TickerWindow() {
             }
 
             void advance() {
                 start += windowSize;
-                hasEarly = false;
-            }
-
-            void resetTo(long curStart) {
-                start = curStart;
                 hasEarly = false;
             }
         }

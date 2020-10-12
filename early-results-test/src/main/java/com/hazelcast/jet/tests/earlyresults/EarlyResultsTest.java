@@ -114,8 +114,8 @@ public class EarlyResultsTest extends AbstractSoakTest {
         void verify(KeyedWindowResult<String, Long> result) {
             TickerWindow tickerWindow = tickerMap.computeIfAbsent(result.getKey(), k -> new TickerWindow());
 
-            assertFalse("Received a result for the previous window: " + result,
-                    result.start() < tickerWindow.start);
+            assertTrue("Received a result for the previous window: " + result,
+                    result.start() >= tickerWindow.start);
 
             if (result.start() > tickerWindow.start) {
                 assertTrue("Received a final result for the next window: " + result, result.isEarly());

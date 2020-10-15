@@ -73,6 +73,7 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 public class StatefulMapTest extends AbstractSoakTest {
 
     static final long TIMED_OUT_CODE = -1;
+    static final int WAIT_TX_TIMEOUT_FACTOR = 4;
 
     private static final String TOPIC_PREFIX = StatefulMapTest.class.getSimpleName();
     private static final String TX_TOPIC_PREFIX = TOPIC_PREFIX + "tx";
@@ -81,7 +82,6 @@ public class StatefulMapTest extends AbstractSoakTest {
     private static final int DEFAULT_GENERATOR_BATCH_COUNT = 100;
     private static final int DEFAULT_TX_PER_SECOND = 1000;
     private static final int DEFAULT_SNAPSHOT_INTERVAL_MILLIS = 5000;
-    private static final int WAIT_TX_TIMEOUT_FACTOR = 4;
     private static final int ASSERTION_RETRY_COUNT = 60;
     private static final int POLL_TIMEOUT = 1000;
 
@@ -111,8 +111,8 @@ public class StatefulMapTest extends AbstractSoakTest {
 
     @Override
     public void test(JetInstance client, String name) throws Exception {
-        KafkaTradeProducer producer
-                = new KafkaTradeProducer(brokerUri, TOPIC_PREFIX + name, txPerSecond, generatorBatchCount);
+        KafkaTradeProducer producer = new KafkaTradeProducer(
+                logger, brokerUri, TOPIC_PREFIX + name, txPerSecond, generatorBatchCount, txTimeout);
         producer.start();
 
         KafkaSinkVerifier verifier = new KafkaSinkVerifier(name, brokerUri, TX_TOPIC_PREFIX + name, logger);
@@ -134,6 +134,7 @@ public class StatefulMapTest extends AbstractSoakTest {
                 job.join();
             }
             verifier.checkStatus();
+            producer.checkStatus();
             txTimoutCount += processTimeoutItems(name, txTimeoutConsumer);
             sleepMinutes(1);
         }

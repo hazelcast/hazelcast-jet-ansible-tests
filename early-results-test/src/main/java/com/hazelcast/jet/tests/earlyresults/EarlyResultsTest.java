@@ -84,19 +84,19 @@ public class EarlyResultsTest extends AbstractSoakTest {
                 .build();
 
         StreamStage<Map.Entry<String, Long>> sourceStage = p.readFrom(TradeGenerator.tradeSource(tradePerSecond))
-                                                            .withNativeTimestamps(0)
-                                                            .setName("Stream from EarlyResult-TradeGenerator");
+                .withNativeTimestamps(0)
+                .setName("Stream from EarlyResult-TradeGenerator");
 
         sourceStage.groupingKey(Map.Entry::getKey)
-                   .window(WindowDefinition.tumbling(windowSize).setEarlyResultsPeriod(earlyResultsPeriod))
-                   .aggregate(AggregateOperations.counting())
-                   .writeTo(verificationSink);
+                .window(WindowDefinition.tumbling(windowSize).setEarlyResultsPeriod(earlyResultsPeriod))
+                .aggregate(AggregateOperations.counting())
+                .writeTo(verificationSink);
 
         return p;
     }
 
     @Override
-    protected void teardown(Throwable t) throws Exception {
+    protected void teardown(Throwable t) {
     }
 
     static class VerificationContext {
@@ -112,20 +112,15 @@ public class EarlyResultsTest extends AbstractSoakTest {
         }
 
         void verify(KeyedWindowResult<String, Long> result) {
-            TickerWindow tickerWindow = tickerMap.computeIfAbsent(result.getKey(), TickerWindow::new);
-            // we have a result after the window advanced
-            // ignore if it is an early result, fail otherwise
-            if (result.start() < tickerWindow.start) {
-                logger.warning("Received a result after window advanced: " + result);
-                assertTrue(result.isEarly());
-                return;
+            TickerWindow tickerWindow = tickerMap.computeIfAbsent(result.getKey(), k -> new TickerWindow());
+
+            assertTrue("Received a result for the previous window: " + result,
+                    result.start() >= tickerWindow.start);
+
+            if (result.start() > tickerWindow.start) {
+                assertTrue("Received a final result for the next window: " + result, result.isEarly());
             }
-            if (tickerWindow.start != result.start()) {
-                logger.severe("Did not receive the final result for the previous window:\n" +
-                        "Current result: " + result + "\n" +
-                        "Start index of tickerWindow=" + tickerWindow.start +
-                        ", start index of current result=" + result.start());
-            }
+
             if (result.isEarly()) {
                 assertTrue(windowSize >= result.getValue());
                 tickerWindow.hasEarly = true;
@@ -140,12 +135,10 @@ public class EarlyResultsTest extends AbstractSoakTest {
 
         class TickerWindow {
 
-            private final String key;
             private long start;
             private boolean hasEarly;
 
-            TickerWindow(String key) {
-                this.key = key;
+            TickerWindow() {
             }
 
             void advance() {

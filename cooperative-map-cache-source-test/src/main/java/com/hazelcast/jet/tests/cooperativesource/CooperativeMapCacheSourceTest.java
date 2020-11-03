@@ -37,6 +37,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.function.Consumer;
 
+import static com.hazelcast.jet.tests.common.Util.sleepMillis;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.MINUTES;
 
@@ -59,6 +60,8 @@ public class CooperativeMapCacheSourceTest extends AbstractSoakTest {
     private static final int EXPECTED_SIZE_AFTER_PREDICATE = SOURCE_MAP_ITEMS - PREDICATE_FROM;
 
     private static final int DEFAULT_THREAD_COUNT = 1;
+
+    private static final int PAUSE_BETWEEN_JOBS = 100;
 
     private int threadCount;
     /**
@@ -150,6 +153,7 @@ public class CooperativeMapCacheSourceTest extends AbstractSoakTest {
                         executeJob.accept(threadIndex);
                         verify.accept(threadIndex);
                         sequenceArray[threadIndex]++;
+                        sleepMillis(PAUSE_BETWEEN_JOBS);
                     } catch (Throwable e) {
                         exception = new Exception(e);
                     }

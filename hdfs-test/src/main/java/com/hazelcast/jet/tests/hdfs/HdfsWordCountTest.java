@@ -49,6 +49,7 @@ import static com.hazelcast.jet.aggregate.AggregateOperations.counting;
 import static com.hazelcast.jet.core.processor.Processors.noopP;
 import static com.hazelcast.jet.pipeline.Sinks.fromProcessor;
 import static com.hazelcast.jet.pipeline.Sources.batchFromProcessor;
+import static com.hazelcast.jet.tests.common.Util.sleepMillis;
 import static com.hazelcast.jet.tests.hdfs.WordGenerator.wordGenerator;
 import static java.lang.Integer.parseInt;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
@@ -59,6 +60,7 @@ public class HdfsWordCountTest extends AbstractSoakTest {
     private static final String TAB_STRING = "\t";
     private static final int DEFAULT_TOTAL = 4800000;
     private static final int DEFAULT_DISTINCT = 500000;
+    private static final int PAUSE_BETWEEN_JOBS = 100;
 
     private String hdfsUri;
     private String inputPath;
@@ -107,6 +109,7 @@ public class HdfsWordCountTest extends AbstractSoakTest {
                     try {
                         executeJob(client, threadIndex);
                         verify(threadIndex);
+                        sleepMillis(PAUSE_BETWEEN_JOBS);
                     } catch (Throwable e) {
                         exception = new Exception(e);
                     }

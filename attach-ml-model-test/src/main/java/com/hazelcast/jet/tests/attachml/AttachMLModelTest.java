@@ -35,7 +35,7 @@ import java.util.stream.Stream;
 
 import static com.hazelcast.jet.core.processor.Processors.noopP;
 import static com.hazelcast.jet.pipeline.Sinks.fromProcessor;
-import static com.hazelcast.jet.tests.common.Util.sleepSeconds;
+import static com.hazelcast.jet.tests.common.Util.sleepMillis;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.stream.Collectors.toList;
 
@@ -52,7 +52,8 @@ public class AttachMLModelTest extends AbstractSoakTest {
     private static final String ML_DATA_PATH_DEFAULT = "/home/ec2-user/ansible/15-minute-counts-sorted.csv";
     private static final String ML_LARGE_DATA_PATH_DEFAULT = "/home/ec2-user/ansible/ml_100mb";
 
-    private static final int PAUSE_BETWEEN_LARGE_FILE_JOBS = 30;
+    private static final int PAUSE_BETWEEN_SMALL_FILE_JOBS = 100;
+    private static final int PAUSE_BETWEEN_LARGE_FILE_JOBS = 30_000;
     private static final int DELAY_AFTER_TEST_FINISHED = 120_000;
 
     private String ml10mbDataPath;
@@ -124,6 +125,7 @@ public class AttachMLModelTest extends AbstractSoakTest {
                 logger.info("Job count 10MB: " + jobCount);
             }
             jobCount++;
+            sleepMillis(PAUSE_BETWEEN_SMALL_FILE_JOBS);
         }
         assertTrue(jobCount > 0);
         logger.info("Final job count 10MB: " + jobCount);
@@ -152,7 +154,7 @@ public class AttachMLModelTest extends AbstractSoakTest {
                 logger.info("Job count 100MB: " + jobCount);
             }
             jobCount++;
-            sleepSeconds(PAUSE_BETWEEN_LARGE_FILE_JOBS);
+            sleepMillis(PAUSE_BETWEEN_LARGE_FILE_JOBS);
         }
         assertTrue(jobCount > 0);
         logger.info("Final job count 100MB: " + jobCount);

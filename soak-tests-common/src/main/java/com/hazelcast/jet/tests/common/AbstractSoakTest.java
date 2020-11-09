@@ -17,7 +17,7 @@
 package com.hazelcast.jet.tests.common;
 
 import com.hazelcast.client.config.ClientConfig;
-import com.hazelcast.client.config.XmlClientConfigBuilder;
+import com.hazelcast.client.config.YamlClientConfigBuilder;
 import com.hazelcast.config.CacheSimpleConfig;
 import com.hazelcast.jet.Jet;
 import com.hazelcast.jet.JetInstance;
@@ -112,7 +112,7 @@ public abstract class AbstractSoakTest {
     /**
      * If {@code true} then {@link #test(JetInstance, String)} method will be
      * called with the dynamic cluster client (which should be the bootstrapped
-     * instance) and stable cluster client (which needs a `remoteClusterXml`
+     * instance) and stable cluster client (which needs a `remoteClusterYaml`
      * defined).
      */
     protected boolean runOnBothClusters() {
@@ -131,12 +131,12 @@ public abstract class AbstractSoakTest {
         if (isRunLocal()) {
             return new JetClientConfig();
         }
-        String remoteClusterXml = property("remoteClusterXml", null);
-        if (remoteClusterXml == null) {
-            throw new IllegalArgumentException("Remote cluster xml should be set, use -DremoteClusterXml to specify it");
+        String remoteClusterYaml = property("remoteClusterYaml", null);
+        if (remoteClusterYaml == null) {
+            throw new IllegalArgumentException("Remote cluster yaml should be set, use -DremoteClusterYaml to specify it");
         }
 
-        return new XmlClientConfigBuilder(remoteClusterXml).build();
+        return new YamlClientConfigBuilder(remoteClusterYaml).build();
     }
 
     private void testInternal() throws Throwable {

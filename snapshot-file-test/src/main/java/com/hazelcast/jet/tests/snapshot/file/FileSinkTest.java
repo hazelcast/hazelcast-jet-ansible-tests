@@ -38,9 +38,11 @@ public class FileSinkTest extends AbstractSoakTest {
 
     private static final int DEFAULT_SLEEP_MS_BETWEEN_ITEM = 20;
     private static final int DEFAULT_SNAPSHOT_INTERVAL = 5000;
+    private static final String DEFAULT_SHUTDOWN_MODE = "TERMINATE";
 
     private int sleepMsBetweenItem;
     private long snapshotIntervalMs;
+    private String jetShutdownMode;
 
     public static void main(String[] args) throws Exception {
         new FileSinkTest().run(args);
@@ -50,6 +52,7 @@ public class FileSinkTest extends AbstractSoakTest {
     public void init(JetInstance client) throws Exception {
         sleepMsBetweenItem = propertyInt("sleepMsBetweenItem", DEFAULT_SLEEP_MS_BETWEEN_ITEM);
         snapshotIntervalMs = propertyInt("snapshotIntervalMs", DEFAULT_SNAPSHOT_INTERVAL);
+        jetShutdownMode = property("jetShutdownMode", DEFAULT_SHUTDOWN_MODE);
     }
 
     @Override
@@ -59,6 +62,11 @@ public class FileSinkTest extends AbstractSoakTest {
 
     @Override
     public void test(JetInstance client, String name) {
+        if (jetShutdownMode.equals("TERMINATE") && name.contains(DYNAMIC_CLUSTER)) {
+            logger.info("FileSinkTest is ignored for DYNAMIC_CLUSTER in TERMINATE shutdown mode");
+            return;
+        }
+
         GeneratedFilesVerifier verifier = new GeneratedFilesVerifier(name, logger);
         verifier.start();
 

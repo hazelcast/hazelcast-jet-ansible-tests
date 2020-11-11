@@ -292,6 +292,7 @@ public class StatefulMapTest extends AbstractSoakTest {
         props.setProperty("value.deserializer", LongDeserializer.class.getName());
         props.setProperty("auto.offset.reset", "earliest");
         props.setProperty("max.poll.records", "32768");
+        props.setProperty("isolation.level", "read_committed");
         return props;
     }
 

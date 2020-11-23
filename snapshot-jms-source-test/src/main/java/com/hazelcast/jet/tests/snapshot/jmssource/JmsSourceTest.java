@@ -106,14 +106,18 @@ public class JmsSourceTest extends AbstractSoakTest {
         log(logger, "Producer started", clusterName);
 
         long begin = System.currentTimeMillis();
-        while (System.currentTimeMillis() - begin < durationInMillis) {
-            if (getJobStatusWithRetry(job) == FAILED) {
-                job.join();
+        long expectedTotalCount;
+        try {
+            while (System.currentTimeMillis() - begin < durationInMillis) {
+                if (getJobStatusWithRetry(job) == FAILED) {
+                    job.join();
+                }
+                sleepMinutes(1);
             }
-            sleepMinutes(1);
+        } finally {
+            expectedTotalCount = producer.stop();
         }
 
-        long expectedTotalCount = producer.stop();
         log(logger, "Producer stopped, expectedTotalCount: " + expectedTotalCount, clusterName);
         assertCountEventually(client, expectedTotalCount, logger, clusterName);
         job.cancel();

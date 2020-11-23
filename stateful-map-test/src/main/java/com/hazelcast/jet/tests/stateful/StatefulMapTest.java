@@ -129,14 +129,19 @@ public class StatefulMapTest extends AbstractSoakTest {
         Job job = client.newJob(buildPipeline(name), jobConfig);
 
         long begin = System.currentTimeMillis();
-        while (System.currentTimeMillis() - begin < durationInMillis) {
-            if (getJobStatusWithRetry(job) == FAILED) {
-                job.join();
+        try {
+            while (System.currentTimeMillis() - begin < durationInMillis) {
+                if (getJobStatusWithRetry(job) == FAILED) {
+                    job.join();
+                }
+                verifier.checkStatus();
+                producer.checkStatus();
+                txTimoutCount += processTimeoutItems(name, txTimeoutConsumer);
+                sleepMinutes(1);
             }
-            verifier.checkStatus();
-            producer.checkStatus();
-            txTimoutCount += processTimeoutItems(name, txTimeoutConsumer);
-            sleepMinutes(1);
+        } catch (Throwable ex) {
+            producer.finish();
+            throw ex;
         }
         verifier.checkStatus();
         txTimoutCount += processTimeoutItems(name, txTimeoutConsumer);

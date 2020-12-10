@@ -39,6 +39,7 @@
         <module>s3-test</module>
         <module>grpc-test</module>
         <module>sort-test</module>
+        <module>file-ingestion-test</module>
     </modules>
 
     <properties>

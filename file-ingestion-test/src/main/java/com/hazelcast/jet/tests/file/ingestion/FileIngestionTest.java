@@ -39,9 +39,6 @@ import java.util.stream.IntStream;
 import static com.hazelcast.function.FunctionEx.identity;
 import static com.hazelcast.jet.aggregate.AggregateOperations.counting;
 import static com.hazelcast.jet.tests.common.Util.sleepSeconds;
-import static com.hazelcast.jet.tests.file.ingestion.FileIngestionTest.JobType.HDFS;
-import static com.hazelcast.jet.tests.file.ingestion.FileIngestionTest.JobType.LOCAL;
-import static com.hazelcast.jet.tests.file.ingestion.FileIngestionTest.JobType.LOCAL_WITH_HADOOP;
 import static java.util.stream.Collectors.toList;
 
 public class FileIngestionTest extends AbstractSoakTest {
@@ -91,8 +88,7 @@ public class FileIngestionTest extends AbstractSoakTest {
     protected void test(JetInstance client, String name) throws Throwable {
         long begin = System.currentTimeMillis();
         int jobNumber = 0;
-//        JobType[] jobTypes = JobType.values();
-        JobType[] jobTypes = new JobType[]{LOCAL, LOCAL_WITH_HADOOP, HDFS};
+        JobType[] jobTypes = JobType.values();
         Job[] jobs = new Job[jobTypes.length];
         while ((System.currentTimeMillis() - begin) < durationInMillis) {
             for (int i = 0; i < jobTypes.length; i++) {
@@ -151,7 +147,8 @@ public class FileIngestionTest extends AbstractSoakTest {
             case S3:
                 return FileSources.files("s3a://" + bucketName + "/" + s3Directory)
                         .option("fs.defaultFS", hdfsUri)
-                        .option("fs.s3a.aws.credentials.provider", "com.amazonaws.auth.profile.ProfileCredentialsProvider")
+                        .option("fs.s3a.access.key", accessKey)
+                        .option("fs.s3a.secret.key", secretKey)
                         .option("fs.hdfs.impl", DistributedFileSystem.class.getName())
                         .option("fs.file.impl", LocalFileSystem.class.getName())
                         .build();

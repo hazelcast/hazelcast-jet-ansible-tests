@@ -1,3 +1,19 @@
+/*
+ * Copyright (c) 2008-2018, Hazelcast, Inc. All Rights Reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.hazelcast.jet.tests.file.ingestion;
 
 import com.hazelcast.internal.nio.IOUtil;
@@ -46,9 +62,7 @@ public class FileIngestionTest extends AbstractSoakTest {
 
     private static final String DEFAULT_DIRECTORY = "/tmp/" + FileIngestionTest.class.getSimpleName();
     private static final String DEFAULT_HDFS_URI = "hdfs://localhost:8020";
-    private static final String DEFAULT_HDFS_PATH = DEFAULT_HDFS_URI + "/" + FileIngestionTest.class.getSimpleName();
     private static final String DEFAULT_BUCKET_NAME = "jet-soak-tests-bucket";
-    private static final String DEFAULT_DIRECTORY_NAME = FileIngestionTest.class.getSimpleName();
     private static final int S3_CLIENT_CONNECTION_TIMEOUT_SECONDS = 10;
     private static final int S3_CLIENT_SOCKET_TIMEOUT_MINUTES = 5;
     private static final int DEFAULT_SLEEP_SECONDS = 4;
@@ -72,10 +86,10 @@ public class FileIngestionTest extends AbstractSoakTest {
         localDirectory = property("localDirectory", DEFAULT_DIRECTORY);
 
         hdfsUri = property("hdfsUri", DEFAULT_HDFS_URI);
-        hdfsPath = property("hdfsPath", DEFAULT_HDFS_PATH);
+        hdfsPath = hdfsUri + "/" + getClass().getSimpleName();
 
         bucketName = property("bucketName", DEFAULT_BUCKET_NAME);
-        s3Directory = property("s3Directory", DEFAULT_DIRECTORY_NAME) + "/";
+        s3Directory = getClass().getSimpleName() + "/";
         accessKey = property("accessKey", "");
         secretKey = property("secretKey", "");
 
@@ -85,7 +99,7 @@ public class FileIngestionTest extends AbstractSoakTest {
     }
 
     @Override
-    protected void test(JetInstance client, String name) throws Throwable {
+    protected void test(JetInstance client, String name) {
         long begin = System.currentTimeMillis();
         int jobNumber = 0;
         JobType[] jobTypes = JobType.values();
@@ -117,7 +131,7 @@ public class FileIngestionTest extends AbstractSoakTest {
     }
 
     @Override
-    protected void teardown(Throwable t) throws Exception {
+    protected void teardown(Throwable t) {
     }
 
     private Pipeline pipeline(JobType jobType, int jobNumber) {

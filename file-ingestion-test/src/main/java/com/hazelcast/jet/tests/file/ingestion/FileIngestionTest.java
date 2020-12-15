@@ -16,7 +16,6 @@
 
 package com.hazelcast.jet.tests.file.ingestion;
 
-import com.hazelcast.internal.nio.IOUtil;
 import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.Observable;
@@ -45,7 +44,6 @@ import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
 import java.net.URI;
-import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.Iterator;
 import java.util.List;
@@ -60,7 +58,7 @@ import static java.util.stream.Collectors.toList;
 public class FileIngestionTest extends AbstractSoakTest {
 
 
-    private static final String DEFAULT_DIRECTORY = "/tmp/" + FileIngestionTest.class.getSimpleName();
+    private static final String LOCAL_DIRECTORY = "/tmp/file-ingestion";
     private static final String DEFAULT_HDFS_URI = "hdfs://localhost:8020";
     private static final String DEFAULT_BUCKET_NAME = "jet-soak-tests-bucket";
     private static final int S3_CLIENT_CONNECTION_TIMEOUT_SECONDS = 10;
@@ -68,7 +66,6 @@ public class FileIngestionTest extends AbstractSoakTest {
     private static final int DEFAULT_SLEEP_SECONDS = 4;
     private static final int ITEM_COUNT = 1000;
 
-    private String localDirectory;
     private String hdfsUri;
     private String hdfsPath;
     private String bucketName;
@@ -83,8 +80,6 @@ public class FileIngestionTest extends AbstractSoakTest {
 
     @Override
     protected void init(JetInstance client) throws Exception {
-        localDirectory = property("localDirectory", DEFAULT_DIRECTORY);
-
         hdfsUri = property("hdfsUri", DEFAULT_HDFS_URI);
         hdfsPath = hdfsUri + "/" + getClass().getSimpleName();
 
@@ -149,9 +144,9 @@ public class FileIngestionTest extends AbstractSoakTest {
     private BatchSource<String> source(JobType jobType) {
         switch (jobType) {
             case LOCAL:
-                return FileSources.files(localDirectory).build();
+                return FileSources.files(LOCAL_DIRECTORY).build();
             case LOCAL_WITH_HADOOP:
-                return FileSources.files(localDirectory).useHadoopForLocalFiles(true).build();
+                return FileSources.files(LOCAL_DIRECTORY).useHadoopForLocalFiles(true).build();
             case HDFS:
                 return FileSources.files(hdfsPath)
                         .option("fs.defaultFS", hdfsUri)
@@ -173,9 +168,6 @@ public class FileIngestionTest extends AbstractSoakTest {
 
     private void createSourceFiles(JetInstance client) throws Exception {
         List<Integer> items = IntStream.range(0, ITEM_COUNT).boxed().collect(toList());
-
-        // clear local directory
-        IOUtil.delete(Paths.get(localDirectory));
 
         // clear hdfs
         URI uri = URI.create(hdfsUri);
@@ -213,7 +205,7 @@ public class FileIngestionTest extends AbstractSoakTest {
         BatchStage<Integer> sourceStage = p.readFrom(TestSources.itemsDistributed(items));
 
         // create local source files
-        sourceStage.writeTo(Sinks.files(localDirectory));
+        sourceStage.writeTo(Sinks.files(LOCAL_DIRECTORY));
 
         // create hdfs source files
         JobConf conf = new JobConf();

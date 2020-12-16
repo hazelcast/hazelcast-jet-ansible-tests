@@ -16,6 +16,7 @@
 
 package com.hazelcast.jet.tests.file.ingestion;
 
+import com.hazelcast.internal.nio.IOUtil;
 import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.Observable;
@@ -30,9 +31,7 @@ import com.hazelcast.jet.pipeline.test.TestSources;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.LocalFileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.TextOutputFormat;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
@@ -44,6 +43,7 @@ import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
 import java.net.URI;
+import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -164,16 +164,12 @@ public class FileIngestionTest extends AbstractSoakTest {
             case HDFS:
                 return FileSources.files(hdfsPath)
                         .option("fs.defaultFS", hdfsUri)
-                        .option("fs.hdfs.impl", DistributedFileSystem.class.getName())
-                        .option("fs.file.impl", LocalFileSystem.class.getName())
                         .build();
             case S3:
                 return FileSources.files("s3a://" + bucketName + "/" + s3Directory)
                         .option("fs.defaultFS", hdfsUri)
                         .option("fs.s3a.access.key", accessKey)
                         .option("fs.s3a.secret.key", secretKey)
-                        .option("fs.hdfs.impl", DistributedFileSystem.class.getName())
-                        .option("fs.file.impl", LocalFileSystem.class.getName())
                         .build();
             default:
                 throw new IllegalArgumentException();
@@ -183,13 +179,14 @@ public class FileIngestionTest extends AbstractSoakTest {
     private void createSourceFiles(JetInstance client) throws Exception {
         List<Integer> items = IntStream.range(0, ITEM_COUNT).boxed().collect(toList());
 
+        // clear local directory
+        IOUtil.delete(Paths.get(LOCAL_DIRECTORY));
+
         // clear hdfs
         URI uri = URI.create(hdfsUri);
         String disableCacheName = String.format("fs.%s.impl.disable.cache", uri.getScheme());
         Configuration configuration = new Configuration();
         configuration.set("fs.defaultFS", hdfsUri);
-        configuration.set("fs.hdfs.impl", DistributedFileSystem.class.getName());
-        configuration.set("fs.file.impl", LocalFileSystem.class.getName());
         configuration.setBoolean(disableCacheName, true);
         try (FileSystem fs = FileSystem.get(uri, configuration)) {
             fs.delete(new Path(hdfsPath), true);
@@ -224,8 +221,6 @@ public class FileIngestionTest extends AbstractSoakTest {
         // create hdfs source files
         JobConf conf = new JobConf();
         conf.set("fs.defaultFS", hdfsUri);
-        conf.set("fs.hdfs.impl", DistributedFileSystem.class.getName());
-        conf.set("fs.file.impl", LocalFileSystem.class.getName());
         conf.setOutputFormat(TextOutputFormat.class);
         TextOutputFormat.setOutputPath(conf, new Path(hdfsPath));
         sourceStage.writeTo(HadoopSinks.outputFormat(conf, identity(), identity()));

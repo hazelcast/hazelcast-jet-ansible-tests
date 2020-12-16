@@ -54,6 +54,9 @@ import java.util.stream.IntStream;
 import static com.hazelcast.function.FunctionEx.identity;
 import static com.hazelcast.jet.aggregate.AggregateOperations.counting;
 import static com.hazelcast.jet.tests.common.Util.sleepSeconds;
+import static com.hazelcast.jet.tests.file.ingestion.FileIngestionTest.JobType.HDFS;
+import static com.hazelcast.jet.tests.file.ingestion.FileIngestionTest.JobType.LOCAL;
+import static com.hazelcast.jet.tests.file.ingestion.FileIngestionTest.JobType.S3;
 import static java.util.stream.Collectors.toList;
 
 public class FileIngestionTest extends AbstractSoakTest {
@@ -99,7 +102,8 @@ public class FileIngestionTest extends AbstractSoakTest {
     protected void test(JetInstance client, String name) {
         long begin = System.currentTimeMillis();
         int jobNumber = 0;
-        JobType[] jobTypes = JobType.values();
+        // excluding LOCAL_WITH_HADOOP
+        JobType[] jobTypes = new JobType[]{LOCAL, HDFS, S3};
         Job[] jobs = new Job[jobTypes.length];
         while ((System.currentTimeMillis() - begin) < durationInMillis) {
             for (int i = 0; i < jobTypes.length; i++) {
@@ -162,9 +166,7 @@ public class FileIngestionTest extends AbstractSoakTest {
             case LOCAL_WITH_HADOOP:
                 return FileSources.files(LOCAL_DIRECTORY).useHadoopForLocalFiles(true).build();
             case HDFS:
-                return FileSources.files(hdfsPath)
-                        .option("fs.defaultFS", hdfsUri)
-                        .build();
+                return FileSources.files(hdfsPath).build();
             case S3:
                 return FileSources.files("s3a://" + bucketName + "/" + s3Directory)
                         .option("fs.defaultFS", hdfsUri)

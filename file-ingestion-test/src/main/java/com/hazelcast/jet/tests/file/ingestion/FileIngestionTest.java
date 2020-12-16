@@ -45,6 +45,7 @@ import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
 import java.net.URI;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -66,6 +67,7 @@ public class FileIngestionTest extends AbstractSoakTest {
     private static final int DEFAULT_SLEEP_SECONDS = 4;
     private static final int ITEM_COUNT = 1000;
 
+    private final List<Throwable> throwableList = new ArrayList<>();
     private String hdfsUri;
     private String hdfsPath;
     private String bucketName;
@@ -106,23 +108,35 @@ public class FileIngestionTest extends AbstractSoakTest {
                 jobConfig.setName(name + "-" + jobType + "-" + jobNumber);
                 jobs[i] = client.newJob(pipeline(jobType, jobNumber), jobConfig);
             }
-            for (Job job : jobs) {
-                job.join();
-            }
-            for (JobType jobType : jobTypes) {
-                verifyObservable(client.getObservable(observableName(jobType, jobNumber)));
+            for (int i = 0; i < jobTypes.length; i++) {
+                Observable<Long> observable = client.getObservable(observableName(jobTypes[i], jobNumber));
+                try {
+                    jobs[i].join();
+                    verifyObservable(observable);
+                } catch (Throwable t) {
+                    logger.severe("Failure while verifying job: " + jobs[i].getName(), t);
+                    throwableList.add(t);
+                } finally {
+                    observable.destroy();
+                }
             }
             sleepSeconds(sleepSeconds);
             jobNumber++;
+        }
+        if (!throwableList.isEmpty()) {
+            logger.severe("Total failed jobs: " + throwableList.size());
+            throwableList.forEach(t -> logger.severe("Failed job", t));
+            throw new AssertionError("Total failed jobs: " + throwableList.size());
         }
     }
 
     private void verifyObservable(Observable<Long> observable) {
         Iterator<Long> iterator = observable.iterator();
-        assertTrue(observable.name() + " is empty", iterator.hasNext());
-        assertEquals(ITEM_COUNT, iterator.next().intValue());
-        assertFalse(iterator.hasNext());
-        observable.destroy();
+        String name = observable.name();
+        assertTrue(name + " is empty", iterator.hasNext());
+        int actual = iterator.next().intValue();
+        assertEquals(name + " -> expected: " + ITEM_COUNT + ", actual: " + actual, ITEM_COUNT, actual);
+        assertFalse(name + " should have single item", iterator.hasNext());
     }
 
     @Override

@@ -31,12 +31,15 @@ import com.hazelcast.jet.pipeline.file.FileFormat;
 import com.hazelcast.jet.pipeline.file.FileSources;
 import com.hazelcast.jet.pipeline.test.TestSources;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
+import com.hazelcast.jet.tests.file.ingestion.domain.AvroUser;
+import com.hazelcast.jet.tests.file.ingestion.domain.JsonUser;
 import org.apache.avro.reflect.ReflectDatumWriter;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.TextOutputFormat;
+import org.apache.parquet.avro.AvroParquetOutputFormat;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.core.sync.RequestBody;
@@ -61,7 +64,9 @@ import static com.hazelcast.jet.tests.file.ingestion.FileIngestionTest.JobType.A
 import static com.hazelcast.jet.tests.file.ingestion.FileIngestionTest.JobType.CSV;
 import static com.hazelcast.jet.tests.file.ingestion.FileIngestionTest.JobType.JSON;
 import static com.hazelcast.jet.tests.file.ingestion.FileIngestionTest.JobType.LOCAL;
+import static com.hazelcast.jet.tests.file.ingestion.FileIngestionTest.JobType.PARQUET;
 import static java.util.stream.Collectors.toList;
+import static org.apache.hadoop.mapreduce.Job.getInstance;
 
 public class FileIngestionTest extends AbstractSoakTest {
 
@@ -71,7 +76,7 @@ public class FileIngestionTest extends AbstractSoakTest {
     private static final String DEFAULT_BUCKET_NAME = "jet-soak-tests-bucket";
     private static final int S3_CLIENT_CONNECTION_TIMEOUT_SECONDS = 10;
     private static final int S3_CLIENT_SOCKET_TIMEOUT_MINUTES = 5;
-    private static final int DEFAULT_SLEEP_SECONDS = 4;
+    private static final int DEFAULT_SLEEP_SECONDS = 5;
     private static final int ITEM_COUNT = 1000;
 
     private final List<Throwable> throwableList = new ArrayList<>();
@@ -171,17 +176,23 @@ public class FileIngestionTest extends AbstractSoakTest {
                 break;
             case AVRO:
                 source = FileSources.files(LOCAL_DIRECTORY + AVRO)
-                        .format(FileFormat.avro(TestItem.class))
+                        .format(FileFormat.avro(AvroUser.class))
                         .build();
                 break;
             case JSON:
                 source = FileSources.files(LOCAL_DIRECTORY + JSON)
-                        .format(FileFormat.json(TestItem.class))
+                        .format(FileFormat.json(AvroUser.class))
                         .build();
                 break;
             case CSV:
                 source = FileSources.files(LOCAL_DIRECTORY + CSV)
-                        .format(FileFormat.csv(TestItem.class))
+                        .format(FileFormat.csv(AvroUser.class))
+                        .build();
+                break;
+            case PARQUET:
+                source = FileSources.files(LOCAL_DIRECTORY + PARQUET)
+                        .useHadoopForLocalFiles(true)
+                        .format(FileFormat.parquet())
                         .build();
                 break;
             case LOCAL_WITH_HADOOP:
@@ -192,19 +203,19 @@ public class FileIngestionTest extends AbstractSoakTest {
             case AVRO_WITH_HADOOP:
                 source = FileSources.files(LOCAL_DIRECTORY + AVRO)
                         .useHadoopForLocalFiles(true)
-                        .format(FileFormat.avro(TestItem.class))
+                        .format(FileFormat.avro(AvroUser.class))
                         .build();
                 break;
             case JSON_WITH_HADOOP:
                 source = FileSources.files(LOCAL_DIRECTORY + JSON)
                         .useHadoopForLocalFiles(true)
-                        .format(FileFormat.json(TestItem.class))
+                        .format(FileFormat.json(AvroUser.class))
                         .build();
                 break;
             case CSV_WITH_HADOOP:
                 source = FileSources.files(LOCAL_DIRECTORY + CSV)
                         .useHadoopForLocalFiles(true)
-                        .format(FileFormat.csv(TestItem.class))
+                        .format(FileFormat.csv(AvroUser.class))
                         .build();
                 break;
             case HDFS:
@@ -212,7 +223,6 @@ public class FileIngestionTest extends AbstractSoakTest {
                 break;
             case S3:
                 source = FileSources.files("s3a://" + bucketName + "/" + s3Directory)
-                        .option("fs.defaultFS", hdfsUri)
                         .option("fs.s3a.access.key", accessKey)
                         .option("fs.s3a.secret.key", secretKey)
                         .build();
@@ -231,11 +241,7 @@ public class FileIngestionTest extends AbstractSoakTest {
 
         // clear hdfs
         URI uri = URI.create(hdfsUri);
-        String disableCacheName = String.format("fs.%s.impl.disable.cache", uri.getScheme());
-        Configuration configuration = new Configuration();
-        configuration.set("fs.defaultFS", hdfsUri);
-        configuration.setBoolean(disableCacheName, true);
-        try (FileSystem fs = FileSystem.get(uri, configuration)) {
+        try (FileSystem fs = FileSystem.get(uri, new Configuration())) {
             fs.delete(new Path(hdfsPath), true);
         }
 
@@ -273,18 +279,27 @@ public class FileIngestionTest extends AbstractSoakTest {
 
         // create avro source files
         sourceStage
-                .map(TestItem::new)
-                .writeTo(AvroSinks.files(LOCAL_DIRECTORY + AVRO.name(), TestItem.avroSchema(), ReflectDatumWriter::new));
+                .map(FileIngestionTest::avroUser)
+                .writeTo(AvroSinks.files(LOCAL_DIRECTORY + AVRO.name(), AvroUser.SCHEMA$, ReflectDatumWriter::new));
 
         // create json source files
         sourceStage
-                .map(TestItem::new)
+                .map(FileIngestionTest::jsonUser)
                 .writeTo(Sinks.json(LOCAL_DIRECTORY + JSON.name()));
 
         // create csv source files
         sourceStage
-                .map(TestItem::new)
-                .writeTo(CsvSink.sink(LOCAL_DIRECTORY + CSV.name(), TestItem.class));
+                .map(FileIngestionTest::jsonUser)
+                .writeTo(CsvSink.sink(LOCAL_DIRECTORY + CSV.name(), JsonUser.class));
+
+        // create parquet source files
+        org.apache.hadoop.mapreduce.Job job = getInstance();
+        job.setOutputFormatClass(AvroParquetOutputFormat.class);
+        AvroParquetOutputFormat.setOutputPath(job, new Path(LOCAL_DIRECTORY + PARQUET));
+        AvroParquetOutputFormat.setSchema(job, AvroUser.SCHEMA$);
+        sourceStage
+                .map(FileIngestionTest::avroUser)
+                .writeTo(HadoopSinks.outputFormat(job.getConfiguration(), o -> null, identity()));
 
         client.newJob(p).join();
     }
@@ -308,16 +323,25 @@ public class FileIngestionTest extends AbstractSoakTest {
         return jobType.name() + "-" + jobNumber;
     }
 
+    private static AvroUser avroUser(int i) {
+        return new AvroUser("name: " + i, "pass: " + i, i, false);
+    }
+
+    private static JsonUser jsonUser(int i) {
+        return new JsonUser("name: " + i, "pass: " + i, i, false);
+    }
+
     enum JobType {
         LOCAL,
         AVRO,
         JSON,
         CSV,
+        PARQUET,
         LOCAL_WITH_HADOOP,
         AVRO_WITH_HADOOP,
         JSON_WITH_HADOOP,
         CSV_WITH_HADOOP,
         HDFS,
-        S3
+        S3,
     }
 }

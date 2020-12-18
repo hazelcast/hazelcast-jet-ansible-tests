@@ -37,4 +37,5 @@
 
     <!-- Suppress checks for auto-generated classes -->
     <suppress checks="" files="generated-sources"/>
+    <suppress checks="" files="AvroUser.java"/>
 </suppressions>

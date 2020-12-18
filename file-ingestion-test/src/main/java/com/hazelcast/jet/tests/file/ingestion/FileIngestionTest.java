@@ -20,15 +20,18 @@ import com.hazelcast.internal.nio.IOUtil;
 import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.Observable;
+import com.hazelcast.jet.avro.AvroSinks;
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.hadoop.HadoopSinks;
 import com.hazelcast.jet.pipeline.BatchSource;
 import com.hazelcast.jet.pipeline.BatchStage;
 import com.hazelcast.jet.pipeline.Pipeline;
 import com.hazelcast.jet.pipeline.Sinks;
+import com.hazelcast.jet.pipeline.file.FileFormat;
 import com.hazelcast.jet.pipeline.file.FileSources;
 import com.hazelcast.jet.pipeline.test.TestSources;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
+import org.apache.avro.reflect.ReflectDatumWriter;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -54,15 +57,16 @@ import java.util.stream.IntStream;
 import static com.hazelcast.function.FunctionEx.identity;
 import static com.hazelcast.jet.aggregate.AggregateOperations.counting;
 import static com.hazelcast.jet.tests.common.Util.sleepSeconds;
-import static com.hazelcast.jet.tests.file.ingestion.FileIngestionTest.JobType.HDFS;
+import static com.hazelcast.jet.tests.file.ingestion.FileIngestionTest.JobType.AVRO;
+import static com.hazelcast.jet.tests.file.ingestion.FileIngestionTest.JobType.CSV;
+import static com.hazelcast.jet.tests.file.ingestion.FileIngestionTest.JobType.JSON;
 import static com.hazelcast.jet.tests.file.ingestion.FileIngestionTest.JobType.LOCAL;
-import static com.hazelcast.jet.tests.file.ingestion.FileIngestionTest.JobType.S3;
 import static java.util.stream.Collectors.toList;
 
 public class FileIngestionTest extends AbstractSoakTest {
 
 
-    private static final String LOCAL_DIRECTORY = "/tmp/file-ingestion";
+    private static final String LOCAL_DIRECTORY = "/tmp/file-ingestion/";
     private static final String DEFAULT_HDFS_URI = "hdfs://localhost:8020";
     private static final String DEFAULT_BUCKET_NAME = "jet-soak-tests-bucket";
     private static final int S3_CLIENT_CONNECTION_TIMEOUT_SECONDS = 10;
@@ -102,8 +106,8 @@ public class FileIngestionTest extends AbstractSoakTest {
     protected void test(JetInstance client, String name) {
         long begin = System.currentTimeMillis();
         int jobNumber = 0;
-        // excluding LOCAL_WITH_HADOOP
-        JobType[] jobTypes = new JobType[]{LOCAL, HDFS, S3};
+
+        JobType[] jobTypes = JobType.values();
         Job[] jobs = new Job[jobTypes.length];
         while ((System.currentTimeMillis() - begin) < durationInMillis) {
             for (int i = 0; i < jobTypes.length; i++) {
@@ -159,23 +163,64 @@ public class FileIngestionTest extends AbstractSoakTest {
         return p;
     }
 
-    private BatchSource<String> source(JobType jobType) {
+    private BatchSource<?> source(JobType jobType) {
+        BatchSource<?> source;
         switch (jobType) {
             case LOCAL:
-                return FileSources.files(LOCAL_DIRECTORY).build();
+                source = FileSources.files(LOCAL_DIRECTORY + LOCAL).build();
+                break;
+            case AVRO:
+                source = FileSources.files(LOCAL_DIRECTORY + AVRO)
+                        .format(FileFormat.avro(TestItem.class))
+                        .build();
+                break;
+            case JSON:
+                source = FileSources.files(LOCAL_DIRECTORY + JSON)
+                        .format(FileFormat.json(TestItem.class))
+                        .build();
+                break;
+            case CSV:
+                source = FileSources.files(LOCAL_DIRECTORY + CSV)
+                        .format(FileFormat.csv(TestItem.class))
+                        .build();
+                break;
             case LOCAL_WITH_HADOOP:
-                return FileSources.files(LOCAL_DIRECTORY).useHadoopForLocalFiles(true).build();
+                source = FileSources.files(LOCAL_DIRECTORY + LOCAL)
+                        .useHadoopForLocalFiles(true)
+                        .build();
+                break;
+            case AVRO_WITH_HADOOP:
+                source = FileSources.files(LOCAL_DIRECTORY + AVRO)
+                        .useHadoopForLocalFiles(true)
+                        .format(FileFormat.avro(TestItem.class))
+                        .build();
+                break;
+            case JSON_WITH_HADOOP:
+                source = FileSources.files(LOCAL_DIRECTORY + JSON)
+                        .useHadoopForLocalFiles(true)
+                        .format(FileFormat.json(TestItem.class))
+                        .build();
+                break;
+            case CSV_WITH_HADOOP:
+                source = FileSources.files(LOCAL_DIRECTORY + CSV)
+                        .useHadoopForLocalFiles(true)
+                        .format(FileFormat.csv(TestItem.class))
+                        .build();
+                break;
             case HDFS:
-                return FileSources.files(hdfsPath).build();
+                source = FileSources.files(hdfsPath).build();
+                break;
             case S3:
-                return FileSources.files("s3a://" + bucketName + "/" + s3Directory)
+                source = FileSources.files("s3a://" + bucketName + "/" + s3Directory)
                         .option("fs.defaultFS", hdfsUri)
                         .option("fs.s3a.access.key", accessKey)
                         .option("fs.s3a.secret.key", secretKey)
                         .build();
+                break;
             default:
                 throw new IllegalArgumentException();
         }
+        return source;
     }
 
     private void createSourceFiles(JetInstance client) throws Exception {
@@ -214,11 +259,10 @@ public class FileIngestionTest extends AbstractSoakTest {
         }
 
         Pipeline p = Pipeline.create();
-
         BatchStage<Integer> sourceStage = p.readFrom(TestSources.itemsDistributed(items));
 
         // create local source files
-        sourceStage.writeTo(Sinks.files(LOCAL_DIRECTORY));
+        sourceStage.writeTo(Sinks.files(LOCAL_DIRECTORY + LOCAL.name()));
 
         // create hdfs source files
         JobConf conf = new JobConf();
@@ -226,6 +270,21 @@ public class FileIngestionTest extends AbstractSoakTest {
         conf.setOutputFormat(TextOutputFormat.class);
         TextOutputFormat.setOutputPath(conf, new Path(hdfsPath));
         sourceStage.writeTo(HadoopSinks.outputFormat(conf, identity(), identity()));
+
+        // create avro source files
+        sourceStage
+                .map(TestItem::new)
+                .writeTo(AvroSinks.files(LOCAL_DIRECTORY + AVRO.name(), TestItem.avroSchema(), ReflectDatumWriter::new));
+
+        // create json source files
+        sourceStage
+                .map(TestItem::new)
+                .writeTo(Sinks.json(LOCAL_DIRECTORY + JSON.name()));
+
+        // create csv source files
+        sourceStage
+                .map(TestItem::new)
+                .writeTo(CsvSink.sink(LOCAL_DIRECTORY + CSV.name(), TestItem.class));
 
         client.newJob(p).join();
     }
@@ -250,6 +309,15 @@ public class FileIngestionTest extends AbstractSoakTest {
     }
 
     enum JobType {
-        LOCAL, LOCAL_WITH_HADOOP, HDFS, S3
+        LOCAL,
+        AVRO,
+        JSON,
+        CSV,
+        LOCAL_WITH_HADOOP,
+        AVRO_WITH_HADOOP,
+        JSON_WITH_HADOOP,
+        CSV_WITH_HADOOP,
+        HDFS,
+        S3
     }
 }

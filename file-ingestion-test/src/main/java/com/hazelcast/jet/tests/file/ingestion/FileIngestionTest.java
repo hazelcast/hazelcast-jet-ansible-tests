@@ -110,7 +110,7 @@ public class FileIngestionTest extends AbstractSoakTest {
     @Override
     protected void test(JetInstance client, String name) {
         long begin = System.currentTimeMillis();
-        int jobNumber = 0;
+        int jobCount = 0;
 
         JobType[] jobTypes = JobType.values();
         Job[] jobs = new Job[jobTypes.length];
@@ -118,11 +118,11 @@ public class FileIngestionTest extends AbstractSoakTest {
             for (int i = 0; i < jobTypes.length; i++) {
                 JobType jobType = jobTypes[i];
                 JobConfig jobConfig = new JobConfig();
-                jobConfig.setName(name + "-" + jobType + "-" + jobNumber);
-                jobs[i] = client.newJob(pipeline(jobType, jobNumber), jobConfig);
+                jobConfig.setName(name + "-" + jobType + "-" + jobCount);
+                jobs[i] = client.newJob(pipeline(jobType, jobCount), jobConfig);
             }
             for (int i = 0; i < jobTypes.length; i++) {
-                Observable<Long> observable = client.getObservable(observableName(jobTypes[i], jobNumber));
+                Observable<Long> observable = client.getObservable(observableName(jobTypes[i], jobCount));
                 try {
                     jobs[i].join();
                     verifyObservable(observable);
@@ -134,8 +134,12 @@ public class FileIngestionTest extends AbstractSoakTest {
                 }
             }
             sleepSeconds(sleepSeconds);
-            jobNumber++;
+            jobCount++;
+            if (jobCount % 100 == 0) {
+                logger.info("Job count " + jobCount);
+            }
         }
+        logger.info("Final job count " + jobCount);
         if (!throwableList.isEmpty()) {
             logger.severe("Total failed jobs: " + throwableList.size());
             throwableList.forEach(t -> logger.severe("Failed job", t));
@@ -181,12 +185,12 @@ public class FileIngestionTest extends AbstractSoakTest {
                 break;
             case JSON:
                 source = FileSources.files(LOCAL_DIRECTORY + JSON)
-                        .format(FileFormat.json(AvroUser.class))
+                        .format(FileFormat.json(JsonUser.class))
                         .build();
                 break;
             case CSV:
                 source = FileSources.files(LOCAL_DIRECTORY + CSV)
-                        .format(FileFormat.csv(AvroUser.class))
+                        .format(FileFormat.csv(JsonUser.class))
                         .build();
                 break;
             case PARQUET:
@@ -209,13 +213,13 @@ public class FileIngestionTest extends AbstractSoakTest {
             case JSON_WITH_HADOOP:
                 source = FileSources.files(LOCAL_DIRECTORY + JSON)
                         .useHadoopForLocalFiles(true)
-                        .format(FileFormat.json(AvroUser.class))
+                        .format(FileFormat.json(JsonUser.class))
                         .build();
                 break;
             case CSV_WITH_HADOOP:
                 source = FileSources.files(LOCAL_DIRECTORY + CSV)
                         .useHadoopForLocalFiles(true)
-                        .format(FileFormat.csv(AvroUser.class))
+                        .format(FileFormat.csv(JsonUser.class))
                         .build();
                 break;
             case HDFS:

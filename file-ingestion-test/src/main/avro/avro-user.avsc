@@ -1,0 +1,11 @@
+{
+"namespace": "com.hazelcast.jet.tests.file.ingestion.domain",
+  "type": "record",
+  "name": "AvroUser",
+  "fields": [
+    {"name": "name", "type": "string"},
+    {"name": "password", "type": "string"},
+    {"name": "age",  "type": "int"},
+    {"name": "status",  "type": "boolean"}
+  ]
+}

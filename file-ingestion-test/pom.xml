@@ -52,16 +52,19 @@
             <groupId>com.hazelcast.jet</groupId>
             <artifactId>hazelcast-jet-files-s3</artifactId>
             <version>${jet.version}</version>
+            <classifier>jar-with-dependencies</classifier>
         </dependency>
         <dependency>
             <groupId>com.hazelcast.jet</groupId>
             <artifactId>hazelcast-jet-avro</artifactId>
             <version>${jet.version}</version>
+            <classifier>jar-with-dependencies</classifier>
         </dependency>
         <dependency>
             <groupId>com.hazelcast.jet</groupId>
             <artifactId>hazelcast-jet-csv</artifactId>
             <version>${jet.version}</version>
+            <classifier>jar-with-dependencies</classifier>
         </dependency>
 
         <!-- s3 -->

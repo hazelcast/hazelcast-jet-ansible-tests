@@ -16,9 +16,9 @@
 
 package com.hazelcast.jet.tests.file.ingestion;
 
-import com.fasterxml.jackson.databind.SequenceWriter;
-import com.fasterxml.jackson.dataformat.csv.CsvMapper;
-import com.fasterxml.jackson.dataformat.csv.CsvSchema;
+import com.hazelcast.com.fasterxml.jackson.databind.SequenceWriter;
+import com.hazelcast.com.fasterxml.jackson.dataformat.csv.CsvMapper;
+import com.hazelcast.com.fasterxml.jackson.dataformat.csv.CsvSchema;
 import com.hazelcast.jet.core.Processor;
 import com.hazelcast.jet.pipeline.Sink;
 import com.hazelcast.jet.pipeline.SinkBuilder;

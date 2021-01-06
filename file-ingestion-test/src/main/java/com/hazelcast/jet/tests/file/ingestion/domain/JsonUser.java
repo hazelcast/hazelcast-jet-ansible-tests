@@ -26,6 +26,9 @@ public class JsonUser {
 
     private boolean status;
 
+    public JsonUser() {
+    }
+
     public JsonUser(String name, String password, int age, boolean status) {
         this.name = name;
         this.password = password;

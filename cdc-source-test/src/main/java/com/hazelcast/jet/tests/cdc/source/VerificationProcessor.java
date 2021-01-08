@@ -28,13 +28,14 @@ import static com.hazelcast.jet.core.ProcessorMetaSupplier.preferLocalParallelis
 
 public class VerificationProcessor extends AbstractProcessor {
 
-    public static final String CONSUMED_MESSAGES_MAP_NAME = "CdcSourceTest_latestCounter";
+    public static final String CONSUMED_MESSAGES_MAP_NAME = "CdcSourceTest_latestCounters";
+
     private static final int QUEUE_SIZE_LIMIT = 4_000;
     private static final int PRINT_LOG_ITEMS = 1_000;
 
     private final String name;
 
-    private boolean processed;
+    private boolean active;
     private int counter = 1;
     private final PriorityQueue<Integer> queue = new PriorityQueue<>();
     private ILogger logger;
@@ -52,7 +53,7 @@ public class VerificationProcessor extends AbstractProcessor {
 
     @Override
     protected boolean tryProcess(int ordinal, Object item) {
-        processed = true;
+        active = true;
         int value = (Integer) item;
         queue.offer(value);
         // try to verify head of verification queue
@@ -83,7 +84,7 @@ public class VerificationProcessor extends AbstractProcessor {
 
     @Override
     public boolean saveToSnapshot() {
-        if (!processed) {
+        if (!active) {
             return true;
         }
         logger.info(String.format("[%s] saveToSnapshot counter: %d, size: %d, peek: %d",

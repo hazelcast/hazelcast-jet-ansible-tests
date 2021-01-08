@@ -73,7 +73,6 @@ public class CdcSourceTest extends AbstractSoakTest {
         connectionIp = connectionUrlProperty.split("//")[1];
         connectionUrlWithDb = connectionUrlProperty + "/" + DATABASE_NAME + "?useSSL=false";
 
-
         sleepMsBetweenItem = propertyInt("sleepMsBetweenItem", DEFAULT_SLEEP_MS_BETWEEN_ITEM);
         snapshotIntervalMs = propertyInt("snapshotIntervalMs", DEFAULT_SNAPSHOT_INTERVAL);
 
@@ -142,7 +141,7 @@ public class CdcSourceTest extends AbstractSoakTest {
             }
             sleepSeconds(1);
         }
-        assertTrue("LatestChecked was: " + latestChecked + ", but after 20minutes latest is: " + latest,
+        assertTrue("LatestChecked was: " + latestChecked + ", but after 20 minutes latest is: " + latest,
                 latest > latestChecked);
         return latest;
     }

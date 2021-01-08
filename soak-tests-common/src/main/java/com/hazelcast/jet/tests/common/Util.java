@@ -81,15 +81,15 @@ public final class Util {
         return new AbstractMap.SimpleImmutableEntry<>(key, value);
     }
 
-    public static void sleepMinutes(int minutes) {
+    public static void sleepMinutes(long minutes) {
         uncheckRun(() -> MINUTES.sleep(minutes));
     }
 
-    public static void sleepSeconds(int seconds) {
+    public static void sleepSeconds(long seconds) {
         uncheckRun(() -> SECONDS.sleep(seconds));
     }
 
-    public static void sleepMillis(int millis) {
+    public static void sleepMillis(long millis) {
         uncheckRun(() -> MILLISECONDS.sleep(millis));
     }
 

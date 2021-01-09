@@ -47,7 +47,7 @@
         <jet.version>4.4-SNAPSHOT</jet.version>
         <main.basedir>${project.basedir}</main.basedir>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <hadoop.version>3.2.1</hadoop.version>
+        <hadoop.version>3.3.0</hadoop.version>
 
         <maven.checkstyle.plugin.version>2.17</maven.checkstyle.plugin.version>
         <maven.compiler.plugin.version>2.5.1</maven.compiler.plugin.version>

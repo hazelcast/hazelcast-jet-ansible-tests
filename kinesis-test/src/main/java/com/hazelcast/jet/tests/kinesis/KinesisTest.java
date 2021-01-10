@@ -16,6 +16,8 @@
 
 package com.hazelcast.jet.tests.kinesis;
 
+import com.amazonaws.SDKGlobalConfiguration;
+import com.amazonaws.regions.Regions;
 import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.config.JobConfig;
@@ -38,7 +40,6 @@ import static com.hazelcast.jet.tests.common.Util.entry;
 import static com.hazelcast.jet.tests.common.Util.getJobStatusWithRetry;
 import static com.hazelcast.jet.tests.common.Util.sleepMillis;
 import static com.hazelcast.jet.tests.common.Util.sleepMinutes;
-import static com.hazelcast.jet.tests.common.Util.sleepSeconds;
 import static com.hazelcast.jet.tests.common.Util.waitForJobStatus;
 
 public class KinesisTest extends AbstractSoakTest {
@@ -47,7 +48,6 @@ public class KinesisTest extends AbstractSoakTest {
     private static final int DEFAULT_PARTITION_KEYS = 10_000;
     private static final int DEFAULT_SLEEP_MS_BETWEEN_ITEM = 1;
     private static final int DEFAULT_SNAPSHOT_INTERVAL = 5000;
-    private static final int ASSERTION_RETRY_COUNT = 60;
 
     private AwsConfig awsConfig;
     private Helper helper;
@@ -58,17 +58,19 @@ public class KinesisTest extends AbstractSoakTest {
     private long snapshotIntervalMs;
 
     public static void main(String[] args) throws Exception {
+        setRunLocal();
+        System.setProperty(SDKGlobalConfiguration.AWS_CBOR_DISABLE_SYSTEM_PROPERTY, "true");
         new KinesisTest().run(args);
     }
 
     @Override
     protected void init(JetInstance client) {
         awsConfig = new AwsConfig()
-                .withEndpoint(property("endpoint", null))
-                .withRegion(property("region", null))
-                .withCredentials(property("accessKey", null), property("secretKey", null));
+                .withEndpoint(property("endpoint", "http://localhost:4566"))
+                .withRegion(property("region", Regions.US_EAST_1.getName()))
+                .withCredentials(property("accessKey", "accessKey"), property("secretKey", "secretKey"));
 
-        streamName = property("streamName", KinesisTest.class.getSimpleName());
+        streamName = property("streamName",  "s_" + System.currentTimeMillis());
         int shardCount = propertyInt("shardCount", DEFAULT_SHARD_COUNT);
 
         partitionKeys = propertyInt("partitionKeys", DEFAULT_PARTITION_KEYS);
@@ -87,27 +89,22 @@ public class KinesisTest extends AbstractSoakTest {
 
     @Override
     protected boolean runOnBothClusters() {
-        return true;
+        return false;
     }
 
     @Override
     protected void test(JetInstance client, String cluster) throws Throwable {
-        JobConfig jobConfig = new JobConfig();
-        jobConfig.setName(cluster);
-        if (cluster.startsWith(STABLE_CLUSTER)) {
-            jobConfig.addClass(KinesisTest.class, Helper.class, VerificationProcessor.class);
-        } else {
-            jobConfig.setSnapshotIntervalMillis(snapshotIntervalMs);
-            jobConfig.setProcessingGuarantee(ProcessingGuarantee.AT_LEAST_ONCE);
-        }
 
-        Job readJob = client.newJob(readPipeline(streamName, awsConfig, cluster), jobConfig);
+        JobConfig readJobConfig = jobConfig(cluster + "_read");
+        Job readJob = client.newJob(readPipeline(streamName, awsConfig, cluster), readJobConfig);
         waitForJobStatus(readJob, RUNNING);
 
-        Job writeJob = client.newJob(writePipeline(streamName, awsConfig), jobConfig);
+        JobConfig writeJobConfig = jobConfig(cluster + "write");
+        Job writeJob = client.newJob(writePipeline(streamName, awsConfig), writeJobConfig);
         waitForJobStatus(writeJob, RUNNING);
 
         int cycles = 0;
+        int latestCycle = 0;
         int latestCheckedCount = 0;
         long begin = System.currentTimeMillis();
         while (System.currentTimeMillis() - begin < durationInMillis) {
@@ -124,24 +121,43 @@ public class KinesisTest extends AbstractSoakTest {
 
             cycles++;
             if (cycles % 20 == 0) {
-                latestCheckedCount = checkNewDataProcessed(client, cluster, latestCheckedCount);
+                latestCycle = cycles;
+                latestCheckedCount = checkNewDataProcessed(client, cluster, latestCheckedCount, 20);
                 log("Check for insert changes succeeded, latestCheckedCount: " + latestCheckedCount, cluster);
             }
             sleepMinutes(1);
         }
+        if (latestCycle != cycles) {
+            latestCheckedCount = checkNewDataProcessed(client, cluster, latestCheckedCount, cycles - latestCycle);
+            log("Check for insert changes succeeded, latestCheckedCount: " + latestCheckedCount, cluster);
+        }
         log("Job completed", cluster);
     }
 
+    private JobConfig jobConfig(String name) {
+        JobConfig jobConfig = new JobConfig();
+        jobConfig.setName(name);
+        if (name.contains(STABLE_CLUSTER)) {
+            jobConfig.addClass(KinesisTest.class, Helper.class, KinesisVerificationP.class);
+        } else {
+            jobConfig.setSnapshotIntervalMillis(snapshotIntervalMs);
+            jobConfig.setProcessingGuarantee(ProcessingGuarantee.AT_LEAST_ONCE);
+        }
+        return jobConfig;
+    }
+
     private Pipeline writePipeline(String stream, AwsConfig awsConfig) {
+        int localPartitionKeys = partitionKeys;
+        long localSleepMsBetweenItem = sleepMsBetweenItem;
         StreamSource<Map.Entry<String, byte[]>> generatorSource = SourceBuilder
-                .stream("dataSource", procCtx -> new long[1])
+                .stream("KinesisDataSource", procCtx -> new long[1])
                 .<Map.Entry<String, byte[]>>fillBufferFn((ctx, buf) -> {
                     long messageId = ctx[0];
-                    String partitionKey = Long.toString(messageId % partitionKeys);
+                    String partitionKey = Long.toString(messageId % localPartitionKeys);
                     byte[] data = Long.toString(messageId).getBytes(StandardCharsets.UTF_8);
                     buf.add(entry(partitionKey, data));
                     ctx[0] += 1;
-                    sleepMillis(sleepMsBetweenItem);
+                    sleepMillis(localSleepMsBetweenItem);
                 })
                 .createSnapshotFn(ctx -> ctx[0])
                 .restoreSnapshotFn((ctx, state) -> ctx[0] = state.get(0))
@@ -169,31 +185,26 @@ public class KinesisTest extends AbstractSoakTest {
                 .withCredentials(awsConfig.getAccessKey(), awsConfig.getSecretKey())
                 .build();
 
-        Sink<String> verificationSink = VerificationProcessor.sink("KinesisVerificationSink", cluster);
+        Sink<String> verificationSink = KinesisVerificationP.sink(cluster);
 
         Pipeline pipeline = Pipeline.create();
         pipeline.readFrom(kinesisSource)
                 .withoutTimestamps()
-                .map(Map.Entry::getValue)
-                .map(String::new)
+                .map(KinesisTest::valueAsString)
                 .writeTo(verificationSink);
         return pipeline;
     }
 
-    private int checkNewDataProcessed(JetInstance client, String cluster, int latestChecked) {
-        Map<String, Integer> latestCounterMap = client.getMap(VerificationProcessor.CONSUMED_MESSAGES_MAP_NAME);
-        int latest = 0;
-        for (int i = 0; i < ASSERTION_RETRY_COUNT; i++) {
-            Integer latestInteger = latestCounterMap.get(cluster);
-            if (latestInteger != null) {
-                latest = latestInteger;
-                break;
-            }
-            sleepSeconds(1);
-        }
-        assertTrue("LatestChecked was: " + latestChecked + ", but after 20 minutes latest is: " + latest,
-                latest > latestChecked);
+    private int checkNewDataProcessed(JetInstance client, String cluster, int latestChecked, int elapsedCycle) {
+        Map<String, Integer> latestCounterMap = client.getMap(KinesisVerificationP.CONSUMED_MESSAGES_MAP_NAME);
+        int latest = latestCounterMap.getOrDefault(cluster, 0);
+        assertTrue(String.format("LatestChecked was: %d, but after %d minutes latest is %d",
+                latestChecked, elapsedCycle, latest), latest > latestChecked);
         return latest;
+    }
+
+    private static String valueAsString(Map.Entry<?, byte[]> entry) {
+        return new String(entry.getValue());
     }
 
     private void log(String message, String clusterName) {

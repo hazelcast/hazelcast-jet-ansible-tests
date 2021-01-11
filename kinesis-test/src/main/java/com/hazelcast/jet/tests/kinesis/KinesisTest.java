@@ -32,6 +32,8 @@ import com.hazelcast.jet.pipeline.StreamSource;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
 
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 import static com.hazelcast.jet.core.JobStatus.FAILED;
@@ -49,11 +51,13 @@ public class KinesisTest extends AbstractSoakTest {
     private static final int DEFAULT_SLEEP_MS_BETWEEN_ITEM = 1;
     private static final int DEFAULT_SNAPSHOT_INTERVAL = 5000;
 
+    private final List<String> streamNames = new ArrayList<>(2);
+
     private AwsConfig awsConfig;
     private Helper helper;
 
-    private String streamName;
     private int partitionKeys;
+    private int shardCount;
     private long sleepMsBetweenItem;
     private long snapshotIntervalMs;
 
@@ -70,37 +74,38 @@ public class KinesisTest extends AbstractSoakTest {
                 .withRegion(property("region", Regions.US_EAST_1.getName()))
                 .withCredentials(property("accessKey", "accessKey"), property("secretKey", "secretKey"));
 
-        streamName = property("streamName",  "s_" + System.currentTimeMillis());
-        int shardCount = propertyInt("shardCount", DEFAULT_SHARD_COUNT);
-
+        shardCount = propertyInt("shardCount", DEFAULT_SHARD_COUNT);
         partitionKeys = propertyInt("partitionKeys", DEFAULT_PARTITION_KEYS);
 
         sleepMsBetweenItem = propertyInt("sleepMsBetweenItem", DEFAULT_SLEEP_MS_BETWEEN_ITEM);
         snapshotIntervalMs = propertyInt("snapshotIntervalMs", DEFAULT_SNAPSHOT_INTERVAL);
 
-        helper = new Helper(awsConfig.buildClient(), streamName, logger);
-        helper.createStream(shardCount);
+        helper = new Helper(awsConfig.buildClient(), logger);
     }
 
     @Override
     protected void teardown(Throwable t) {
-        helper.deleteStream();
+        for (String streamName : streamNames) {
+            helper.deleteStream(streamName);
+        }
     }
 
     @Override
     protected boolean runOnBothClusters() {
-        return false;
+        return true;
     }
 
     @Override
     protected void test(JetInstance client, String cluster) throws Throwable {
+        streamNames.add(cluster);
+        helper.createStream(cluster, shardCount);
 
         JobConfig readJobConfig = jobConfig(cluster + "_read");
-        Job readJob = client.newJob(readPipeline(streamName, awsConfig, cluster), readJobConfig);
+        Job readJob = client.newJob(readPipeline(cluster, awsConfig, cluster), readJobConfig);
         waitForJobStatus(readJob, RUNNING);
 
         JobConfig writeJobConfig = jobConfig(cluster + "write");
-        Job writeJob = client.newJob(writePipeline(streamName, awsConfig), writeJobConfig);
+        Job writeJob = client.newJob(writePipeline(cluster, awsConfig), writeJobConfig);
         waitForJobStatus(writeJob, RUNNING);
 
         int cycles = 0;

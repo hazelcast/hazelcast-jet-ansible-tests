@@ -40,6 +40,7 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
 
 import static com.hazelcast.jet.impl.util.ExceptionUtil.rethrow;
+import static java.lang.String.format;
 
 public class Helper {
 
@@ -49,19 +50,16 @@ public class Helper {
             .build();
 
     private final AmazonKinesisAsync kinesis;
-    private final String stream;
-
     private final ILogger logger;
 
-    Helper(AmazonKinesisAsync kinesis, String stream, ILogger logger) {
+    Helper(AmazonKinesisAsync kinesis, ILogger logger) {
         this.kinesis = kinesis;
-        this.stream = stream;
         this.logger = logger;
     }
 
-    public void createStream(int shardCount) {
-        if (streamExists()) {
-            throw new IllegalStateException("Stream already exists");
+    public void createStream(String stream, int shardCount) {
+        if (streamExists(stream)) {
+            throw new IllegalStateException(format("Stream[%s] already exists", stream));
         }
 
         callSafely(() -> {
@@ -69,15 +67,15 @@ public class Helper {
             request.setShardCount(shardCount);
             request.setStreamName(stream);
             return kinesis.createStream(request);
-        }, "stream creation");
+        }, format("stream[%s] creation", stream));
 
-        waitForStreamToActivate();
+        waitForStreamToActivate(stream);
     }
 
-    public void deleteStream() {
-        if (streamExists()) {
-            callSafely(() -> kinesis.deleteStream(stream), "stream deletion");
-            waitForStreamToDisappear();
+    public void deleteStream(String stream) {
+        if (streamExists(stream)) {
+            callSafely(() -> kinesis.deleteStream(stream), format("stream[%s] deletion", stream));
+            waitForStreamToDisappear(stream);
         }
     }
 
@@ -85,43 +83,44 @@ public class Helper {
         return kinesis.listStreams().getStreamNames();
     }
 
-    private boolean streamExists() {
-        Set<String> streams = new HashSet<>(callSafely(this::listStreams, "stream listing"));
+    private boolean streamExists(String stream) {
+        Set<String> streams = new HashSet<>(callSafely(this::listStreams, format("stream[%s] listing", stream)));
         return streams.contains(stream);
     }
 
-    private void waitForStreamToActivate() {
+    private void waitForStreamToActivate(String stream) {
         int attempt = 0;
         while (true) {
-            StreamStatus status = callSafely(this::getStreamStatus, "stream status");
+            StreamStatus status = callSafely(() -> getStreamStatus(stream), format("stream[%s] status", stream));
             switch (status) {
                 case ACTIVE:
                     return;
                 case CREATING:
                 case UPDATING:
-                    wait(++attempt, "stream activation");
+                    wait(++attempt, format("stream[%s] activation", stream));
                     break;
                 case DELETING:
-                    throw new JetException("Stream is being deleted");
+                    throw new JetException(format("Stream[%s] is being deleted: ", stream));
                 default:
-                    throw new JetException("Programming error, unhandled stream status: " + status);
+                    throw new JetException(format("Programming error, unhandled stream[%s] status: %s",
+                            stream, status));
             }
         }
     }
 
-    private void waitForStreamToDisappear() {
+    private void waitForStreamToDisappear(String stream) {
         int attempt = 0;
         while (true) {
-            List<String> streams = callSafely(this::listStreams, "stream disappearance");
+            List<String> streams = callSafely(this::listStreams, "stream disappearance: " + stream);
             if (streams.contains(stream)) {
-                wait(++attempt, "stream disappearance");
+                wait(++attempt, "stream disappearance: " + stream);
             } else {
                 return;
             }
         }
     }
 
-    private StreamStatus getStreamStatus() {
+    private StreamStatus getStreamStatus(String stream) {
         DescribeStreamSummaryRequest request = new DescribeStreamSummaryRequest();
         request.setStreamName(stream);
 
@@ -137,24 +136,28 @@ public class Helper {
             try {
                 return callable.call();
             } catch (LimitExceededException lee) {
-                String message = "The requested resource exceeds the maximum number allowed, or the number of " +
-                        "concurrent stream requests exceeds the maximum number allowed. Will retry.";
+                String message = "The requested resource exceeds the maximum number allowed, " +
+                        "or the number of concurrent stream requests exceeds the maximum number allowed. " +
+                        "Will retry. The action: " + action;
                 logger.warning(message, lee);
             } catch (ExpiredNextTokenException ente) {
-                String message = "The pagination token passed to the operation is expired. Will retry.";
+                String message = "The pagination token passed to the operation is expired. " +
+                        "Will retry. The action: " + action;
                 logger.warning(message, ente);
             } catch (ResourceInUseException riue) {
                 String message = "The resource is not available for this operation. For successful operation, the " +
-                        "resource must be in the ACTIVE state. Will retry.";
+                        "resource must be in the ACTIVE state. Will retry. The action: " + action;
                 logger.warning(message, riue);
             } catch (ResourceNotFoundException rnfe) {
-                String message = "The requested resource could not be found. The stream might not be specified correctly.";
+                String message = "The requested resource could not be found. " +
+                        "The stream might not be specified correctly. The action: " + action;
                 throw new JetException(message, rnfe);
             } catch (InvalidArgumentException iae) {
-                String message = "A specified parameter exceeds its restrictions, is not supported, or can't be used.";
+                String message = "A specified parameter exceeds its restrictions, is not supported, or can't be used." +
+                        " The action: " + action;
                 throw new JetException(message, iae);
             } catch (SdkClientException sce) {
-                String message = "Amazon SDK failure, ignoring and retrying.";
+                String message = "Amazon SDK failure, ignoring and retrying. The action: " + action;
                 logger.warning(message, sce);
             } catch (Exception e) {
                 throw rethrow(e);
@@ -166,16 +169,16 @@ public class Helper {
 
     private void wait(int attempt, String action) {
         if (attempt > RETRY_STRATEGY.getMaxAttempts()) {
-            throw new JetException(String.format("Abort waiting for %s, too many attempts", action));
+            throw new JetException(format("Abort waiting for %s, too many attempts", action));
         }
 
-        logger.info(String.format("Waiting for %s ...", action));
+        logger.info(format("Waiting for %s ...", action));
         long duration = RETRY_STRATEGY.getIntervalFunction().waitAfterAttempt(attempt);
         try {
             TimeUnit.MILLISECONDS.sleep(duration);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new JetException(String.format("Waiting for %s interrupted", action));
+            throw new JetException(format("Waiting for %s interrupted", action));
         }
     }
 

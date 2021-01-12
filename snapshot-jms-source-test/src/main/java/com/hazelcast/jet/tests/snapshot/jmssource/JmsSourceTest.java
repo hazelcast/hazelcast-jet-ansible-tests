@@ -23,7 +23,6 @@ import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.config.ProcessingGuarantee;
 import com.hazelcast.jet.pipeline.Pipeline;
 import com.hazelcast.jet.pipeline.Sink;
-import com.hazelcast.jet.pipeline.Sinks;
 import com.hazelcast.jet.pipeline.Sources;
 import com.hazelcast.jet.pipeline.StreamSource;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
@@ -38,7 +37,6 @@ import java.util.Map;
 
 import static com.hazelcast.jet.core.JobStatus.FAILED;
 import static com.hazelcast.jet.core.JobStatus.RUNNING;
-import static com.hazelcast.jet.pipeline.ServiceFactories.sharedService;
 import static com.hazelcast.jet.tests.common.Util.getJobStatusWithRetry;
 import static com.hazelcast.jet.tests.common.Util.sleepMinutes;
 import static com.hazelcast.jet.tests.common.Util.waitForJobStatus;
@@ -81,13 +79,11 @@ public class JmsSourceTest extends AbstractSoakTest {
                 .destinationName(SOURCE_QUEUE + clusterName)
                 .build(msg -> Long.parseLong(((TextMessage) msg).getText().substring(MESSAGE_PREFIX_LENGTH)));
 
-        Sink<Long> sink = Sinks.fromProcessor("sinkVerificationProcessor", VerificationProcessor.supplier(clusterName));
+        Sink<Long> sink = VerificationProcessor.sink(clusterName);
 
         p.readFrom(source)
-         .withoutTimestamps()
-         .groupingKey(t -> 0L)
-         .mapUsingService(sharedService(ctw -> null), (c, k, v) -> v)
-         .writeTo(sink);
+                .withoutTimestamps()
+                .writeTo(sink);
 
         JobConfig jobConfig = new JobConfig()
                 .setName("JMS transactional source " + clusterName)

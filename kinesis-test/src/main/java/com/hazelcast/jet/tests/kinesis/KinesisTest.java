@@ -62,7 +62,6 @@ public class KinesisTest extends AbstractSoakTest {
     private long snapshotIntervalMs;
 
     public static void main(String[] args) throws Exception {
-        setRunLocal();
         System.setProperty(SDKGlobalConfiguration.AWS_CBOR_DISABLE_SYSTEM_PROPERTY, "true");
         new KinesisTest().run(args);
     }

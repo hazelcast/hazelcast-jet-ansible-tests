@@ -17,14 +17,18 @@
 package com.hazelcast.jet.tests.snapshot.jmssource;
 
 import com.hazelcast.jet.core.AbstractProcessor;
-import com.hazelcast.jet.core.BroadcastKey;
-import com.hazelcast.jet.core.ProcessorMetaSupplier;
 import com.hazelcast.jet.core.ProcessorSupplier;
+import com.hazelcast.jet.datamodel.Tuple2;
+import com.hazelcast.jet.impl.pipeline.SinkImpl;
+import com.hazelcast.jet.pipeline.Sink;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.map.IMap;
+
 import java.util.PriorityQueue;
 
-import static com.hazelcast.jet.core.ProcessorMetaSupplier.preferLocalParallelismOne;
+import static com.hazelcast.jet.core.ProcessorMetaSupplier.forceTotalParallelismOne;
+import static com.hazelcast.jet.datamodel.Tuple2.tuple2;
+import static com.hazelcast.jet.impl.pipeline.SinkImpl.Type.TOTAL_PARALLELISM_ONE;
 
 public class VerificationProcessor extends AbstractProcessor {
 
@@ -34,7 +38,6 @@ public class VerificationProcessor extends AbstractProcessor {
 
     private final String name;
 
-    private boolean processed;
     private long counter;
     private final PriorityQueue<Long> queue = new PriorityQueue<>();
     private ILogger logger;
@@ -52,11 +55,10 @@ public class VerificationProcessor extends AbstractProcessor {
 
     @Override
     protected boolean tryProcess(int ordinal, Object item) {
-        processed = true;
         long value = (Long) item;
         queue.offer(value);
         // try to verify head of verification queue
-        for (Long peeked; (peeked = queue.peek()) != null;) {
+        for (Long peeked; (peeked = queue.peek()) != null; ) {
             if (peeked > counter) {
                 // the item might arrive later
                 break;
@@ -68,15 +70,15 @@ public class VerificationProcessor extends AbstractProcessor {
                 queue.remove();
                 counter++;
                 map.put(name, counter);
-            } else if (peeked < counter) {
+            } else {
                 // duplicate key
-                throw new AssertionError(
-                        String.format("[%s] Duplicate key %d, but counter was %d", name, peeked, counter));
+                logger.warning(String.format("[%s] Duplicate key %d, but counter was %d", name, peeked, counter));
+                queue.remove();
             }
         }
         if (queue.size() >= QUEUE_SIZE_LIMIT) {
             throw new AssertionError(String.format("[%s] Queue size exceeded while waiting for the next "
-                    + "item. Limit=%d, expected next=%d, next in queue: %s, %s, %s, %s, ...",
+                            + "item. Limit=%d, expected next=%d, next in queue: %s, %s, %s, %s, ...",
                     name, QUEUE_SIZE_LIMIT, counter, queue.poll(), queue.poll(), queue.poll(), queue.poll()));
         }
         return true;
@@ -84,25 +86,25 @@ public class VerificationProcessor extends AbstractProcessor {
 
     @Override
     public boolean saveToSnapshot() {
-        if (!processed) {
-            return true;
-        }
         logger.info(String.format("saveToSnapshot counter: %d, size: %d, peek: %d",
                 counter, queue.size(), queue.peek()));
-        return tryEmitToSnapshot(BroadcastKey.broadcastKey(counter), queue);
+        return tryEmitToSnapshot(name, tuple2(counter, queue));
     }
 
     @Override
-    protected void restoreFromSnapshot(Object key, Object value) {
-        counter = (Long) ((BroadcastKey) key).key();
-        queue.addAll((PriorityQueue<Long>) value);
+    protected void restoreFromSnapshot(Object ignored, Object value) {
+        Tuple2<Long, PriorityQueue<Long>> tuple = (Tuple2) value;
+        counter = tuple.f0();
+        queue.addAll(tuple.f1());
 
         logger.info(String.format("restoreFromSnapshot counter: %d, size: %d, peek: %d",
                 counter, queue.size(), queue.peek()));
     }
 
-    static ProcessorMetaSupplier supplier(String name) {
-        return preferLocalParallelismOne(ProcessorSupplier.of(() -> new VerificationProcessor(name)));
+    static Sink<Long> sink(String name) {
+        return new SinkImpl<>(name,
+                forceTotalParallelismOne(ProcessorSupplier.of(() -> new VerificationProcessor(name)), name),
+                TOTAL_PARALLELISM_ONE);
     }
 
 }

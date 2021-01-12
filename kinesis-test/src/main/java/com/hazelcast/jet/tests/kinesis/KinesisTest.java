@@ -71,7 +71,7 @@ public class KinesisTest extends AbstractSoakTest {
     protected void init(JetInstance client) {
         awsConfig = new AwsConfig()
                 .withEndpoint(property("endpoint", "http://localhost:4566"))
-                .withRegion(property("region", Regions.US_EAST_1.getName()))
+                .withRegion(Regions.US_EAST_1.getName())
                 .withCredentials(property("accessKey", "accessKey"), property("secretKey", "secretKey"));
 
         shardCount = propertyInt("shardCount", DEFAULT_SHARD_COUNT);

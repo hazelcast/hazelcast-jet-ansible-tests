@@ -33,7 +33,7 @@ public class KinesisVerificationP extends AbstractProcessor {
 
     public static final String CONSUMED_MESSAGES_MAP_NAME = "KinesisTest_latestCounters";
 
-    private static final int QUEUE_SIZE_LIMIT = 4_000;
+    private static final int QUEUE_SIZE_LIMIT = 5_000;
     private static final int PRINT_LOG_ITEMS = 20_000;
 
     private final String clusterName;

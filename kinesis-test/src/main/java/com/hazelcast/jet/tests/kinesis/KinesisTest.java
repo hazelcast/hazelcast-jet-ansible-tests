@@ -48,7 +48,7 @@ public class KinesisTest extends AbstractSoakTest {
 
     private static final int DEFAULT_SHARD_COUNT = 1;
     private static final int DEFAULT_PARTITION_KEYS = 10_000;
-    private static final int DEFAULT_SLEEP_MS_BETWEEN_ITEM = 1;
+    private static final int DEFAULT_SLEEP_MS_BETWEEN_ITEM = 20;
     private static final int DEFAULT_SNAPSHOT_INTERVAL = 5000;
 
     private final List<String> streamNames = new ArrayList<>(2);
@@ -85,7 +85,11 @@ public class KinesisTest extends AbstractSoakTest {
     @Override
     protected void teardown(Throwable t) {
         for (String streamName : streamNames) {
-            helper.deleteStream(streamName);
+            try {
+                helper.deleteStream(streamName);
+            } catch (Exception e) {
+                logger.severe("Exception when deleting stream: " + streamName, e);
+            }
         }
     }
 
@@ -114,12 +118,10 @@ public class KinesisTest extends AbstractSoakTest {
         while (System.currentTimeMillis() - begin < durationInMillis) {
             if (getJobStatusWithRetry(readJob) == FAILED) {
                 writeJob.cancel();
-                writeJob.join();
                 readJob.join();
             }
             if (getJobStatusWithRetry(writeJob) == FAILED) {
                 readJob.cancel();
-                readJob.join();
                 writeJob.join();
             }
 

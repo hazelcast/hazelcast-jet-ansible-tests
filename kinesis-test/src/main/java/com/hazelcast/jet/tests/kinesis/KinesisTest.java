@@ -84,12 +84,18 @@ public class KinesisTest extends AbstractSoakTest {
 
     @Override
     protected void teardown(Throwable t) {
+        boolean failedToDeleteStream = false;
         for (String streamName : streamNames) {
             try {
                 helper.deleteStream(streamName);
             } catch (Exception e) {
                 logger.severe("Exception when deleting stream: " + streamName, e);
+                failedToDeleteStream = true;
             }
+        }
+        if (t == null && failedToDeleteStream) {
+            logger.severe("Failed to delete some streams, see above for the stacktrace");
+            System.exit(1);
         }
     }
 

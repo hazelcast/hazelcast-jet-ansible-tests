@@ -50,6 +50,7 @@ public class KinesisTest extends AbstractSoakTest {
     private static final int DEFAULT_PARTITION_KEYS = 10_000;
     private static final int DEFAULT_SLEEP_MS_BETWEEN_ITEM = 20;
     private static final int DEFAULT_SNAPSHOT_INTERVAL = 5000;
+    private static final int NEW_DATA_PROCESSED_CHECK_CYCLE = 10;
 
     private final List<String> streamNames = new ArrayList<>(2);
 
@@ -119,7 +120,7 @@ public class KinesisTest extends AbstractSoakTest {
 
         int cycles = 0;
         int latestCycle = 0;
-        int latestCheckedCount = 0;
+        long latestCheckedCount = 0;
         long begin = System.currentTimeMillis();
         while (System.currentTimeMillis() - begin < durationInMillis) {
             if (getJobStatusWithRetry(readJob) == FAILED) {
@@ -132,9 +133,10 @@ public class KinesisTest extends AbstractSoakTest {
             }
 
             cycles++;
-            if (cycles % 20 == 0) {
+            if (cycles % NEW_DATA_PROCESSED_CHECK_CYCLE == 0) {
                 latestCycle = cycles;
-                latestCheckedCount = checkNewDataProcessed(client, cluster, latestCheckedCount, 20);
+                latestCheckedCount =
+                        checkNewDataProcessed(client, cluster, latestCheckedCount, NEW_DATA_PROCESSED_CHECK_CYCLE);
                 log("Check for insert changes succeeded, latestCheckedCount: " + latestCheckedCount, cluster);
             }
             sleepMinutes(1);
@@ -207,9 +209,9 @@ public class KinesisTest extends AbstractSoakTest {
         return pipeline;
     }
 
-    private int checkNewDataProcessed(JetInstance client, String cluster, int latestChecked, int elapsedCycle) {
-        Map<String, Integer> latestCounterMap = client.getMap(KinesisVerificationP.CONSUMED_MESSAGES_MAP_NAME);
-        int latest = latestCounterMap.getOrDefault(cluster, 0);
+    private long checkNewDataProcessed(JetInstance client, String cluster, long latestChecked, int elapsedCycle) {
+        Map<String, Long> latestCounterMap = client.getMap(KinesisVerificationP.CONSUMED_MESSAGES_MAP_NAME);
+        long latest = latestCounterMap.getOrDefault(cluster, 0L);
         assertTrue(String.format("LatestChecked was: %d, but after %d minutes latest is %d",
                 latestChecked, elapsedCycle, latest), latest > latestChecked);
         return latest;

@@ -24,7 +24,6 @@ import com.hazelcast.jet.JobStateSnapshot;
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.config.ProcessingGuarantee;
 import com.hazelcast.jet.pipeline.Pipeline;
-import com.hazelcast.jet.pipeline.Sinks;
 import com.hazelcast.jet.pipeline.Sources;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
 import com.hazelcast.map.IMap;
@@ -36,7 +35,6 @@ import static com.hazelcast.jet.Util.mapPutEvents;
 import static com.hazelcast.jet.core.JobStatus.RUNNING;
 import static com.hazelcast.jet.core.JobStatus.SUSPENDED;
 import static com.hazelcast.jet.pipeline.JournalInitialPosition.START_FROM_OLDEST;
-import static com.hazelcast.jet.pipeline.ServiceFactories.sharedService;
 import static com.hazelcast.jet.tests.common.Util.sleepMillis;
 import static com.hazelcast.jet.tests.common.Util.sleepMinutes;
 import static com.hazelcast.jet.tests.common.Util.sleepSeconds;
@@ -134,11 +132,9 @@ public class JobManagementTest extends AbstractSoakTest {
 
     private static Pipeline pipeline() {
         Pipeline p = Pipeline.create();
-        p.readFrom(Sources.mapJournal(SOURCE, START_FROM_OLDEST, mapEventNewValue(), mapPutEvents()))
+        p.readFrom(Sources.<Long, Long, Long>mapJournal(SOURCE, START_FROM_OLDEST, mapEventNewValue(), mapPutEvents()))
          .withoutTimestamps()
-         .groupingKey(l -> 0L)
-         .mapUsingService(sharedService(ctw -> null), (c, k, v) -> v)
-         .writeTo(Sinks.fromProcessor("sink", VerificationProcessor.supplier()));
+         .writeTo(VerificationProcessor.sink());
         return p;
     }
 

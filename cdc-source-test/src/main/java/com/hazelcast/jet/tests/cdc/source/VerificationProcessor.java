@@ -56,6 +56,7 @@ public class VerificationProcessor extends AbstractProcessor {
         int value = (Integer) item;
         queue.offer(value);
         // try to verify head of verification queue
+        long counterBeforeProcess = counter;
         for (Integer peeked; (peeked = queue.peek()) != null;) {
             if (peeked > counter) {
                 // the item might arrive later
@@ -67,10 +68,14 @@ public class VerificationProcessor extends AbstractProcessor {
                 // correct head of queue
                 queue.remove();
                 counter++;
-                map.put(name, counter);
-            } else if (peeked < counter) {
+            } else {
                 // duplicate key, ignore
+                logger.warning(String.format("[%s] Duplicate key %d, but counter was %d", name, peeked, counter));
+                queue.remove();
             }
+        }
+        if (counter != counterBeforeProcess) {
+            map.setAsync(name, counter);
         }
         if (queue.size() >= QUEUE_SIZE_LIMIT) {
             throw new AssertionError(String.format("[%s] Queue size exceeded while waiting for the next "

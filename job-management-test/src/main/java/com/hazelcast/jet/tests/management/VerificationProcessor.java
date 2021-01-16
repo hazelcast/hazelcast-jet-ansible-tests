@@ -17,20 +17,23 @@
 package com.hazelcast.jet.tests.management;
 
 import com.hazelcast.jet.core.AbstractProcessor;
-import com.hazelcast.jet.core.BroadcastKey;
-import com.hazelcast.jet.core.ProcessorMetaSupplier;
 import com.hazelcast.jet.core.ProcessorSupplier;
+import com.hazelcast.jet.datamodel.Tuple2;
+import com.hazelcast.jet.impl.pipeline.SinkImpl;
+import com.hazelcast.jet.pipeline.Sink;
 import com.hazelcast.logging.ILogger;
 
 import java.util.PriorityQueue;
 
-import static com.hazelcast.jet.core.ProcessorMetaSupplier.preferLocalParallelismOne;
+import static com.hazelcast.jet.core.ProcessorMetaSupplier.forceTotalParallelismOne;
+import static com.hazelcast.jet.impl.pipeline.SinkImpl.Type.TOTAL_PARALLELISM_ONE;
 
 public final class VerificationProcessor extends AbstractProcessor {
 
+    public static final String SINK_NAME = "jobManagementSink";
+
     private static final int MAX_QUEUE_SIZE = 50_000;
     private final PriorityQueue<Long> queue = new PriorityQueue<>();
-    private boolean processed;
     private long counter;
     private ILogger logger;
 
@@ -44,7 +47,6 @@ public final class VerificationProcessor extends AbstractProcessor {
 
     @Override
     protected boolean tryProcess(int ordinal, Object item) {
-        processed = true;
         long value = (Long) item;
         if (value < counter) {
             logger.info("discard stale value: " + value + ", counter: " + counter);
@@ -68,17 +70,15 @@ public final class VerificationProcessor extends AbstractProcessor {
 
     @Override
     public boolean saveToSnapshot() {
-        if (!processed) {
-            return true;
-        }
         logger.info(String.format("saveToSnapshot counter: %d, size: %d, peek: %d", counter, queue.size(), queue.peek()));
-        return tryEmitToSnapshot(BroadcastKey.broadcastKey(counter), queue);
+        return tryEmitToSnapshot(SINK_NAME, Tuple2.tuple2(counter, queue));
     }
 
     @Override
-    protected void restoreFromSnapshot(Object key, Object value) {
-        counter = (Long) ((BroadcastKey) key).key();
-        queue.addAll((PriorityQueue<Long>) value);
+    protected void restoreFromSnapshot(Object ignored, Object value) {
+        Tuple2<Long, PriorityQueue<Long>> tuple = (Tuple2) value;
+        counter = tuple.f0();
+        queue.addAll(tuple.f1());
 
         logger.info(String.format("restoreFromSnapshot counter: %d, size: %d, peek: %d",
                 counter, queue.size(), queue.peek()));
@@ -95,8 +95,10 @@ public final class VerificationProcessor extends AbstractProcessor {
         }
     }
 
-    static ProcessorMetaSupplier supplier() {
-        return preferLocalParallelismOne(ProcessorSupplier.of(VerificationProcessor::new));
+    static Sink<Long> sink() {
+        return new SinkImpl<>(SINK_NAME,
+                forceTotalParallelismOne(ProcessorSupplier.of(VerificationProcessor::new), SINK_NAME),
+                TOTAL_PARALLELISM_ONE);
     }
 }
 

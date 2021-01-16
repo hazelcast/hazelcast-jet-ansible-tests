@@ -42,6 +42,7 @@ import static com.hazelcast.jet.tests.common.Util.entry;
 import static com.hazelcast.jet.tests.common.Util.getJobStatusWithRetry;
 import static com.hazelcast.jet.tests.common.Util.sleepMillis;
 import static com.hazelcast.jet.tests.common.Util.sleepMinutes;
+import static com.hazelcast.jet.tests.common.Util.sleepSeconds;
 import static com.hazelcast.jet.tests.common.Util.waitForJobStatus;
 
 public class KinesisTest extends AbstractSoakTest {
@@ -51,6 +52,7 @@ public class KinesisTest extends AbstractSoakTest {
     private static final int DEFAULT_SLEEP_MS_BETWEEN_ITEM = 20;
     private static final int DEFAULT_SNAPSHOT_INTERVAL = 5000;
     private static final int NEW_DATA_PROCESSED_CHECK_CYCLE = 10;
+    private static final int ASSERTION_RETRY_COUNT = 60;
 
     private final List<String> streamNames = new ArrayList<>(2);
 
@@ -211,7 +213,15 @@ public class KinesisTest extends AbstractSoakTest {
 
     private long checkNewDataProcessed(JetInstance client, String cluster, long latestChecked, int elapsedCycle) {
         Map<String, Long> latestCounterMap = client.getMap(KinesisVerificationP.CONSUMED_MESSAGES_MAP_NAME);
-        long latest = latestCounterMap.getOrDefault(cluster, 0L);
+        long latest = 0;
+        for (int i = 0; i < ASSERTION_RETRY_COUNT; i++) {
+            Long latestLong = latestCounterMap.get(cluster);
+            if (latestLong != null) {
+                latest = latestLong;
+                break;
+            }
+            sleepSeconds(1);
+        }
         assertTrue(String.format("LatestChecked was: %d, but after %d minutes latest is %d",
                 latestChecked, elapsedCycle, latest), latest > latestChecked);
         return latest;

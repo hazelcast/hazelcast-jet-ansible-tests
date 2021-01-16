@@ -24,6 +24,7 @@
         <module>job-level-serializers-test</module>
         <module>job-management-test</module>
         <module>kafka-session-window-test</module>
+        <module>kinesis-test</module>
         <module>large-snapshot-chunk-test</module>
         <module>python-test</module>
         <module>remote-controller-client</module>

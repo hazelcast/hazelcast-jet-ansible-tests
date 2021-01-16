@@ -17,8 +17,8 @@
 package com.hazelcast.jet.tests.kinesis;
 
 import com.hazelcast.jet.core.AbstractProcessor;
+import com.hazelcast.jet.core.BroadcastKey;
 import com.hazelcast.jet.core.ProcessorSupplier;
-import com.hazelcast.jet.datamodel.Tuple2;
 import com.hazelcast.jet.impl.pipeline.SinkImpl;
 import com.hazelcast.jet.pipeline.Sink;
 import com.hazelcast.logging.ILogger;
@@ -91,14 +91,13 @@ public class KinesisVerificationP extends AbstractProcessor {
     public boolean saveToSnapshot() {
         logger.info(String.format("[%s] saveToSnapshot counter: %d, size: %d, peek: %d",
                 clusterName, counter, queue.size(), queue.peek()));
-        return tryEmitToSnapshot(clusterName, Tuple2.tuple2(counter, queue));
+        return tryEmitToSnapshot(BroadcastKey.broadcastKey(counter), queue);
     }
 
     @Override
-    protected void restoreFromSnapshot(Object ignored, Object value) {
-        Tuple2<Long, PriorityQueue<Long>> tuple = (Tuple2) value;
-        counter = tuple.f0();
-        queue.addAll(tuple.f1());
+    protected void restoreFromSnapshot(Object key, Object value) {
+        counter = (Long) ((BroadcastKey) key).key();
+        queue.addAll((PriorityQueue<Long>) value);
 
         logger.info(String.format("[%s] restoreFromSnapshot counter: %d, size: %d, peek: %d",
                 clusterName, counter, queue.size(), queue.peek()));

@@ -105,9 +105,8 @@ public class KinesisVerificationP extends AbstractProcessor {
     }
 
     static Sink<String> sink(String cluster) {
-        String sinkName = "KinesisVerificationSink";
-        return new SinkImpl<>(sinkName,
-                forceTotalParallelismOne(ProcessorSupplier.of(() -> new KinesisVerificationP(cluster)), sinkName),
+        return new SinkImpl<>(cluster,
+                forceTotalParallelismOne(ProcessorSupplier.of(() -> new KinesisVerificationP(cluster)), cluster),
                 TOTAL_PARALLELISM_ONE);
     }
 

@@ -16,6 +16,7 @@
 
 package com.hazelcast.jet.tests.cdc.source;
 
+import com.hazelcast.core.HazelcastInstanceNotActiveException;
 import com.hazelcast.jet.core.AbstractProcessor;
 import com.hazelcast.jet.core.BroadcastKey;
 import com.hazelcast.jet.core.ProcessorMetaSupplier;
@@ -25,6 +26,7 @@ import com.hazelcast.map.IMap;
 import java.util.PriorityQueue;
 
 import static com.hazelcast.jet.core.ProcessorMetaSupplier.preferLocalParallelismOne;
+import static java.lang.String.format;
 
 public class VerificationProcessor extends AbstractProcessor {
 
@@ -76,7 +78,12 @@ public class VerificationProcessor extends AbstractProcessor {
             }
         }
         if (counter != counterBeforeProcess) {
-            map.setAsync(name, counter);
+            try {
+                map.setAsync(name, counter);
+            } catch (HazelcastInstanceNotActiveException e) {
+                logger.warning(format("Setting the counter[%s] to %d failed with instance not active exception",
+                        name, counter), e);
+            }
         }
         if (queue.size() >= QUEUE_SIZE_LIMIT) {
             throw new AssertionError(String.format("[%s] Queue size exceeded while waiting for the next "

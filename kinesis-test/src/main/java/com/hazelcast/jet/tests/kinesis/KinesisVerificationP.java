@@ -16,6 +16,7 @@
 
 package com.hazelcast.jet.tests.kinesis;
 
+import com.hazelcast.core.HazelcastInstanceNotActiveException;
 import com.hazelcast.jet.core.AbstractProcessor;
 import com.hazelcast.jet.core.ProcessorSupplier;
 import com.hazelcast.jet.datamodel.Tuple2;
@@ -28,6 +29,7 @@ import java.util.PriorityQueue;
 
 import static com.hazelcast.jet.core.ProcessorMetaSupplier.forceTotalParallelismOne;
 import static com.hazelcast.jet.impl.pipeline.SinkImpl.Type.TOTAL_PARALLELISM_ONE;
+import static java.lang.String.format;
 
 public class KinesisVerificationP extends AbstractProcessor {
 
@@ -58,6 +60,7 @@ public class KinesisVerificationP extends AbstractProcessor {
         long value = Long.parseLong(item.toString());
         queue.add(value);
         // try to verify head of verification queue
+        long counterBeforeProcess = counter;
         for (Long peeked; (peeked = queue.peek()) != null; ) {
             if (peeked > counter) {
                 // the item might arrive later
@@ -69,12 +72,19 @@ public class KinesisVerificationP extends AbstractProcessor {
                 // correct head of queue
                 queue.remove();
                 counter++;
-                map.setAsync(clusterName, counter);
             } else {
                 // duplicate key, remove
                 queue.remove();
                 logger.info(String.format("[%s] duplicate key, ignored. peeked: %d, counter: %d, item: %d",
                         clusterName, peeked, counter, value));
+            }
+        }
+        if (counter != counterBeforeProcess) {
+            try {
+                map.setAsync(clusterName, counter);
+            } catch (HazelcastInstanceNotActiveException e) {
+                logger.warning(format("Setting the counter[%s] to %d failed with instance not active exception",
+                        clusterName, counter), e);
             }
         }
         if (queue.size() >= QUEUE_SIZE_LIMIT) {

@@ -16,6 +16,7 @@
 
 package com.hazelcast.jet.tests.snapshot.jmssource;
 
+import com.hazelcast.core.HazelcastInstanceNotActiveException;
 import com.hazelcast.jet.core.AbstractProcessor;
 import com.hazelcast.jet.core.ProcessorSupplier;
 import com.hazelcast.jet.datamodel.Tuple2;
@@ -29,6 +30,7 @@ import java.util.PriorityQueue;
 import static com.hazelcast.jet.core.ProcessorMetaSupplier.forceTotalParallelismOne;
 import static com.hazelcast.jet.datamodel.Tuple2.tuple2;
 import static com.hazelcast.jet.impl.pipeline.SinkImpl.Type.TOTAL_PARALLELISM_ONE;
+import static java.lang.String.format;
 
 public class VerificationProcessor extends AbstractProcessor {
 
@@ -65,22 +67,27 @@ public class VerificationProcessor extends AbstractProcessor {
                 break;
             } else if (peeked == counter) {
                 if (counter % PRINT_LOG_ITEMS == 0) {
-                    logger.info(String.format("[%s] Processed correctly item %d", name, counter));
+                    logger.info(format("[%s] Processed correctly item %d", name, counter));
                 }
                 // correct head of queue
                 queue.remove();
                 counter++;
             } else {
                 // duplicate key
-                logger.warning(String.format("[%s] Duplicate key %d, but counter was %d", name, peeked, counter));
+                logger.warning(format("[%s] Duplicate key %d, but counter was %d", name, peeked, counter));
                 queue.remove();
             }
         }
         if (counter != counterBeforeProcess) {
-            map.setAsync(name, counter);
+            try {
+                map.setAsync(name, counter);
+            } catch (HazelcastInstanceNotActiveException e) {
+                logger.warning(format("Setting the counter[%s] to %d failed with instance not active exception",
+                        name, counter), e);
+            }
         }
         if (queue.size() >= QUEUE_SIZE_LIMIT) {
-            throw new AssertionError(String.format("[%s] Queue size exceeded while waiting for the next "
+            throw new AssertionError(format("[%s] Queue size exceeded while waiting for the next "
                             + "item. Limit=%d, expected next=%d, next in queue: %s, %s, %s, %s, ...",
                     name, QUEUE_SIZE_LIMIT, counter, queue.poll(), queue.poll(), queue.poll(), queue.poll()));
         }
@@ -89,7 +96,7 @@ public class VerificationProcessor extends AbstractProcessor {
 
     @Override
     public boolean saveToSnapshot() {
-        logger.info(String.format("saveToSnapshot counter: %d, size: %d, peek: %d",
+        logger.info(format("saveToSnapshot counter: %d, size: %d, peek: %d",
                 counter, queue.size(), queue.peek()));
         return tryEmitToSnapshot(name, tuple2(counter, queue));
     }
@@ -100,7 +107,7 @@ public class VerificationProcessor extends AbstractProcessor {
         counter = tuple.f0();
         queue.addAll(tuple.f1());
 
-        logger.info(String.format("restoreFromSnapshot counter: %d, size: %d, peek: %d",
+        logger.info(format("restoreFromSnapshot counter: %d, size: %d, peek: %d",
                 counter, queue.size(), queue.peek()));
     }
 

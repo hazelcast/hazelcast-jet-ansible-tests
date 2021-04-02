@@ -16,8 +16,8 @@
 
 package com.hazelcast.jet.tests.largesnapshotchunk;
 
+import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.internal.nio.Bits;
-import com.hazelcast.jet.JetInstance;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.map.IMap;
 
@@ -39,18 +39,18 @@ class LargeSnapshotChunkProducer {
 
     private volatile boolean shutdown;
 
-    LargeSnapshotChunkProducer(ILogger logger, JetInstance instance, int windowSize, IMap<String, int[]> map) {
+    LargeSnapshotChunkProducer(ILogger logger, HazelcastInstance instance, int windowSize, IMap<String, int[]> map) {
         this.logger = logger;
         this.windowSize = windowSize;
         this.map = map;
         this.thread = new Thread(this::run);
 
         // find one string key for each partition
-        int partitionCount = instance.getHazelcastInstance().getPartitionService().getPartitions().size();
+        int partitionCount = instance.getPartitionService().getPartitions().size();
         keys = new String[partitionCount];
         for (int i = 0; partitionCount > 0; i++) {
             String key = "key-" + i;
-            int partition = instance.getHazelcastInstance().getPartitionService().getPartition(key).getPartitionId();
+            int partition = instance.getPartitionService().getPartition(key).getPartitionId();
             if (keys[partition] == null) {
                 keys[partition] = key;
                 partitionCount--;

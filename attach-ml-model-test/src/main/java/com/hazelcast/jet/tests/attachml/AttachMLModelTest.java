@@ -16,7 +16,7 @@
 
 package com.hazelcast.jet.tests.attachml;
 
-import com.hazelcast.jet.JetInstance;
+import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.core.ProcessorMetaSupplier;
 import com.hazelcast.jet.pipeline.Pipeline;
@@ -64,13 +64,13 @@ public class AttachMLModelTest extends AbstractSoakTest {
     }
 
     @Override
-    protected void init(JetInstance client) throws Exception {
+    protected void init(HazelcastInstance client) throws Exception {
         ml10mbDataPath = property("ml10mbDataPath", ML_DATA_PATH_DEFAULT);
         ml100mbDataPath = property("ml100mbDataPath", ML_LARGE_DATA_PATH_DEFAULT);
     }
 
     @Override
-    protected void test(JetInstance client, String name) throws Throwable {
+    protected void test(HazelcastInstance client, String name) throws Throwable {
         Throwable[] exceptions = new Throwable[2];
         ExecutorService executorService = Executors.newFixedThreadPool(2);
         executorService.execute(() -> {
@@ -106,7 +106,7 @@ public class AttachMLModelTest extends AbstractSoakTest {
         }
     }
 
-    protected void test10mbFile(JetInstance client) throws IOException {
+    protected void test10mbFile(HazelcastInstance client) throws IOException {
         Path mlData = Paths.get(ml10mbDataPath);
         assertTrue("testing ML 10MB data does not exists", Files.exists(mlData));
         long count = Files.lines(mlData).count();
@@ -120,7 +120,7 @@ public class AttachMLModelTest extends AbstractSoakTest {
             JobConfig jobConfig = new JobConfig();
             jobConfig.setName("AttachMLModelTest_10mbFile" + jobCount);
             jobConfig.attachFile(ml10mbDataPath, MODEL + jobCount);
-            client.newJob(pipeline10mbFile(jobCount), jobConfig).join();
+            client.getJet().newJob(pipeline10mbFile(jobCount), jobConfig).join();
             if (jobCount % LOG_JOB_COUNT_THRESHOLD == 0) {
                 logger.info("Job count 10MB: " + jobCount);
             }
@@ -131,7 +131,7 @@ public class AttachMLModelTest extends AbstractSoakTest {
         logger.info("Final job count 10MB: " + jobCount);
     }
 
-    protected void test100mbDirectory(JetInstance client) throws IOException {
+    protected void test100mbDirectory(HazelcastInstance client) throws IOException {
         Path mlDir = Paths.get(ml100mbDataPath);
         assertTrue("testing ML 100MB data does not exists", Files.exists(mlDir));
         assertTrue(Files.isDirectory(mlDir));
@@ -149,7 +149,7 @@ public class AttachMLModelTest extends AbstractSoakTest {
             JobConfig jobConfig = new JobConfig();
             jobConfig.setName("AttachMLModelTest_100mbDirectory" + jobCount);
             jobConfig.attachDirectory(ml100mbDataPath, MODEL_LARGE + jobCount);
-            client.newJob(pipeline100mbDirectory(jobCount), jobConfig).join();
+            client.getJet().newJob(pipeline100mbDirectory(jobCount), jobConfig).join();
             if (jobCount % LOG_JOB_COUNT_LARGE_FILE_THRESHOLD == 0) {
                 logger.info("Job count 100MB: " + jobCount);
             }

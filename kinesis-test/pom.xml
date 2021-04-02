@@ -9,7 +9,7 @@
     <parent>
         <groupId>com.hazelcast.jet.tests</groupId>
         <artifactId>hazelcast-jet-ansible-tests</artifactId>
-        <version>4.5-SNAPSHOT</version>
+        <version>5.0-SNAPSHOT</version>
     </parent>
 
     <properties>
@@ -22,12 +22,12 @@
             <groupId>com.hazelcast.jet</groupId>
             <artifactId>hazelcast-jet-kinesis</artifactId>
             <classifier>jar-with-dependencies</classifier>
-            <version>${jet.version}</version>
+            <version>${hazelcast.version}</version>
         </dependency>
         <dependency>
             <groupId>com.hazelcast.jet.tests</groupId>
             <artifactId>soak-tests-common</artifactId>
-            <version>${jet.version}</version>
+            <version>${hazelcast.version}</version>
         </dependency>
     </dependencies>
 

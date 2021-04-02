@@ -52,7 +52,7 @@ public class VerificationProcessor extends AbstractProcessor {
     @Override
     protected void init(Context context) {
         logger = context.logger();
-        map = context.jetInstance().getMap(CONSUMED_MESSAGES_MAP_NAME);
+        map = context.hazelcastInstance().getMap(CONSUMED_MESSAGES_MAP_NAME);
     }
 
     @Override

@@ -16,7 +16,7 @@
 
 package com.hazelcast.jet.tests.hdfs;
 
-import com.hazelcast.jet.JetInstance;
+import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.core.ProcessorMetaSupplier;
 import com.hazelcast.jet.hadoop.HadoopSinks;
@@ -75,7 +75,7 @@ public class HdfsWordCountTest extends AbstractSoakTest {
     }
 
     @Override
-    public void init(JetInstance client) {
+    public void init(HazelcastInstance client) {
         long timestamp = System.nanoTime();
         hdfsUri = property("hdfs_name_node", "hdfs://localhost:8020");
         inputPath = property("hdfs_input_path", "hdfs-input-") + timestamp;
@@ -95,11 +95,11 @@ public class HdfsWordCountTest extends AbstractSoakTest {
         jobConfig.addClass(WordGenerator.class);
         jobConfig.addClass(WordGenerator.MetaSupplier.class);
 
-        client.newJob(pipeline, jobConfig).join();
+        client.getJet().newJob(pipeline, jobConfig).join();
     }
 
     @Override
-    public void test(JetInstance client, String name) throws Exception {
+    public void test(HazelcastInstance client, String name) throws Exception {
         long begin = System.currentTimeMillis();
         ExecutorService executorService = Executors.newFixedThreadPool(threadCount);
         for (int i = 0; i < threadCount; i++) {
@@ -126,10 +126,10 @@ public class HdfsWordCountTest extends AbstractSoakTest {
     protected void teardown(Throwable t) throws Exception {
     }
 
-    private void executeJob(JetInstance client, int threadIndex) {
+    private void executeJob(HazelcastInstance client, int threadIndex) {
         JobConfig jobConfig = new JobConfig();
         jobConfig.setName("Hdfs WordCount Test [" + threadIndex + "]");
-        client.newJob(pipeline(threadIndex), jobConfig).join();
+        client.getJet().newJob(pipeline(threadIndex), jobConfig).join();
     }
 
     private Pipeline pipeline(int threadIndex) {

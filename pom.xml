@@ -7,7 +7,7 @@
     <groupId>com.hazelcast.jet.tests</groupId>
     <artifactId>hazelcast-jet-ansible-tests</artifactId>
     <packaging>pom</packaging>
-    <version>4.5-SNAPSHOT</version>
+    <version>5.0-SNAPSHOT</version>
     <description>Soak Tests for Hazelcast Jet</description>
     <modules>
         <module>async-transform-test</module>
@@ -41,11 +41,14 @@
         <module>grpc-test</module>
         <module>sort-test</module>
         <module>file-ingestion-test</module>
+        <module>sql-map-test</module>
+        <module>sql-kafka-test</module>
+        <module>sql-join-test</module>
     </modules>
 
     <properties>
         <jdk.version>1.8</jdk.version>
-        <jet.version>4.5-SNAPSHOT</jet.version>
+        <hazelcast.version>5.0-SNAPSHOT</hazelcast.version>
         <main.basedir>${project.basedir}</main.basedir>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <hadoop.version>3.3.0</hadoop.version>
@@ -59,9 +62,9 @@
 
     <dependencies>
         <dependency>
-            <groupId>com.hazelcast.jet</groupId>
-            <artifactId>hazelcast-jet</artifactId>
-            <version>${jet.version}</version>
+            <groupId>com.hazelcast</groupId>
+            <artifactId>hazelcast</artifactId>
+            <version>${hazelcast.version}</version>
         </dependency>
         <dependency>
             <groupId>junit</groupId>
@@ -131,11 +134,11 @@
         </repository>
         <repository>
             <id>main-repo</id>
-            <url>http://repo1.maven.org/maven2/</url>
+            <url>https://repo1.maven.org/maven2/</url>
         </repository>
         <repository>
             <id>backup-repo</id>
-            <url>http://repo2.maven.org/maven2/</url>
+            <url>https://repo2.maven.org/maven2/</url>
         </repository>
         <repository>
             <id>release-repository</id>

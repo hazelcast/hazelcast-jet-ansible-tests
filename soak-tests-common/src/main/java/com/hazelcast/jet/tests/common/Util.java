@@ -16,10 +16,11 @@
 
 package com.hazelcast.jet.tests.common;
 
-import com.hazelcast.jet.JetInstance;
+import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.core.JobStatus;
 
+import java.time.Duration;
 import java.util.AbstractMap;
 import java.util.Map;
 import java.util.concurrent.CancellationException;
@@ -67,9 +68,9 @@ public final class Util {
                 expectedStatus, job.getStatus()));
     }
 
-    public static void cancelJobAndJoin(JetInstance jet, Job job) {
+    public static void cancelJobAndJoin(HazelcastInstance client, Job job) {
         // workaround, it should be fixed in Jet 3.2.1
-        Job jobForCancelling = jet.getJob(job.getName());
+        Job jobForCancelling = client.getJet().getJob(job.getName());
         jobForCancelling.cancel();
         try {
             jobForCancelling.join();
@@ -101,5 +102,14 @@ public final class Util {
             }
             System.setProperty(split[0], split[1]);
         }
+    }
+
+    public static String getTimeElapsed(long begin) {
+        Duration timeElapsed = Duration.ofMillis(System.currentTimeMillis() - begin);
+        long days = timeElapsed.toDays();
+        long hours = timeElapsed.minusDays(days).toHours();
+        long minutes = timeElapsed.minusDays(days).minusHours(hours).toMinutes();
+        long seconds = timeElapsed.minusDays(days).minusHours(hours).minusMinutes(minutes).toMillis() / 1000L;
+        return String.format("%dd, %dh, %dm, %ds", days, hours, minutes, seconds);
     }
 }

@@ -17,7 +17,7 @@
 package com.hazelcast.jet.tests.joblevelserializers;
 
 import com.hazelcast.collection.IList;
-import com.hazelcast.jet.JetInstance;
+import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.pipeline.Pipeline;
 import com.hazelcast.jet.pipeline.Sinks;
@@ -50,12 +50,12 @@ public class JobLevelSerializersTest extends AbstractSoakTest {
     }
 
     @Override
-    protected void init(JetInstance client) throws Exception {
+    protected void init(HazelcastInstance client) throws Exception {
         sourceListSize = propertyInt("sourceListSize", DEFAULT_SOURCE_LIST_SIZE);
     }
 
     @Override
-    protected void test(JetInstance client, String name) throws Throwable {
+    protected void test(HazelcastInstance client, String name) throws Throwable {
         prepareExpectedList();
         prepareSourceData(client);
 
@@ -66,7 +66,7 @@ public class JobLevelSerializersTest extends AbstractSoakTest {
             jobConfig.setName("JobLevelSerializersTest" + jobCount);
             jobConfig.registerSerializer(IntValue.class, IntValueSerializer.class);
 
-            client.newJob(pipeline(jobCount), jobConfig).join();
+            client.getJet().newJob(pipeline(jobCount), jobConfig).join();
 
             verifySink(client, jobCount);
             if (jobCount % LOG_JOB_COUNT_THRESHOLD == 0) {
@@ -84,7 +84,7 @@ public class JobLevelSerializersTest extends AbstractSoakTest {
     protected void teardown(Throwable t) throws Exception {
     }
 
-    private void prepareSourceData(JetInstance client) {
+    private void prepareSourceData(HazelcastInstance client) {
         List<Integer> list = client.getList(SOURCE_LIST_NAME);
         list.addAll(expectedList);
     }
@@ -95,7 +95,7 @@ public class JobLevelSerializersTest extends AbstractSoakTest {
                 .collect(Collectors.toList());
     }
 
-    private void verifySink(JetInstance client, long jobCount) {
+    private void verifySink(HazelcastInstance client, long jobCount) {
         IList<Integer> list = client.getList(SINK_LIST_NAME + jobCount);
         List<Integer> copiedList = new ArrayList<>(list);
         Collections.sort(copiedList);

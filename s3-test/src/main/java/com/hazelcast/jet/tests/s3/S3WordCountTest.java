@@ -17,8 +17,8 @@
 package com.hazelcast.jet.tests.s3;
 
 import com.hazelcast.client.UndefinedErrorCodeException;
+import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.function.SupplierEx;
-import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.impl.util.ExceptionUtil;
 import com.hazelcast.jet.pipeline.Pipeline;
@@ -82,7 +82,7 @@ public class S3WordCountTest extends AbstractSoakTest {
     }
 
     @Override
-    protected void init(JetInstance client) {
+    protected void init(HazelcastInstance client) {
         bucketName = property("bucketName", DEFAULT_BUCKET_NAME);
         directoryName = property("directoryName", DEFAULT_DIRECTORY_NAME) + "/";
         result = directoryName + RESULTS_PREFIX;
@@ -100,11 +100,11 @@ public class S3WordCountTest extends AbstractSoakTest {
                 WordGenerator.metaSupplier(distinct, totalWordCount)))
          .writeTo(S3Sinks.s3(bucketName, directoryName, UTF_8, clientSupplier(), Object::toString));
 
-        client.newJob(p).join();
+        client.getJet().newJob(p).join();
     }
 
     @Override
-    protected void test(JetInstance client, String name) {
+    protected void test(HazelcastInstance client, String name) {
         long begin = System.currentTimeMillis();
         int jobNumber = 0;
         int socketTimeoutNumber = 0;
@@ -112,7 +112,7 @@ public class S3WordCountTest extends AbstractSoakTest {
             try {
                 JobConfig jobConfig = new JobConfig();
                 jobConfig.setName(name + "-" + jobNumber);
-                client.newJob(pipeline(), jobConfig).join();
+                client.getJet().newJob(pipeline(), jobConfig).join();
                 verify(jobNumber);
                 sleepSeconds(sleepSeconds);
             } catch (Throwable e) {

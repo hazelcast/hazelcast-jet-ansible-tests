@@ -41,6 +41,7 @@
         <module>grpc-test</module>
         <module>sort-test</module>
         <module>file-ingestion-test</module>
+        <module>sql-imap-soak-test</module>
     </modules>
 
     <properties>

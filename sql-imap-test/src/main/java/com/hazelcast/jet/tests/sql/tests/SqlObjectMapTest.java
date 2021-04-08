@@ -21,15 +21,21 @@ import com.hazelcast.jet.JetInstance;
 
 //TODO: Create SQL tests for different InMemoryFormat
 //TODO: Create SQL tests for Kafka as a data source
-public class SqlObjectImapSoakTest extends AbstractSqlSoakTest {
+public class SqlObjectMapTest extends AbstractSqlTest {
 
-    private static final String MAP_NAME = "map_object";
+    private static final String MAP_NAME = "object_sql_map";
 
     private HazelcastInstance hazelcastInstance;
+
+    public static void main(String[] args) throws Exception{
+        new SqlObjectMapTest().run(args);
+    }
 
     @Override
     protected void init(JetInstance client){
         hazelcastInstance = client.getHazelcastInstance();
+        dataSetSize = propertyInt("dataSetSize", DEFAULT_DATA_SET_SIZE);
+        queryTimeout = propertyInt("queryTimeout", DEFAULT_QUERY_TIMEOUT_MILLIS);
         populateMap(hazelcastInstance, MAP_NAME);
     }
 

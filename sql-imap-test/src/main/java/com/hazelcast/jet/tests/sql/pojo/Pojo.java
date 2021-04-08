@@ -54,8 +54,6 @@ public class Pojo implements Serializable {
 
     private List<Object> objectVal;
 
-    private Object nullVal;
-
     public Pojo(long val) {
         booleanVal = val % 2 == 0;
 

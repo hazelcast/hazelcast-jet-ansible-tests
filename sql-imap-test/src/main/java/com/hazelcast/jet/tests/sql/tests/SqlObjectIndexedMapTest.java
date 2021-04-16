@@ -19,15 +19,15 @@ package com.hazelcast.jet.tests.sql.tests;
 import com.hazelcast.config.InMemoryFormat;
 import com.hazelcast.jet.JetInstance;
 
-public class SqlObjectMapTest extends AbstractSqlMapTest{
+public class SqlObjectIndexedMapTest extends AbstractSqlMapTest{
 
     public static final String OBJECT_MAP_NAME = "object_sql_map";
 
     public static void main(String[] args) throws Exception {
-        new SqlObjectMapTest(OBJECT_MAP_NAME, false).run(args);
+        new SqlObjectIndexedMapTest(OBJECT_MAP_NAME,true).run(args);
     }
 
-    public SqlObjectMapTest(String mapName, boolean isIndexed) {
+    public SqlObjectIndexedMapTest(String mapName, boolean isIndexed) {
         super(mapName, isIndexed);
     }
 

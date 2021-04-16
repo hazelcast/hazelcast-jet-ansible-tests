@@ -16,7 +16,10 @@
 
 package com.hazelcast.jet.tests.sql.tests;
 
+import com.hazelcast.config.*;
 import com.hazelcast.core.HazelcastInstance;
+import com.hazelcast.internal.util.UuidUtil;
+import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
 import com.hazelcast.jet.tests.sql.pojo.Key;
 import com.hazelcast.jet.tests.sql.pojo.Pojo;
@@ -31,21 +34,29 @@ import java.util.List;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
 
-public abstract class AbstractSqlTest extends AbstractSoakTest {
+public abstract class AbstractSqlMapTest extends AbstractSoakTest {
 
     protected static final int DEFAULT_DATA_SET_SIZE = 65536;
     protected static final int DEFAULT_QUERY_TIMEOUT_MILLIS = 100;
 
-    protected int dataSetSize;
-    protected int queryTimeout;
+    protected int dataSetSize = propertyInt("dataSetSize", DEFAULT_DATA_SET_SIZE);
+    protected int queryTimeout = propertyInt("queryTimeout", DEFAULT_QUERY_TIMEOUT_MILLIS);
 
+    protected HazelcastInstance hazelcastInstance;
+    private String mapName;
+    boolean isIndexed;
     private long begin;
     private long onePercentInMillis;
     private long currentIteration = 0;
     private long currentQueryCount = 0;
     private long lastQueryCount = 0;
 
-    protected void runTest(HazelcastInstance hazelcastInstance, String mapName) {
+    public AbstractSqlMapTest(String mapName, boolean isIndexed) {
+        this.mapName = mapName;
+        this.isIndexed = isIndexed;
+    }
+
+    protected void runTest() {
         int index = 0;
         begin = System.currentTimeMillis();
         onePercentInMillis = durationInMillis / 100;
@@ -53,7 +64,7 @@ public abstract class AbstractSqlTest extends AbstractSoakTest {
         SqlService sql = hazelcastInstance.getSql();
         while (System.currentTimeMillis() - begin < durationInMillis) {
             //Execute query
-            String query = getSqlQuery(index++, mapName);
+            String query = getSqlQuery(index++);
             SqlResult sqlResult = sql.execute(query);
 
             //Check that query returned results
@@ -93,15 +104,18 @@ public abstract class AbstractSqlTest extends AbstractSoakTest {
                 lastQueryCount, currentQueryCount);
     }
 
-    protected void populateMap(HazelcastInstance hazelcastInstance, String mapName) {
+    protected void populateMap() {
         IMap<Key, Pojo> map = hazelcastInstance.getMap(mapName);
         for (long i = 0; i < DEFAULT_DATA_SET_SIZE; i++) {
             map.put(new Key(i), new Pojo(i));
         }
+        if(isIndexed) {
+            addIndexing();
+        }
         assertEquals("Failed to populate the map", DEFAULT_DATA_SET_SIZE, map.size());
     }
 
-    protected String getSqlQuery(int key, String mapName) {
+    protected String getSqlQuery(int key) {
         List<String> fields = getFieldNames();
         StringBuilder res = new StringBuilder("SELECT ");
 
@@ -142,6 +156,19 @@ public abstract class AbstractSqlTest extends AbstractSoakTest {
         );
     }
 
+    protected static List<String> getFieldNamesForIndexing() {
+        return Arrays.asList(
+                "bigIntVal",
+                "doubleVal",
+                "decimalBigIntegerVal",
+                "charVal",
+                "varcharVal",
+                "dateVal",
+                "timestampVal",
+                "tsTzOffsetDateTimeVal"
+        );
+    }
+
     private void sleep(int timeout) {
         try {
             Thread.sleep(timeout);
@@ -152,5 +179,21 @@ public abstract class AbstractSqlTest extends AbstractSoakTest {
 
     private boolean isQuerySuccessful(SqlResult sqlResult) {
         return sqlResult.iterator().hasNext();
+    }
+
+    protected void setInMemoryFormat(JetInstance client, InMemoryFormat inMemoryFormat) {
+        client.getConfig().configureHazelcast(config1 ->
+                new Config().addMapConfig(new MapConfig(mapName).setInMemoryFormat(inMemoryFormat)));
+    }
+
+    protected void addIndexing() {
+        IndexConfig indexConfig = new IndexConfig().setName("Index_" + UuidUtil.newUnsecureUuidString())
+                .setType(IndexType.SORTED);
+
+        for (String fieldName : getFieldNamesForIndexing()) {
+            indexConfig.addAttribute(fieldName);
+        }
+
+        hazelcastInstance.getMap(mapName).addIndex(indexConfig);
     }
 }

@@ -21,12 +21,12 @@ import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.internal.util.UuidUtil;
 import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
+import com.hazelcast.jet.tests.common.Util;
 import com.hazelcast.jet.tests.sql.pojo.Key;
 import com.hazelcast.jet.tests.sql.pojo.Pojo;
 import com.hazelcast.map.IMap;
 import com.hazelcast.sql.SqlResult;
 import com.hazelcast.sql.SqlService;
-import org.junit.Assert;
 
 import java.util.Arrays;
 import java.util.List;
@@ -68,7 +68,7 @@ public abstract class AbstractSqlMapTest extends AbstractSoakTest {
             SqlResult sqlResult = sql.execute(query);
 
             //Check that query returned results
-            Assert.assertTrue("The following query returned not results: " + query,
+            assertTrue("The following query returned not results: " + query,
                     isQuerySuccessful(sqlResult));
             currentQueryCount++;
 
@@ -81,7 +81,7 @@ public abstract class AbstractSqlMapTest extends AbstractSoakTest {
             }
 
             //Timeout between queries to not stress out the cluster
-            sleep(queryTimeout);
+            Util.sleepMillis(queryTimeout);
         }
         logger.info(String.format("Test completed successfully. Executed %d queries in %d minutes",
                 currentQueryCount, MILLISECONDS.toMinutes(durationInMillis)));
@@ -96,10 +96,11 @@ public abstract class AbstractSqlMapTest extends AbstractSoakTest {
             currentIteration++;
         }
         assertNotStuck();
+        lastQueryCount = currentQueryCount;
     }
 
     private void assertNotStuck() {
-        Assert.assertNotEquals(
+        assertNotEquals(
                 String.format("No queries executed in %d seconds.", MILLISECONDS.toSeconds(durationInMillis)),
                 lastQueryCount, currentQueryCount);
     }
@@ -112,7 +113,10 @@ public abstract class AbstractSqlMapTest extends AbstractSoakTest {
         if(isIndexed) {
             addIndexing();
         }
-        assertEquals("Failed to populate the map", DEFAULT_DATA_SET_SIZE, map.size());
+        assertEquals(
+                String.format("Failed to populate the map. Map size should be %d but actually is %d.",
+                        DEFAULT_DATA_SET_SIZE, map.size()),
+                DEFAULT_DATA_SET_SIZE, map.size());
     }
 
     protected String getSqlQuery(int key) {
@@ -167,14 +171,6 @@ public abstract class AbstractSqlMapTest extends AbstractSoakTest {
                 "timestampVal",
                 "tsTzOffsetDateTimeVal"
         );
-    }
-
-    private void sleep(int timeout) {
-        try {
-            Thread.sleep(timeout);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
     }
 
     private boolean isQuerySuccessful(SqlResult sqlResult) {

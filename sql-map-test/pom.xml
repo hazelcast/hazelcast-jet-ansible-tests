@@ -20,7 +20,7 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <artifactId>sql-imap-test</artifactId>
+    <artifactId>sql-map-test</artifactId>
 
     <parent>
         <groupId>com.hazelcast.jet.tests</groupId>
@@ -41,7 +41,7 @@
         <dependency>
             <groupId>com.hazelcast</groupId>
             <artifactId>hazelcast-sql</artifactId>
-            <version>4.2</version>
+            <version>${imdg.version}</version>
         </dependency>
     </dependencies>
 

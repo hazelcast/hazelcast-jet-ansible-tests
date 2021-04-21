@@ -23,18 +23,18 @@ public class SqlNativeIndexedMapTest extends AbstractSqlMapTest {
 
     private static final String NATIVE_MAP_NAME = "native_sql_map";
 
-    public static void main(String[] args) throws Exception {
-        new SqlNativeIndexedMapTest(NATIVE_MAP_NAME, true).run(args);
-    }
-
     public SqlNativeIndexedMapTest(String mapName, boolean isIndexed) {
         super(mapName, isIndexed);
     }
 
+    public static void main(String[] args) throws Exception {
+        new SqlNativeIndexedMapTest(NATIVE_MAP_NAME, true).run(args);
+    }
+
     @Override
     protected void init(JetInstance client) {
-        setInMemoryFormat(client, InMemoryFormat.NATIVE);
-        hazelcastInstance = client.getHazelcastInstance();
+        super.client = client;
+        setInMemoryFormat(InMemoryFormat.NATIVE);
         populateMap();
     }
 

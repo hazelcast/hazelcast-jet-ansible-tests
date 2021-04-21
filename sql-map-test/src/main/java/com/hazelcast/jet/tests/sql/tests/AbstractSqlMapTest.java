@@ -16,8 +16,11 @@
 
 package com.hazelcast.jet.tests.sql.tests;
 
-import com.hazelcast.config.*;
-import com.hazelcast.core.HazelcastInstance;
+import com.hazelcast.config.Config;
+import com.hazelcast.config.InMemoryFormat;
+import com.hazelcast.config.IndexConfig;
+import com.hazelcast.config.MapConfig;
+import com.hazelcast.config.IndexType;
 import com.hazelcast.internal.util.UuidUtil;
 import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
@@ -28,6 +31,7 @@ import com.hazelcast.map.IMap;
 import com.hazelcast.sql.SqlResult;
 import com.hazelcast.sql.SqlService;
 
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
 
@@ -38,18 +42,17 @@ public abstract class AbstractSqlMapTest extends AbstractSoakTest {
 
     protected static final int DEFAULT_DATA_SET_SIZE = 65536;
     protected static final int DEFAULT_QUERY_TIMEOUT_MILLIS = 100;
+    private static final int PROGRESS_PRINT_QUERIES_INTERVAL = 500;
 
+    protected boolean isIndexed;
+    protected JetInstance client;
     protected int dataSetSize = propertyInt("dataSetSize", DEFAULT_DATA_SET_SIZE);
     protected int queryTimeout = propertyInt("queryTimeout", DEFAULT_QUERY_TIMEOUT_MILLIS);
-
-    protected HazelcastInstance hazelcastInstance;
     private String mapName;
-    boolean isIndexed;
     private long begin;
-    private long onePercentInMillis;
-    private long currentIteration = 0;
-    private long currentQueryCount = 0;
-    private long lastQueryCount = 0;
+    private long currentQueryCount;
+    private long lastQueryCount;
+    private long lastProgressPrintCount;
 
     public AbstractSqlMapTest(String mapName, boolean isIndexed) {
         this.mapName = mapName;
@@ -59,44 +62,52 @@ public abstract class AbstractSqlMapTest extends AbstractSoakTest {
     protected void runTest() {
         int index = 0;
         begin = System.currentTimeMillis();
-        onePercentInMillis = durationInMillis / 100;
 
-        SqlService sql = hazelcastInstance.getSql();
+        SqlService sql = client.getHazelcastInstance().getSql();
         while (System.currentTimeMillis() - begin < durationInMillis) {
+            int queryKey = index++;
             //Execute query
-            String query = getSqlQuery(index++);
+            String query = getSqlQuery(queryKey);
             SqlResult sqlResult = sql.execute(query);
 
             //Check that query returned results
             assertTrue("The following query returned not results: " + query,
-                    isQuerySuccessful(sqlResult));
+                    isQuerySuccessful(sqlResult, queryKey));
             currentQueryCount++;
 
             //Print progress
             printProgress();
 
             //Reset index if reached to the end of sql table
-            if(index == dataSetSize -1) {
+            if (index == dataSetSize - 1) {
                 index = 0;
             }
 
             //Timeout between queries to not stress out the cluster
             Util.sleepMillis(queryTimeout);
         }
-        logger.info(String.format("Test completed successfully. Executed %d queries in %d minutes",
-                currentQueryCount, MILLISECONDS.toMinutes(durationInMillis)));
+        logger.info(String.format("Test completed successfully. Executed %d queries in %s.",
+                currentQueryCount, getTimeElapsed()));
     }
 
     private void printProgress() {
-        long timer = System.currentTimeMillis() - begin;
-        long nextPrintTime = onePercentInMillis * currentIteration;
-        boolean toPrint = timer >= nextPrintTime;
-        if(toPrint) {
-            logger.info(String.format("Progress: %d%%. Executed %d queries", currentIteration, currentQueryCount));
-            currentIteration++;
+        long nextPrintCount = lastProgressPrintCount + PROGRESS_PRINT_QUERIES_INTERVAL;
+        boolean toPrint = currentQueryCount >= nextPrintCount;
+        if (toPrint) {
+            logger.info(String.format("Time elapsed: %s. Executed %d queries", getTimeElapsed(), currentQueryCount));
+            lastProgressPrintCount = currentQueryCount;
         }
         assertNotStuck();
         lastQueryCount = currentQueryCount;
+    }
+
+    private String getTimeElapsed() {
+        Duration timeElapsed = Duration.ofMillis(System.currentTimeMillis() - begin);
+        long days = timeElapsed.toDays();
+        long hours = timeElapsed.minusDays(days).toHours();
+        long minutes = timeElapsed.minusDays(days).minusHours(hours).toMinutes();
+        long seconds = timeElapsed.minusDays(days).minusHours(hours).minusMinutes(minutes).toMillis() / 1000;
+        return String.format("%dd, %dh, %dm, %ds", days, hours, minutes, seconds);
     }
 
     private void assertNotStuck() {
@@ -106,11 +117,11 @@ public abstract class AbstractSqlMapTest extends AbstractSoakTest {
     }
 
     protected void populateMap() {
-        IMap<Key, Pojo> map = hazelcastInstance.getMap(mapName);
+        IMap<Key, Pojo> map = client.getHazelcastInstance().getMap(mapName);
         for (long i = 0; i < DEFAULT_DATA_SET_SIZE; i++) {
             map.put(new Key(i), new Pojo(i));
         }
-        if(isIndexed) {
+        if (isIndexed) {
             addIndexing();
         }
         assertEquals(
@@ -173,11 +184,11 @@ public abstract class AbstractSqlMapTest extends AbstractSoakTest {
         );
     }
 
-    private boolean isQuerySuccessful(SqlResult sqlResult) {
-        return sqlResult.iterator().hasNext();
+    private boolean isQuerySuccessful(SqlResult sqlResult, int queryKey) {
+        return sqlResult.iterator().next().getObject("intVal").equals(queryKey);
     }
 
-    protected void setInMemoryFormat(JetInstance client, InMemoryFormat inMemoryFormat) {
+    protected void setInMemoryFormat(InMemoryFormat inMemoryFormat) {
         client.getConfig().configureHazelcast(config1 ->
                 new Config().addMapConfig(new MapConfig(mapName).setInMemoryFormat(inMemoryFormat)));
     }
@@ -190,6 +201,6 @@ public abstract class AbstractSqlMapTest extends AbstractSoakTest {
             indexConfig.addAttribute(fieldName);
         }
 
-        hazelcastInstance.getMap(mapName).addIndex(indexConfig);
+        client.getHazelcastInstance().getMap(mapName).addIndex(indexConfig);
     }
 }

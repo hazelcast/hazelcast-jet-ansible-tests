@@ -17,25 +17,24 @@
 package com.hazelcast.jet.tests.sql.tests;
 
 import com.hazelcast.config.InMemoryFormat;
-import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.jet.JetInstance;
 
 public class SqlNativeMapTest extends AbstractSqlMapTest {
 
     private static final String NATIVE_MAP_NAME = "native_sql_map";
 
-    public static void main(String[] args) throws Exception {
-        new SqlNativeMapTest(NATIVE_MAP_NAME, false).run(args);
-    }
-
     public SqlNativeMapTest(String mapName, boolean isIndexed) {
         super(mapName, isIndexed);
     }
 
+    public static void main(String[] args) throws Exception {
+        new SqlNativeMapTest(NATIVE_MAP_NAME, false).run(args);
+    }
+
     @Override
     protected void init(JetInstance client) {
-        setInMemoryFormat(client, InMemoryFormat.NATIVE);
-        hazelcastInstance = client.getHazelcastInstance();
+        super.client = client;
+        setInMemoryFormat(InMemoryFormat.NATIVE);
         populateMap();
     }
 

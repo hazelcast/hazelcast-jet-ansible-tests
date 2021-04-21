@@ -23,18 +23,18 @@ public class SqlBinaryMapTest extends AbstractSqlMapTest {
 
     private static final String BINARY_MAP_NAME = "binary_sql_map";
 
-    public static void main(String[] args) throws Exception {
-        new SqlBinaryMapTest(BINARY_MAP_NAME, false).run(args);
-    }
-
     public SqlBinaryMapTest(String mapName, boolean isIndexed) {
         super(mapName, isIndexed);
     }
 
+    public static void main(String[] args) throws Exception {
+        new SqlBinaryMapTest(BINARY_MAP_NAME, false).run(args);
+    }
+
     @Override
     protected void init(JetInstance client) {
-        setInMemoryFormat(client, InMemoryFormat.BINARY);
-        hazelcastInstance = client.getHazelcastInstance();
+        super.client = client;
+        setInMemoryFormat(InMemoryFormat.BINARY);
         populateMap();
     }
 

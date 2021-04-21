@@ -20,7 +20,7 @@ import java.io.Serializable;
 
 public class Key implements Serializable {
 
-    public long key;
+    private long key;
 
     public Key(long key) {
         this.key = key;

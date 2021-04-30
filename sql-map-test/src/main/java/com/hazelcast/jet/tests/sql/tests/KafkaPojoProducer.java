@@ -14,8 +14,10 @@
  * limitations under the License.
  */
 
-package com.hazelcast.jet.tests.stateful;
+package com.hazelcast.jet.tests.sql.tests;
 
+import com.hazelcast.jet.tests.sql.pojo.Key;
+import com.hazelcast.jet.tests.sql.pojo.Pojo;
 import com.hazelcast.logging.ILogger;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -29,27 +31,15 @@ import java.util.Properties;
 import java.util.concurrent.Future;
 
 import static com.hazelcast.jet.impl.util.Util.uncheckCall;
-import static com.hazelcast.jet.tests.stateful.StatefulMapTest.WAIT_TX_TIMEOUT_FACTOR;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static java.util.concurrent.locks.LockSupport.parkNanos;
 
-/**
- * It produces events with String key like [type],[id] where type is 0 for start
- * event and 1 for end event. Value is timestamp.
- * <p>
- * In every cycle it emits "batchCount" times start event + "batchCount" times
- * end event for them; and 1 transaction event (with negative id) which has only
- * start and which will never get the END event.
- * <p>
- * Ids are increasing by 1 for each start event and for each end event (i.e.
- * there is just one start event with id x and just one end event with id x).
- */
-public class KafkaTradeProducer implements AutoCloseable {
+public class KafkaPojoProducer implements AutoCloseable {
 
     private static final int PRODUCE_WAIT_TIMEOUT_MILLIS = 10_000;
 
-    private final KafkaProducer<String, Long> producer;
+    private final KafkaProducer<Key, Pojo> producer;
     private final String topic;
     private final long nanosBetweenEvents;
     private final int batchCount;
@@ -61,7 +51,7 @@ public class KafkaTradeProducer implements AutoCloseable {
 
     private long txId;
 
-    public KafkaTradeProducer(
+    public KafkaPojoProducer(
             ILogger logger, String broker, String topic, int txPerSeconds, int batchCount, int txTimeout
     ) {
         this.producerThread = new Thread(() -> {
@@ -95,30 +85,11 @@ public class KafkaTradeProducer implements AutoCloseable {
             // generate start events
             for (int i = 0; i < batchCount; i++) {
                 long id = txId + i;
-                futureList.add(produce(0, id, id));
+                futureList.add(produce(0, new Key(id), new Pojo(id)));
                 parkNanos(nanosBetweenEvents);
             }
             waitForCompleteAndClearList(futureList);
-
-            // generate send events
-            for (int i = 0; i < batchCount; i++) {
-                long id = txId + i;
-                futureList.add(produce(1, id, id));
-                parkNanos(nanosBetweenEvents);
-            }
-            waitForCompleteAndClearList(futureList);
-
-            txId += batchCount;
-
-            //This adds a transaction event of type START which will never get the END event
-            //Eventually the transaction will be evicted and marked as timeout
-            //a single tx is produced per batch and txId<0
-            produce(0, -txId, txId).get(PRODUCE_WAIT_TIMEOUT_MILLIS, MILLISECONDS);
-            parkNanos(nanosBetweenEvents);
         }
-        //this is to advance wm and eventually evict expired transactions
-        parkNanos(MILLISECONDS.toNanos(WAIT_TX_TIMEOUT_FACTOR * txTimeout));
-        produce(-1, Long.MAX_VALUE, Long.MAX_VALUE - 1).get(PRODUCE_WAIT_TIMEOUT_MILLIS, MILLISECONDS);
     }
 
     public void start() {
@@ -139,9 +110,8 @@ public class KafkaTradeProducer implements AutoCloseable {
         }
     }
 
-    private Future<RecordMetadata> produce(int type, long id, long timestamp) {
-        String key = type + "," + id;
-        return producer.send(new ProducerRecord<>(topic, key, timestamp));
+    private Future<RecordMetadata> produce(int type, Key key, Pojo pojo) {
+        return producer.send(new ProducerRecord<>(topic, key, pojo));
     }
 
     private static void waitForCompleteAndClearList(List<Future<RecordMetadata>> futureList) {

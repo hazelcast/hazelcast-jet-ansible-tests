@@ -39,9 +39,19 @@
             <version>${jet.version}</version>
         </dependency>
         <dependency>
+            <groupId>com.hazelcast.jet.tests</groupId>
+            <artifactId>stateful-map-test</artifactId>
+            <version>${jet.version}</version>
+        </dependency>
+        <dependency>
             <groupId>com.hazelcast</groupId>
             <artifactId>hazelcast-sql</artifactId>
             <version>${imdg.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.hazelcast.jet</groupId>
+            <artifactId>hazelcast-jet-kafka</artifactId>
+            <version>${jet.version}</version>
         </dependency>
     </dependencies>
 

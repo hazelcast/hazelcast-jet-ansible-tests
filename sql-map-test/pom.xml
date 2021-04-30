@@ -53,7 +53,7 @@
                 <configuration>
                     <archive>
                         <manifest>
-                            <mainClass>com.hazelcast.jet.tests.sql.tests.SqlObjectMapTest</mainClass>
+                            <mainClass>com.hazelcast.jet.tests.sql.tests.SqlNonIndexedMapTest</mainClass>
                         </manifest>
                     </archive>
                 </configuration>
@@ -75,7 +75,7 @@
                                 <transformer
                                         implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                                     <manifestEntries>
-                                        <Main-Class>com.hazelcast.jet.tests.sql.tests.SqlObjectMapTest</Main-Class>
+                                        <Main-Class>com.hazelcast.jet.tests.sql.tests.SqlNonIndexedMapTest</Main-Class>
                                     </manifestEntries>
                                 </transformer>
                             </transformers>

@@ -188,11 +188,6 @@ public abstract class AbstractSqlMapTest extends AbstractSoakTest {
         return sqlResult.iterator().next().getObject("intVal").equals(queryKey);
     }
 
-    protected void setInMemoryFormat(InMemoryFormat inMemoryFormat) {
-        client.getConfig().configureHazelcast(config1 ->
-                new Config().addMapConfig(new MapConfig(mapName).setInMemoryFormat(inMemoryFormat)));
-    }
-
     protected void addIndexing() {
         IndexConfig indexConfig = new IndexConfig().setName("Index_" + UuidUtil.newUnsecureUuidString())
                 .setType(IndexType.SORTED);

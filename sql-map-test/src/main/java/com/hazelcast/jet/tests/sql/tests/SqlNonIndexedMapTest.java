@@ -16,25 +16,23 @@
 
 package com.hazelcast.jet.tests.sql.tests;
 
-import com.hazelcast.config.InMemoryFormat;
 import com.hazelcast.jet.JetInstance;
 
-public class SqlNativeIndexedMapTest extends AbstractSqlMapTest {
+public class SqlNonIndexedMapTest extends AbstractSqlMapTest {
 
-    private static final String NATIVE_MAP_NAME = "native_sql_map";
+    public static final String OBJECT_MAP_NAME = "object_sql_map";
 
-    public SqlNativeIndexedMapTest(String mapName, boolean isIndexed) {
+    public SqlNonIndexedMapTest(String mapName, boolean isIndexed) {
         super(mapName, isIndexed);
     }
 
     public static void main(String[] args) throws Exception {
-        new SqlNativeIndexedMapTest(NATIVE_MAP_NAME, true).run(args);
+        new SqlNonIndexedMapTest(OBJECT_MAP_NAME, false).run(args);
     }
 
     @Override
     protected void init(JetInstance client) {
         super.client = client;
-        setInMemoryFormat(InMemoryFormat.NATIVE);
         populateMap();
     }
 

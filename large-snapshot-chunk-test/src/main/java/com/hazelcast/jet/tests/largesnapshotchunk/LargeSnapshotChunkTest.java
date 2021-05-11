@@ -16,10 +16,10 @@
 
 package com.hazelcast.jet.tests.largesnapshotchunk;
 
+import com.hazelcast.client.HazelcastClient;
 import com.hazelcast.client.config.ClientConfig;
 import com.hazelcast.config.Config;
 import com.hazelcast.config.MapConfig;
-import com.hazelcast.jet.Jet;
 import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.config.JobConfig;
@@ -115,7 +115,7 @@ public class LargeSnapshotChunkTest extends AbstractSoakTest {
 
     private void configureProducer() throws IOException {
         remoteClientConfig = remoteClusterClientConfig();
-        remoteClient = Jet.newJetClient(remoteClientConfig);
+        remoteClient = HazelcastClient.newHazelcastClient(remoteClientConfig).getJetInstance();
 
         Config config = remoteClient.getHazelcastInstance().getConfig();
         MapConfig mapConfig = new MapConfig(SOURCE);

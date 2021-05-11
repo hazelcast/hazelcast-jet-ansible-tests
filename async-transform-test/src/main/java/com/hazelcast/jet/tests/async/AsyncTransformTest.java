@@ -16,11 +16,11 @@
 
 package com.hazelcast.jet.tests.async;
 
+import com.hazelcast.client.HazelcastClient;
 import com.hazelcast.client.config.ClientConfig;
 import com.hazelcast.config.Config;
 import com.hazelcast.config.MapConfig;
 import com.hazelcast.core.HazelcastInstance;
-import com.hazelcast.jet.Jet;
 import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.config.JobConfig;
@@ -83,7 +83,7 @@ public class AsyncTransformTest extends AbstractSoakTest {
         maxSchedulerDelayMillis = propertyInt("maxSchedulerDelayMillis", DEFAULT_MAX_SCHEDULER_DELAY);
 
         remoteClusterClientConfig = remoteClusterClientConfig();
-        remoteClient = Jet.newJetClient(remoteClusterClientConfig);
+        remoteClient = HazelcastClient.newHazelcastClient(remoteClusterClientConfig).getJetInstance();
 
         Config config = remoteClient.getHazelcastInstance().getConfig();
         MapConfig mapConfig = new MapConfig(ORDERED_SINK);

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.hazelcast.jet.tests.sql.tests;
+package com.hazelcast.jet.tests.sql.kafka;
 
 import com.hazelcast.jet.tests.sql.pojo.Key;
 import com.hazelcast.jet.tests.sql.pojo.Pojo;
@@ -22,8 +22,6 @@ import com.hazelcast.logging.ILogger;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
-import org.apache.kafka.common.serialization.LongSerializer;
-import org.apache.kafka.common.serialization.StringSerializer;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -56,6 +54,7 @@ public class KafkaPojoProducer implements AutoCloseable {
     ) {
         this.producerThread = new Thread(() -> {
             try {
+                System.out.println("Starting producer thread");
                 run();
             } catch (Exception exception) {
                 logger.severe("Exception while producing trades to topic: " + topic, exception);
@@ -64,8 +63,10 @@ public class KafkaPojoProducer implements AutoCloseable {
         });
         Properties props = new Properties();
         props.setProperty("bootstrap.servers", broker);
-        props.setProperty("key.serializer", StringSerializer.class.getName());
-        props.setProperty("value.serializer", LongSerializer.class.getName());
+        props.setProperty("key.serializer", "com.hazelcast.jet.tests.sql.serializer.KeySerializer");
+        props.setProperty("key.deserializer", "com.hazelcast.jet.tests.sql.serializer.KeyDeserializer");
+        props.setProperty("value.serializer", "com.hazelcast.jet.tests.sql.serializer.PojoSerializer");
+        props.setProperty("value.deserializer", "com.hazelcast.jet.tests.sql.serializer.PojoDeserializer");
         this.producer = new KafkaProducer<>(props);
         this.topic = topic;
         this.batchCount = batchCount;

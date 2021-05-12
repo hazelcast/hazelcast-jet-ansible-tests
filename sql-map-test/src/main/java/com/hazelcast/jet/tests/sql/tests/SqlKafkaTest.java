@@ -8,16 +8,27 @@ import com.hazelcast.jet.kafka.KafkaSinks;
 import com.hazelcast.jet.kafka.KafkaSources;
 import com.hazelcast.jet.pipeline.Pipeline;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
+import com.hazelcast.jet.tests.sql.kafka.KafkaPojoProducer;
+import com.hazelcast.jet.tests.sql.kafka.KafkaPojoSinkVerifier;
+import com.hazelcast.jet.tests.sql.kafka.KafkaSqlReader;
+import com.hazelcast.jet.tests.sql.pojo.Key;
 import com.hazelcast.jet.tests.sql.pojo.Pojo;
 import com.hazelcast.jet.tests.stateful.KafkaSinkVerifier;
 import com.hazelcast.sql.SqlResult;
+import com.hazelcast.sql.SqlRow;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
 
+import java.time.Duration;
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
+import java.time.temporal.TemporalUnit;
 import java.util.Arrays;
+import java.util.Iterator;
 import java.util.Properties;
+import java.util.Random;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -28,7 +39,8 @@ import static com.hazelcast.jet.pipeline.WindowDefinition.sliding;
 
 public class SqlKafkaTest extends AbstractSoakTest {
 
-    public static final String TOPIC_NAME = "topic";
+    public static final String TOPIC_NAME = "topic" + new Random().nextInt(9999);
+    public static final String JOB_NAME = "kafka_pipeline";
     private static final int DEFAULT_LAG = 3000;
     private static final int DEFAULT_TX_TIMEOUT = 5000;
     private static final int DEFAULT_GENERATOR_BATCH_COUNT = 100;
@@ -47,6 +59,8 @@ public class SqlKafkaTest extends AbstractSoakTest {
     private int windowSize;
     private int slideBy;
     private int lagMs;
+    private long begin;
+    private LocalDateTime finishTime;
 
     private transient ExecutorService producerExecutorService;
 
@@ -61,7 +75,7 @@ public class SqlKafkaTest extends AbstractSoakTest {
     @Override
     protected void init(JetInstance client) {
         producerExecutorService = Executors.newSingleThreadExecutor();
-        brokerUri = property("brokerUri", "localhost:9092");
+        brokerUri = property("brokerUri", "127.0.0.1:9092");
         offsetReset = property("offsetReset", "earliest");
         txTimeout = propertyInt("txTimeout", DEFAULT_TX_TIMEOUT);
         txPerSecond = propertyInt("txPerSecond", DEFAULT_TX_PER_SECOND);
@@ -70,30 +84,40 @@ public class SqlKafkaTest extends AbstractSoakTest {
         lagMs = propertyInt("lagMs", DEFAULT_LAG);
         windowSize = propertyInt("windowSize", DEFAULT_WINDOW_SIZE);
         slideBy = propertyInt("slideBy", DEFAULT_SLIDE_BY);
-
+        finishTime = LocalDateTime.now().plus(durationInMillis, ChronoUnit.MILLIS);
+        begin = System.currentTimeMillis();
     }
 
     @Override
-    protected void test(JetInstance client, String name) {
-        SqlResult sqlResult = client.getSql().execute("SELECT * FROM kafka");
+    protected void test(JetInstance client, String name) throws Exception{
+        System.out.println("Topic name: " + TOPIC_NAME);
 
+        createKafkaSqlMapping(client);
 
         KafkaPojoProducer producer = new KafkaPojoProducer(
                 logger, brokerUri, TOPIC_NAME, txPerSecond, generatorBatchCount, txTimeout);
         producer.start();
 
-        KafkaSinkVerifier verifier = new KafkaSinkVerifier(name, brokerUri, TOPIC_NAME, logger);
-        verifier.start();
+        KafkaSqlReader reader = new KafkaSqlReader(
+                logger, client, TOPIC_NAME, finishTime);
+        reader.start();
 
-        KafkaConsumer<Long, Pojo> consumer = new KafkaConsumer<>(kafkaProps(brokerUri, offsetReset));
-        consumer.subscribe(Arrays.asList(TOPIC_NAME));
+        do {
+            //nothing
+        } while(LocalDateTime.now().isBefore(finishTime));
+        //And then
+        logger.info(String.format("Test successfully executed. Executed %d queries in %s",
+                reader.getQueryCount(), getTimeElapsed()));
+        producer.finish();
+        reader.finish();
+    }
 
-        JobConfig cfg = new JobConfig().setName("kafka-sql-pojo");
-        client.newJob(pipeline("kafka_pipeline", AT_LEAST_ONCE, 0), cfg);
+    @Override
+    protected void teardown(Throwable t) {
+    }
 
-        String tableName = "kafka";
-
-        client.getSql().execute("CREATE MAPPING kafka (" +
+    private void createKafkaSqlMapping(JetInstance client) {
+        client.getSql().execute("CREATE MAPPING " + TOPIC_NAME + "(" +
                 " booleanVal BOOLEAN," +
                 " tinyIntVal TINYINT," +
                 " smallIntVal SMALLINT," +
@@ -101,81 +125,28 @@ public class SqlKafkaTest extends AbstractSoakTest {
                 " bigIntVal BIGINT," +
                 " realVal REAL," +
                 " doubleVal DOUBLE," +
-                " decimalBigIntegerVal BIGINT," +
                 " decimalVal DECIMAL," +
-                " varcharVal VARCHAR," +
-                " timeVal TIME," +
-                " dateVal DATE," +
-                " timestampVal TIMESTAMP)" +
+                " varcharVal VARCHAR)" +
                 " TYPE Kafka" +
                 " OPTIONS (" +
-                " 'valueFormat' = 'json'," +
-                " 'bootstrap.servers' = 'kafka:9092'" +
+                " 'keyFormat' = 'java'," +
+                " 'keyJavaClass' = 'com.hazelcast.jet.tests.sql.pojo.Key'," +
+                " 'key.serializer' = 'com.hazelcast.jet.tests.sql.serializer.KeySerializer'," +
+                " 'key.deserializer' = 'com.hazelcast.jet.tests.sql.serializer.KeyDeserializer'," +
+                " 'valueFormat' = 'java'," +
+                " 'valueJavaClass' = 'com.hazelcast.jet.tests.sql.pojo.Pojo'," +
+                " 'value.serializer' = 'com.hazelcast.jet.tests.sql.serializer.PojoSerializer'," +
+                " 'value.deserializer' = 'com.hazelcast.jet.tests.sql.serializer.PojoDeserializer'," +
+                " 'bootstrap.servers' = '127.0.0.1:9092'" +
                 ")");
-
-        while(true) {
-            SqlResult sqlResult1 = client.getSql().execute("SELECT * FROM kafka");
-        }
-
-//        client.getJob("kafka_pipeline").cancel();
-
     }
 
-    @Override
-    protected void teardown(Throwable t) {
-    }
-
-    private Pipeline pipeline(String name, ProcessingGuarantee guarantee, int jobIndex) {
-        Pipeline pipeline = Pipeline.create();
-
-        Properties propsForTrades = kafkaPropsForTrades(brokerUri, offsetReset);
-        Properties propsForResult = kafkaPropsForResults(brokerUri, offsetReset);
-
-        pipeline.readFrom(KafkaSources.kafka(propsForTrades, ConsumerRecord<Long, Long>::value, TOPIC_NAME))
-                .withTimestamps(t -> t, lagMs)
-                .setName(String.format("ReadKafka(%s-%s-%d)", TOPIC_NAME, guarantee, jobIndex))
-                .window(sliding(windowSize, slideBy))
-                .groupingKey(wholeItem())
-                .aggregate(counting()).setName(String.format("AggregateCount(%s-%s-%d)", TOPIC_NAME, guarantee, jobIndex))
-                .writeTo(KafkaSinks.kafka(propsForResult, TOPIC_NAME))
-                .setName(String.format("WriteKafka(%s)", TOPIC_NAME));
-        return pipeline;
-    }
-
-    private static Properties kafkaPropsForTrades(String brokerUrl, String offsetReset) {
-        Properties props = new Properties();
-        props.setProperty("bootstrap.servers", brokerUrl);
-        props.setProperty("group.id", UuidUtil.newUnsecureUuidString());
-        props.setProperty("key.deserializer", LongDeserializer.class.getName());
-        props.setProperty("value.deserializer", LongDeserializer.class.getName());
-        props.setProperty("auto.offset.reset", offsetReset);
-        props.setProperty("max.poll.records", "32768");
-        return props;
-    }
-
-    private static Properties kafkaPropsForResults(String brokerUrl, String offsetReset) {
-        Properties props = new Properties();
-        props.setProperty("bootstrap.servers", brokerUrl);
-        props.setProperty("group.id", UuidUtil.newUnsecureUuidString());
-        props.setProperty("key.deserializer", LongDeserializer.class.getName());
-        props.setProperty("value.deserializer", LongDeserializer.class.getName());
-        props.setProperty("key.serializer", LongSerializer.class.getName());
-        props.setProperty("value.serializer", LongSerializer.class.getName());
-        props.setProperty("auto.offset.reset", offsetReset);
-        props.setProperty("max.poll.records", "32768");
-        return props;
-    }
-
-    private static Properties kafkaProps(String brokerUrl, String offsetReset) {
-        Properties props = new Properties();
-        props.setProperty("bootstrap.servers", brokerUrl);
-        props.setProperty("group.id", UuidUtil.newUnsecureUuidString());
-        props.setProperty("key.deserializer", LongDeserializer.class.getName());
-        props.setProperty("value.deserializer", LongDeserializer.class.getName());
-        props.setProperty("key.serializer", LongSerializer.class.getName());
-        props.setProperty("value.serializer", LongSerializer.class.getName());
-        props.setProperty("auto.offset.reset", offsetReset);
-        props.setProperty("max.poll.records", "32768");
-        return props;
+    private String getTimeElapsed() {
+        Duration timeElapsed = Duration.ofMillis(System.currentTimeMillis() - begin);
+        long days = timeElapsed.toDays();
+        long hours = timeElapsed.minusDays(days).toHours();
+        long minutes = timeElapsed.minusDays(days).minusHours(hours).toMinutes();
+        long seconds = timeElapsed.minusDays(days).minusHours(hours).minusMinutes(minutes).toMillis() / 1000;
+        return String.format("%dd, %dh, %dm, %ds", days, hours, minutes, seconds);
     }
 }

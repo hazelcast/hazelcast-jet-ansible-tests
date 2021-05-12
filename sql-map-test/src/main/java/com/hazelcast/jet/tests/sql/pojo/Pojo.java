@@ -18,17 +18,6 @@ package com.hazelcast.jet.tests.sql.pojo;
 
 import java.io.Serializable;
 import java.math.BigDecimal;
-import java.math.BigInteger;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.LocalTime;
-import java.time.OffsetDateTime;
-import java.time.ZonedDateTime;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.GregorianCalendar;
-import java.util.List;
 
 public class Pojo implements Serializable {
 
@@ -41,23 +30,12 @@ public class Pojo implements Serializable {
     private float realVal;
     private double doubleVal;
 
-    private BigInteger decimalBigIntegerVal;
     private BigDecimal decimalVal;
 
     private char charVal;
     private String varcharVal;
 
-    private LocalTime timeVal;
-    private LocalDate dateVal;
-    private LocalDateTime timestampVal;
-
-    private Date tsTzDateVal;
-    private GregorianCalendar tsTzCalendarVal;
-    private Instant tsTzInstantVal;
-    private OffsetDateTime tsTzOffsetDateTimeVal;
-    private ZonedDateTime tsTzZonedDateTimeVal;
-
-    private List<Object> objectVal;
+    public Pojo() {}    //This is needed for Jackson deserialization
 
     public Pojo(long val) {
         booleanVal = val % 2 == 0;
@@ -69,24 +47,11 @@ public class Pojo implements Serializable {
         realVal = (float) val;
         doubleVal = (double) val;
 
-        decimalBigIntegerVal = BigInteger.valueOf(val);
         decimalVal = BigDecimal.valueOf(val);
 
         charVal = 'c';
         varcharVal = Long.toString(val);
 
-        timestampVal = LocalDateTime.now();
-        dateVal = timestampVal.toLocalDate();
-        timeVal = timestampVal.toLocalTime();
-
-        tsTzDateVal = new Date();
-        tsTzCalendarVal = (GregorianCalendar) GregorianCalendar.getInstance();
-        tsTzInstantVal = Instant.now();
-        tsTzOffsetDateTimeVal = OffsetDateTime.now();
-        tsTzZonedDateTimeVal = ZonedDateTime.now();
-
-        objectVal = new ArrayList<>(1);
-        objectVal.add(val);
     }
 
     public boolean isBooleanVal() {
@@ -117,9 +82,6 @@ public class Pojo implements Serializable {
         return doubleVal;
     }
 
-    public BigInteger getDecimalBigIntegerVal() {
-        return decimalBigIntegerVal;
-    }
 
     public BigDecimal getDecimalVal() {
         return decimalVal;
@@ -133,39 +95,4 @@ public class Pojo implements Serializable {
         return varcharVal;
     }
 
-    public LocalTime getTimeVal() {
-        return timeVal;
-    }
-
-    public LocalDate getDateVal() {
-        return dateVal;
-    }
-
-    public LocalDateTime getTimestampVal() {
-        return timestampVal;
-    }
-
-    public Date getTsTzDateVal() {
-        return tsTzDateVal;
-    }
-
-    public GregorianCalendar getTsTzCalendarVal() {
-        return tsTzCalendarVal;
-    }
-
-    public Instant getTsTzInstantVal() {
-        return tsTzInstantVal;
-    }
-
-    public OffsetDateTime getTsTzOffsetDateTimeVal() {
-        return tsTzOffsetDateTimeVal;
-    }
-
-    public ZonedDateTime getTsTzZonedDateTimeVal() {
-        return tsTzZonedDateTimeVal;
-    }
-
-    public List<Object> getObjectVal() {
-        return objectVal;
-    }
 }

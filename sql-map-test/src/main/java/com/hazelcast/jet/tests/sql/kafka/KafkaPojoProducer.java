@@ -28,13 +28,12 @@ import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.Future;
 
-import static com.hazelcast.jet.impl.util.Util.logLateEvent;
 import static com.hazelcast.jet.impl.util.Util.uncheckCall;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static java.util.concurrent.locks.LockSupport.parkNanos;
 
-public class KafkaPojoProducer implements AutoCloseable {
+public class KafkaPojoProducer extends Thread {
 
     private static final int PRODUCE_WAIT_TIMEOUT_MILLIS = 10_000;
 
@@ -42,27 +41,16 @@ public class KafkaPojoProducer implements AutoCloseable {
     private final String topic;
     private final long nanosBetweenEvents;
     private final int batchCount;
-    private final int txTimeout;
-
-    private final Thread producerThread;
     private volatile boolean finished;
-    private volatile Exception exception;
     private ILogger logger;
+    private long begin;
+    private long durationInMillis;
 
     private long txId;
 
     public KafkaPojoProducer(
-            ILogger logger, String broker, String topic, int txPerSeconds, int batchCount, int txTimeout
+            ILogger logger, String broker, String topic, int txPerSeconds, int batchCount, int txTimeout, long begin, long durationInMillis
     ) {
-        this.producerThread = new Thread(() -> {
-            try {
-                logger.info("Starting producer thread");
-                run();
-            } catch (Exception exception) {
-                logger.severe("Exception while producing trades to topic: " + topic, exception);
-                this.exception = exception;
-            }
-        });
         Properties props = new Properties();
         props.setProperty("bootstrap.servers", broker);
         props.setProperty("key.serializer", "com.hazelcast.jet.tests.sql.serializer.KeySerializer");
@@ -72,20 +60,16 @@ public class KafkaPojoProducer implements AutoCloseable {
         this.producer = new KafkaProducer<>(props);
         this.topic = topic;
         this.batchCount = batchCount;
-        this.txTimeout = txTimeout;
         this.nanosBetweenEvents = SECONDS.toNanos(1) / txPerSeconds;
         this.logger = logger;
+        this.begin = begin;
+        this.durationInMillis = durationInMillis;
     }
 
     @Override
-    public void close() {
-        producer.flush();
-        producer.close();
-    }
-
-    private void run() throws Exception {
+    public void run(){
         List<Future<RecordMetadata>> futureList = new ArrayList<>(batchCount);
-        while (!finished) {
+        while (System.currentTimeMillis() - begin < durationInMillis) {
             // generate start events
             for (int i = 0; i < batchCount; i++) {
                 long id = txId + i;
@@ -93,24 +77,6 @@ public class KafkaPojoProducer implements AutoCloseable {
                 parkNanos(nanosBetweenEvents);
             }
             waitForCompleteAndClearList(futureList);
-        }
-    }
-
-    public void start() {
-        producerThread.start();
-    }
-
-    public long finish() throws Exception {
-        checkStatus();
-        finished = true;
-        producerThread.join();
-        checkStatus();
-        return txId;
-    }
-
-    public void checkStatus() throws Exception {
-        if (exception != null) {
-            throw exception;
         }
     }
 

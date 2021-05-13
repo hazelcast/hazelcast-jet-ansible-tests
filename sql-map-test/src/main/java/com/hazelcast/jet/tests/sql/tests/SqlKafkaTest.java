@@ -7,21 +7,13 @@ import com.hazelcast.jet.tests.sql.kafka.KafkaSqlReader;
 
 import java.time.Duration;
 import java.util.Random;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 public class SqlKafkaTest extends AbstractSoakTest {
 
-    public static final String TOPIC_NAME = "topic" + new Random().nextInt(9999);
-    public static final String JOB_NAME = "kafka_pipeline";
-    private static final int DEFAULT_LAG = 3000;
+    private static final String TOPIC_NAME = "topic" + new Random().nextInt(9999);
     private static final int DEFAULT_TX_TIMEOUT = 5000;
     private static final int DEFAULT_GENERATOR_BATCH_COUNT = 100;
     private static final int DEFAULT_TX_PER_SECOND = 50;
-    private static final int POLL_TIMEOUT = 1000;
-    private static final int DEFAULT_COUNTER_PER_TICKER = 1000;
-    private static final int DEFAULT_WINDOW_SIZE = 20;
-    private static final int DEFAULT_SLIDE_BY = 10;
 
     private String brokerUri;
     private int txTimeout;
@@ -29,19 +21,12 @@ public class SqlKafkaTest extends AbstractSoakTest {
     private int generatorBatchCount;
     private long begin;
 
-    private transient ExecutorService producerExecutorService;
-
-    public SqlKafkaTest() {
-
-    }
-
     public static void main(String[] args) throws Exception {
         new SqlKafkaTest().run(args);
     }
 
     @Override
     protected void init(JetInstance client) {
-        producerExecutorService = Executors.newSingleThreadExecutor();
         brokerUri = property("brokerUri", "127.0.0.1:9092");
         txTimeout = propertyInt("txTimeout", DEFAULT_TX_TIMEOUT);
         txPerSecond = propertyInt("txPerSecond", DEFAULT_TX_PER_SECOND);
@@ -51,26 +36,21 @@ public class SqlKafkaTest extends AbstractSoakTest {
 
     @Override
     protected void test(JetInstance client, String name) throws Exception{
-        System.out.println("Topic name: " + TOPIC_NAME);
-
         createKafkaSqlMapping(client);
 
-        KafkaPojoProducer producer = new KafkaPojoProducer(
-                logger, brokerUri, TOPIC_NAME, txPerSecond, generatorBatchCount, txTimeout);
+        Thread producer = new KafkaPojoProducer(
+                logger, brokerUri, TOPIC_NAME, txPerSecond, generatorBatchCount, txTimeout, begin, durationInMillis);
         producer.start();
 
-        KafkaSqlReader reader = new KafkaSqlReader(logger, client, TOPIC_NAME);
+        Thread reader = new KafkaSqlReader(logger, client, TOPIC_NAME, begin, durationInMillis);
         reader.start();
-
-        //TODO: Remove this
-        durationInMillis = 15000;
 
         Thread.sleep(durationInMillis);
 
-        logger.info(String.format("Test successfully executed. Executed %d queries in %s",
-                reader.getQueryCount(), getTimeElapsed()));
-        producer.finish();
-        reader.finish();
+        producer.join();
+        reader.join();
+
+        logger.info("Test completed successfully after " + getTimeElapsed());
     }
 
     @Override

@@ -41,7 +41,6 @@ public class KafkaPojoProducer extends Thread {
     private final String topic;
     private final long nanosBetweenEvents;
     private final int batchCount;
-    private volatile boolean finished;
     private ILogger logger;
     private long begin;
     private long durationInMillis;

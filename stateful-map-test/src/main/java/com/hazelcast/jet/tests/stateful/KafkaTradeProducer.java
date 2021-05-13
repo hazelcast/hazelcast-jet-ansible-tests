@@ -121,7 +121,7 @@ public class KafkaTradeProducer implements AutoCloseable {
         produce(-1, Long.MAX_VALUE, Long.MAX_VALUE - 1).get(PRODUCE_WAIT_TIMEOUT_MILLIS, MILLISECONDS);
     }
 
-    public void start() {
+    void start() {
         producerThread.start();
     }
 

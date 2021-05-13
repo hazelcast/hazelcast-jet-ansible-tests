@@ -129,7 +129,7 @@ public class KafkaSinkVerifier {
         }
     }
 
-    public void start() {
+    void start() {
         consumerThread.start();
     }
 

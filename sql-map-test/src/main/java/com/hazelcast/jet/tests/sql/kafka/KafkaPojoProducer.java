@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.Future;
 
+import static com.hazelcast.jet.impl.util.Util.logLateEvent;
 import static com.hazelcast.jet.impl.util.Util.uncheckCall;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
@@ -46,6 +47,7 @@ public class KafkaPojoProducer implements AutoCloseable {
     private final Thread producerThread;
     private volatile boolean finished;
     private volatile Exception exception;
+    private ILogger logger;
 
     private long txId;
 
@@ -54,7 +56,7 @@ public class KafkaPojoProducer implements AutoCloseable {
     ) {
         this.producerThread = new Thread(() -> {
             try {
-                System.out.println("Starting producer thread");
+                logger.info("Starting producer thread");
                 run();
             } catch (Exception exception) {
                 logger.severe("Exception while producing trades to topic: " + topic, exception);
@@ -72,6 +74,7 @@ public class KafkaPojoProducer implements AutoCloseable {
         this.batchCount = batchCount;
         this.txTimeout = txTimeout;
         this.nanosBetweenEvents = SECONDS.toNanos(1) / txPerSeconds;
+        this.logger = logger;
     }
 
     @Override
@@ -112,6 +115,7 @@ public class KafkaPojoProducer implements AutoCloseable {
     }
 
     private Future<RecordMetadata> produce(int type, Key key, Pojo pojo) {
+        logger.info("Produce: " + key.getKey());
         return producer.send(new ProducerRecord<>(topic, key, pojo));
     }
 

@@ -5,9 +5,7 @@ import com.hazelcast.logging.ILogger;
 import com.hazelcast.sql.SqlResult;
 import com.hazelcast.sql.SqlRow;
 import com.hazelcast.sql.SqlService;
-import org.junit.Assert;
 
-import java.time.LocalDateTime;
 import java.util.Iterator;
 
 public class KafkaSqlReader{
@@ -15,20 +13,18 @@ public class KafkaSqlReader{
     public final Thread readerThread;
     private JetInstance jetInstance;
     private String topicName;
-    private LocalDateTime finish;
     private volatile boolean finished;
     private ILogger logger;
     private int queryCount;
+    long iteratorLastUpdated = System.currentTimeMillis();
 
-    public KafkaSqlReader(ILogger logger, JetInstance jetInstance, String topicName, LocalDateTime finish) {
+    public KafkaSqlReader(ILogger logger, JetInstance jetInstance, String topicName) {
         this.jetInstance = jetInstance;
         this.topicName = topicName;
-        this.finish = finish;
         this.logger = logger;
         this.readerThread = new Thread(() -> {
             try {
-                System.out.println("Starting reader thread");
-
+                logger.info("Starting reader thread");
                 run();
             } catch (Exception exception) {
                 logger.severe("Exception while reading with SQL from topic: " + topicName, exception);
@@ -38,11 +34,12 @@ public class KafkaSqlReader{
 
     public void run() {
         SqlService sql = jetInstance.getSql();
+        String query = "SELECT * FROM " + topicName;
+        logger.info("Executing query: " + query);
+        SqlResult sqlResult = sql.execute(query);
+        Iterator<SqlRow> iterator = sqlResult.iterator();
         while(!finished) {
-            String query = "SELECT * FROM " + topicName;
-            logger.info("Executing query: " + query);
-            SqlResult sqlResult = sql.execute(query);
-            verifySqlResultSuccessful(sqlResult);
+            verifyIteratorIsUpdating(iterator);
             logger.info("SQL query executed");
             queryCount++;
         }
@@ -52,20 +49,22 @@ public class KafkaSqlReader{
         readerThread.start();
     }
 
-    private void verifySqlResultSuccessful(SqlResult sqlResult) {
-        Iterator<SqlRow> iterator = sqlResult.iterator();
-        SqlRow sqlRow = iterator.hasNext() ? iterator.next() : null;
-        Assert.assertNotNull("SQL query returned no results.", sqlRow);
+    private void verifyIteratorIsUpdating(Iterator<SqlRow> iterator) {
+        SqlRow sqlRow;
+        while (!finished && iterator.hasNext()) {
+            sqlRow = iterator.next();
+            logger.info("Retreived row from sql: " + sqlRow.getObject("intVal"));
+            iteratorLastUpdated = System.currentTimeMillis();
+        }
     }
 
     public void finish() throws Exception {
         logger.info("Finishing execution after");
         finished = true;
-        Thread.sleep(1000);
-        readerThread.interrupt();
+//        readerThread.interrupt();
 
         //TODO: Find out why join causes deadlock
-//        readerThread.join();
+        readerThread.join();
     }
 
     public int getQueryCount() {

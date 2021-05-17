@@ -8,10 +8,13 @@ import com.hazelcast.jet.tests.sql.kafka.KafkaSqlReader;
 
 import java.util.Random;
 import java.util.concurrent.FutureTask;
+import java.util.concurrent.TimeUnit;
 
 public class SqlKafkaTest extends AbstractSoakTest {
 
     private static final String TOPIC_NAME = "topic" + new Random().nextInt(9999);
+
+    private static final int READ_FROM_KAFKA_THRESHOLD = 10000;
     private static final int DEFAULT_TX_TIMEOUT = 5000;
     private static final int DEFAULT_GENERATOR_BATCH_COUNT = 100;
     private static final int DEFAULT_TX_PER_SECOND = 50;
@@ -20,6 +23,7 @@ public class SqlKafkaTest extends AbstractSoakTest {
     private int txTimeout;
     private int txPerSecond;
     private int generatorBatchCount;
+    private long readFromKafkaThreshold;
     private long begin;
 
     public static void main(String[] args) throws Exception {
@@ -32,6 +36,7 @@ public class SqlKafkaTest extends AbstractSoakTest {
         txTimeout = propertyInt("txTimeout", DEFAULT_TX_TIMEOUT);
         txPerSecond = propertyInt("txPerSecond", DEFAULT_TX_PER_SECOND);
         generatorBatchCount = propertyInt("generatorBatchCount", DEFAULT_GENERATOR_BATCH_COUNT);
+        readFromKafkaThreshold = propertyInt("readFromKafkaThreshold", READ_FROM_KAFKA_THRESHOLD);
         begin = System.currentTimeMillis();
     }
 
@@ -42,9 +47,9 @@ public class SqlKafkaTest extends AbstractSoakTest {
         Thread producer = new KafkaPojoProducer(
                 logger, brokerUri, TOPIC_NAME, txPerSecond, generatorBatchCount, txTimeout, begin, durationInMillis);
 
-        FutureTask<Integer> readerTask =
-                new FutureTask<>(new KafkaSqlReader(logger, client, TOPIC_NAME, begin, durationInMillis));
-        Thread reader = new Thread(readerTask);
+        FutureTask<Integer> readerFuture =
+                new FutureTask<>(new KafkaSqlReader(logger, client, TOPIC_NAME, begin, durationInMillis, readFromKafkaThreshold));
+        Thread reader = new Thread(readerFuture);
 
         producer.start();
         reader.start();
@@ -52,7 +57,7 @@ public class SqlKafkaTest extends AbstractSoakTest {
         producer.join();
         reader.join();
 
-        int queriesRun = readerTask.get();
+        int queriesRun = readerFuture.get();
 
         logger.info(String.format(
                 "Test completed successfully. Executed %d queries in: %s", queriesRun, Util.getTimeElapsed(begin)));

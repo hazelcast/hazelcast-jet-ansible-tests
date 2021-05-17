@@ -29,6 +29,7 @@ public class Pojo implements Serializable {
     private long bigIntVal;
     private float realVal;
     private double doubleVal;
+    private long timestampVal;
 
     private BigDecimal decimalVal;
 
@@ -46,6 +47,7 @@ public class Pojo implements Serializable {
         bigIntVal = val;
         realVal = (float) val;
         doubleVal = (double) val;
+        timestampVal = System.currentTimeMillis();
 
         decimalVal = BigDecimal.valueOf(val);
 
@@ -82,6 +84,9 @@ public class Pojo implements Serializable {
         return doubleVal;
     }
 
+    public long getTimestampVal() {
+        return timestampVal;
+    }
 
     public BigDecimal getDecimalVal() {
         return decimalVal;

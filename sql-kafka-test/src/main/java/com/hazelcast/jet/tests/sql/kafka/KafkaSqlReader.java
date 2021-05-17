@@ -13,24 +13,25 @@ import java.util.concurrent.TimeUnit;
 
 public class KafkaSqlReader implements Callable<Integer> {
 
-    private static final long SQL_UPDATE_MAX_TIMEOUT = TimeUnit.SECONDS.toMillis(10);
-    private static final long PROGRESS_PRINT_INTERVAL = TimeUnit.SECONDS.toMillis(10);
+    private static final long PROGRESS_PRINT_INTERVAL = TimeUnit.SECONDS.toMillis(60);
 
     private JetInstance jetInstance;
     private String topicName;
     private ILogger logger;
-    private long iteratorLastUpdated = System.currentTimeMillis();
     private long begin;
     private long durationInMillis;
     private long lastProgressPrintTime;
+    private long readFromKafkaThreshold;
     private int currentQueryCount;
 
-    public KafkaSqlReader(ILogger logger, JetInstance jetInstance, String topicName, long begin, long durationInMillis) {
+    public KafkaSqlReader(ILogger logger, JetInstance jetInstance, String topicName, long begin,
+                          long durationInMillis, long readFromKafkaThreshold) {
         this.jetInstance = jetInstance;
         this.topicName = topicName;
         this.logger = logger;
         this.begin = begin;
         this.durationInMillis = durationInMillis;
+        this.readFromKafkaThreshold = readFromKafkaThreshold;
     }
 
     @Override
@@ -42,18 +43,24 @@ public class KafkaSqlReader implements Callable<Integer> {
 
     private void readFromIterator(Iterator<SqlRow> iterator) {
         while (System.currentTimeMillis() - begin < durationInMillis) {
-            checkIfNotStuck();
             //The following line would throw an exception in case SqlRow does not contain the value we expect
-            iterator.next().getObject("intVal");
-            iteratorLastUpdated = System.currentTimeMillis();
+            SqlRow sqlRow = iterator.next();
+            checkReadTime(sqlRow);
             currentQueryCount++;
             printProgress();
         }
     }
 
-    private void checkIfNotStuck() {
-        Assert.assertFalse("Too big interval between SQL updates. Reading seems stuck.",
-                (System.currentTimeMillis()-iteratorLastUpdated) > SQL_UPDATE_MAX_TIMEOUT);
+    /**
+     * Verifies that it's been less than {@link #readFromKafkaThreshold} to consume a message from Kafka
+     * @param sqlRow
+     */
+    private void checkReadTime(SqlRow sqlRow) {
+        long timestamp = sqlRow.getObject("timestampVal");
+        long timeTakenToRead = System.currentTimeMillis() - timestamp;
+        Assert.assertTrue(String.format("It took %d seconds to read message from Kafka while expected under %d seconds",
+                TimeUnit.MILLISECONDS.toSeconds(timeTakenToRead), TimeUnit.MILLISECONDS.toSeconds(readFromKafkaThreshold)),
+                timeTakenToRead < readFromKafkaThreshold);
     }
 
     private void printProgress() {

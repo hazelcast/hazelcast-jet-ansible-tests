@@ -20,6 +20,7 @@ import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.core.JobStatus;
 
+import java.time.Duration;
 import java.util.AbstractMap;
 import java.util.Map;
 import java.util.concurrent.CancellationException;
@@ -101,5 +102,18 @@ public final class Util {
             }
             System.setProperty(split[0], split[1]);
         }
+    }
+
+    /**
+     * @param begin starting point
+     * @return pretty time interval representation, starting from 'begin' param
+     */
+    public static String getTimeElapsed(long begin) {
+        Duration timeElapsed = Duration.ofMillis(System.currentTimeMillis() - begin);
+        long days = timeElapsed.toDays();
+        long hours = timeElapsed.minusDays(days).toHours();
+        long minutes = timeElapsed.minusDays(days).minusHours(hours).toMinutes();
+        long seconds = timeElapsed.minusDays(days).minusHours(hours).minusMinutes(minutes).toMillis() / 1000;
+        return String.format("%dd, %dh, %dm, %ds", days, hours, minutes, seconds);
     }
 }

@@ -20,12 +20,12 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <artifactId>sql-map-test</artifactId>
+    <artifactId>sql-kafka-test</artifactId>
 
     <parent>
         <groupId>com.hazelcast.jet.tests</groupId>
         <artifactId>hazelcast-jet-ansible-tests</artifactId>
-        <version>4.5-SNAPSHOT</version>
+        <version>4.5</version>
     </parent>
 
     <properties>
@@ -36,12 +36,7 @@
         <dependency>
             <groupId>com.hazelcast.jet.tests</groupId>
             <artifactId>soak-tests-common</artifactId>
-            <version>${jet.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>com.hazelcast.jet.tests</groupId>
-            <artifactId>stateful-map-test</artifactId>
-            <version>${jet.version}</version>
+            <version>4.5-SNAPSHOT</version>
         </dependency>
         <dependency>
             <groupId>com.hazelcast.jet</groupId>
@@ -69,7 +64,7 @@
                 <configuration>
                     <archive>
                         <manifest>
-                            <mainClass>com.hazelcast.jet.tests.sql.tests.SqlObjectMapTest</mainClass>
+                            <mainClass>com.hazelcast.jet.tests.sql.tests.SqlKafkaTest</mainClass>
                         </manifest>
                     </archive>
                 </configuration>
@@ -91,7 +86,7 @@
                                 <transformer
                                         implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                                     <manifestEntries>
-                                        <Main-Class>com.hazelcast.jet.tests.sql.tests.SqlObjectMapTest</Main-Class>
+                                        <Main-Class>com.hazelcast.jet.tests.sql.tests.SqlKafkaTest</Main-Class>
                                     </manifestEntries>
                                 </transformer>
                             </transformers>

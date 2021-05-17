@@ -2,11 +2,12 @@ package com.hazelcast.jet.tests.sql.tests;
 
 import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
+import com.hazelcast.jet.tests.common.Util;
 import com.hazelcast.jet.tests.sql.kafka.KafkaPojoProducer;
 import com.hazelcast.jet.tests.sql.kafka.KafkaSqlReader;
 
-import java.time.Duration;
 import java.util.Random;
+import java.util.concurrent.FutureTask;
 
 public class SqlKafkaTest extends AbstractSoakTest {
 
@@ -40,17 +41,21 @@ public class SqlKafkaTest extends AbstractSoakTest {
 
         Thread producer = new KafkaPojoProducer(
                 logger, brokerUri, TOPIC_NAME, txPerSecond, generatorBatchCount, txTimeout, begin, durationInMillis);
+
+        FutureTask<Integer> readerTask =
+                new FutureTask<>(new KafkaSqlReader(logger, client, TOPIC_NAME, begin, durationInMillis));
+        Thread reader = new Thread(readerTask);
+
         producer.start();
-
-        Thread reader = new KafkaSqlReader(logger, client, TOPIC_NAME, begin, durationInMillis);
         reader.start();
-
-        Thread.sleep(durationInMillis);
 
         producer.join();
         reader.join();
 
-        logger.info("Test completed successfully after " + getTimeElapsed());
+        int queriesRun = readerTask.get();
+
+        logger.info(String.format(
+                "Test completed successfully. Executed %d queries in: %s", queriesRun, Util.getTimeElapsed(begin)));
     }
 
     @Override
@@ -80,14 +85,5 @@ public class SqlKafkaTest extends AbstractSoakTest {
                 " 'value.deserializer' = 'com.hazelcast.jet.tests.sql.serializer.PojoDeserializer'," +
                 " 'bootstrap.servers' = '127.0.0.1:9092'" +
                 ")");
-    }
-
-    private String getTimeElapsed() {
-        Duration timeElapsed = Duration.ofMillis(System.currentTimeMillis() - begin);
-        long days = timeElapsed.toDays();
-        long hours = timeElapsed.minusDays(days).toHours();
-        long minutes = timeElapsed.minusDays(days).minusHours(hours).toMinutes();
-        long seconds = timeElapsed.minusDays(days).minusHours(hours).minusMinutes(minutes).toMillis() / 1000;
-        return String.format("%dd, %dh, %dm, %ds", days, hours, minutes, seconds);
     }
 }

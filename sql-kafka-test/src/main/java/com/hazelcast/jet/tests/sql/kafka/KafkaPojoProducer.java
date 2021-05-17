@@ -69,18 +69,17 @@ public class KafkaPojoProducer extends Thread {
     public void run(){
         List<Future<RecordMetadata>> futureList = new ArrayList<>(batchCount);
         while (System.currentTimeMillis() - begin < durationInMillis) {
-            // generate start events
             for (int i = 0; i < batchCount; i++) {
                 long id = txId + i;
-                futureList.add(produce(0, new Key(id), new Pojo(id)));
+                futureList.add(produce(new Key(id), new Pojo(id)));
                 parkNanos(nanosBetweenEvents);
             }
             waitForCompleteAndClearList(futureList);
         }
     }
 
-    private Future<RecordMetadata> produce(int type, Key key, Pojo pojo) {
-        logger.info("Produce: " + key.getKey());
+    private Future<RecordMetadata> produce(Key key, Pojo pojo) {
+        logger.fine("Produce: " + key.getKey());
         return producer.send(new ProducerRecord<>(topic, key, pojo));
     }
 

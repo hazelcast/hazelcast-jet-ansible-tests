@@ -48,7 +48,7 @@ public class KafkaPojoProducer extends Thread {
     private long txId;
 
     public KafkaPojoProducer(
-            ILogger logger, String broker, String topic, int txPerSeconds, int batchCount, int txTimeout, long begin, long durationInMillis
+            ILogger logger, String broker, String topic, int txPerSeconds, int batchCount, long begin, long durationInMillis
     ) {
         Properties props = new Properties();
         props.setProperty("bootstrap.servers", broker);

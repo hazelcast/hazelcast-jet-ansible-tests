@@ -20,7 +20,6 @@ public class SqlKafkaTest extends AbstractSoakTest {
     private static final int DEFAULT_TX_PER_SECOND = 50;
 
     private String brokerUri;
-    private int txTimeout;
     private int txPerSecond;
     private int generatorBatchCount;
     private long readFromKafkaThreshold;
@@ -33,7 +32,6 @@ public class SqlKafkaTest extends AbstractSoakTest {
     @Override
     protected void init(JetInstance client) {
         brokerUri = property("brokerUri", "127.0.0.1:9092");
-        txTimeout = propertyInt("txTimeout", DEFAULT_TX_TIMEOUT);
         txPerSecond = propertyInt("txPerSecond", DEFAULT_TX_PER_SECOND);
         generatorBatchCount = propertyInt("generatorBatchCount", DEFAULT_GENERATOR_BATCH_COUNT);
         readFromKafkaThreshold = propertyInt("readFromKafkaThreshold", READ_FROM_KAFKA_THRESHOLD);
@@ -45,7 +43,7 @@ public class SqlKafkaTest extends AbstractSoakTest {
         createKafkaSqlMapping(client);
 
         Thread producer = new KafkaPojoProducer(
-                logger, brokerUri, TOPIC_NAME, txPerSecond, generatorBatchCount, txTimeout, begin, durationInMillis);
+                logger, brokerUri, TOPIC_NAME, txPerSecond, generatorBatchCount, begin, durationInMillis);
 
         FutureTask<Integer> readerFuture =
                 new FutureTask<>(new KafkaSqlReader(logger, client, TOPIC_NAME, begin, durationInMillis, readFromKafkaThreshold));

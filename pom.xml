@@ -41,7 +41,6 @@
         <module>grpc-test</module>
         <module>sort-test</module>
         <module>file-ingestion-test</module>
-        <module>sql-map-test</module>
         <module>sql-kafka-test</module>
     </modules>
 

@@ -36,7 +36,7 @@ public class Pojo implements Serializable {
     private char charVal;
     private String varcharVal;
 
-    public Pojo() {}    //This is needed for Jackson deserialization
+    public Pojo() { }    //This is needed for Jackson deserialization
 
     public Pojo(long val) {
         booleanVal = val % 2 == 0;

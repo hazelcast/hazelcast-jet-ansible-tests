@@ -1,3 +1,19 @@
+/*
+ * Copyright (c) 2008-2018, Hazelcast, Inc. All Rights Reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.hazelcast.jet.tests.sql.tests;
 
 import com.hazelcast.jet.JetInstance;
@@ -8,14 +24,12 @@ import com.hazelcast.jet.tests.sql.kafka.KafkaSqlReader;
 
 import java.util.Random;
 import java.util.concurrent.FutureTask;
-import java.util.concurrent.TimeUnit;
 
 public class SqlKafkaTest extends AbstractSoakTest {
 
     private static final String TOPIC_NAME = "topic" + new Random().nextInt(9999);
 
     private static final int READ_FROM_KAFKA_THRESHOLD = 10000;
-    private static final int DEFAULT_TX_TIMEOUT = 5000;
     private static final int DEFAULT_GENERATOR_BATCH_COUNT = 100;
     private static final int DEFAULT_TX_PER_SECOND = 50;
 
@@ -39,14 +53,14 @@ public class SqlKafkaTest extends AbstractSoakTest {
     }
 
     @Override
-    protected void test(JetInstance client, String name) throws Exception{
+    protected void test(JetInstance client, String name) throws Exception {
         createKafkaSqlMapping(client);
 
         Thread producer = new KafkaPojoProducer(
                 logger, brokerUri, TOPIC_NAME, txPerSecond, generatorBatchCount, begin, durationInMillis);
 
-        FutureTask<Integer> readerFuture =
-                new FutureTask<>(new KafkaSqlReader(logger, client, TOPIC_NAME, begin, durationInMillis, readFromKafkaThreshold));
+        FutureTask<Integer> readerFuture = new FutureTask<>(
+                new KafkaSqlReader(logger, client, TOPIC_NAME, begin, durationInMillis, readFromKafkaThreshold));
         Thread reader = new Thread(readerFuture);
 
         producer.start();

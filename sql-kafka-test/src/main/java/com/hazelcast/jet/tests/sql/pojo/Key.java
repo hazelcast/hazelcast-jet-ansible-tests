@@ -22,7 +22,7 @@ public class Key implements Serializable {
 
     private long key;
 
-    public Key() {}     //This is needed for Jackson deserialization
+    public Key() { }     //This is needed for Jackson deserialization
 
     public Key(long key) {
         this.key = key;

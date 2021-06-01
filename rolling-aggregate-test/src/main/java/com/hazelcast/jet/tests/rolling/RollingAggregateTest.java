@@ -16,8 +16,8 @@
 
 package com.hazelcast.jet.tests.rolling;
 
+import com.hazelcast.client.HazelcastClient;
 import com.hazelcast.client.config.ClientConfig;
-import com.hazelcast.jet.Jet;
 import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.config.JobConfig;
@@ -57,7 +57,7 @@ public class RollingAggregateTest extends AbstractSoakTest {
     public void init(JetInstance client) throws Exception {
         snapshotIntervalMs = propertyInt("snapshotIntervalMs", DEFAULT_SNAPSHOT_INTERVAL);
         remoteClusterClientConfig = remoteClusterClientConfig();
-        remoteClient = Jet.newJetClient(remoteClusterClientConfig);
+        remoteClient = HazelcastClient.newHazelcastClient(remoteClusterClientConfig).getJetInstance();
 
         producer = new BasicEventJournalProducer(remoteClient, SOURCE, EVENT_JOURNAL_CAPACITY);
         producer.start();

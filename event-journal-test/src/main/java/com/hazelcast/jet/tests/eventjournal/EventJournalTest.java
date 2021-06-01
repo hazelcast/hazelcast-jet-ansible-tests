@@ -16,12 +16,12 @@
 
 package com.hazelcast.jet.tests.eventjournal;
 
+import com.hazelcast.client.HazelcastClient;
 import com.hazelcast.client.config.ClientConfig;
 import com.hazelcast.config.Config;
 import com.hazelcast.config.MapConfig;
 import com.hazelcast.core.EntryEventType;
 import com.hazelcast.core.HazelcastInstance;
-import com.hazelcast.jet.Jet;
 import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.aggregate.AggregateOperations;
@@ -156,7 +156,7 @@ public class EventJournalTest extends AbstractSoakTest {
     }
 
     private void configureTradeProducer() throws IOException {
-        remoteClient = Jet.newJetClient(remoteClusterClientConfig);
+        remoteClient = HazelcastClient.newHazelcastClient(remoteClusterClientConfig).getJetInstance();
         HazelcastInstance hazelcastInstance = remoteClient.getHazelcastInstance();
 
         memberSize = hazelcastInstance.getCluster().getMembers().size();

@@ -16,13 +16,15 @@
 
 package com.hazelcast.jet.tests.common;
 
+import com.hazelcast.client.HazelcastClient;
 import com.hazelcast.client.config.ClientConfig;
 import com.hazelcast.client.config.YamlClientConfigBuilder;
 import com.hazelcast.config.CacheSimpleConfig;
+import com.hazelcast.config.Config;
+import com.hazelcast.core.Hazelcast;
+import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.jet.Jet;
 import com.hazelcast.jet.JetInstance;
-import com.hazelcast.jet.config.JetClientConfig;
-import com.hazelcast.jet.config.JetConfig;
 import com.hazelcast.logging.ILogger;
 
 import java.io.IOException;
@@ -52,16 +54,17 @@ public abstract class AbstractSoakTest {
     protected final void run(String[] args) throws Exception {
         parseArguments(args);
 
-        JetInstance[] instances = null;
+        HazelcastInstance[] instances = null;
         if (isRunLocal()) {
-            JetConfig config = new JetConfig();
+            Config config = new Config();
             CacheSimpleConfig cacheConfig = new CacheSimpleConfig()
                     .setName("CooperativeMapCacheSourceTest_SourceCache");
             cacheConfig.getEvictionConfig().setSize(CACHE_EVICTION_SIZE);
-            config.getHazelcastConfig().addCacheConfig(cacheConfig);
+            config.addCacheConfig(cacheConfig);
 
-            instances = new JetInstance[]{Jet.newJetInstance(config), Jet.newJetInstance(config)};
-            jet = Jet.newJetClient();
+            instances = new HazelcastInstance[]{
+                Hazelcast.newHazelcastInstance(config), Hazelcast.newHazelcastInstance(config)};
+            jet = HazelcastClient.newHazelcastClient().getJetInstance();
         } else {
             jet = Jet.bootstrappedInstance();
         }
@@ -97,7 +100,7 @@ public abstract class AbstractSoakTest {
             stableClusterClient.shutdown();
         }
         if (instances != null) {
-            Jet.shutdownAll();
+            Hazelcast.shutdownAll();
         }
         logger.info("Finished OK");
         System.exit(0);
@@ -129,7 +132,7 @@ public abstract class AbstractSoakTest {
 
     protected ClientConfig remoteClusterClientConfig() throws IOException {
         if (isRunLocal()) {
-            return new JetClientConfig();
+            return new ClientConfig();
         }
         String remoteClusterYaml = property("remoteClusterYaml", null);
         if (remoteClusterYaml == null) {
@@ -146,7 +149,7 @@ public abstract class AbstractSoakTest {
         }
 
         stableClusterClientConfig = remoteClusterClientConfig();
-        stableClusterClient = Jet.newJetClient(stableClusterClientConfig);
+        stableClusterClient = HazelcastClient.newHazelcastClient(stableClusterClientConfig).getJetInstance();
 
         Throwable[] exceptions = new Throwable[2];
         String dynamicName = DYNAMIC_CLUSTER + "-" + getClass().getSimpleName();

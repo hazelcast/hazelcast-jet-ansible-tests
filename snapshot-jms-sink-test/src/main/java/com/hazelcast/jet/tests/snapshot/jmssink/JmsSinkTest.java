@@ -16,8 +16,8 @@
 
 package com.hazelcast.jet.tests.snapshot.jmssink;
 
+import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.function.SupplierEx;
-import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.config.ProcessingGuarantee;
@@ -52,7 +52,7 @@ public class JmsSinkTest extends AbstractSoakTest {
     }
 
     @Override
-    public void init(JetInstance client) throws Exception {
+    public void init(HazelcastInstance client) throws Exception {
         sleepMsBetweenItem = propertyInt("sleepMsBetweenItem", DEFAULT_SLEEP_MS_BETWEEN_ITEM);
         snapshotIntervalMs = propertyInt("snapshotIntervalMs", DEFAULT_SNAPSHOT_INTERVAL);
         brokerURL = property("brokerURL", "tcp://localhost:61616");
@@ -64,7 +64,7 @@ public class JmsSinkTest extends AbstractSoakTest {
     }
 
     @Override
-    public void test(JetInstance client, String name) throws InterruptedException {
+    public void test(HazelcastInstance client, String name) throws InterruptedException {
         JmsSinkVerifier verifier = new JmsSinkVerifier(name, brokerURL, logger);
         verifier.start();
 
@@ -76,7 +76,7 @@ public class JmsSinkTest extends AbstractSoakTest {
             if (name.startsWith(STABLE_CLUSTER)) {
                 jobConfig.addClass(JmsSinkTest.class, JmsSinkVerifier.class);
             }
-            Job job = client.newJob(pipeline(name), jobConfig);
+            Job job = client.getJet().newJob(pipeline(name), jobConfig);
 
             try {
                 long begin = System.currentTimeMillis();

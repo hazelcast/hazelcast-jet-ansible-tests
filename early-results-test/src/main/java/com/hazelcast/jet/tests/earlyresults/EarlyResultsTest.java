@@ -16,7 +16,7 @@
 
 package com.hazelcast.jet.tests.earlyresults;
 
-import com.hazelcast.jet.JetInstance;
+import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.aggregate.AggregateOperations;
 import com.hazelcast.jet.config.JobConfig;
@@ -51,17 +51,17 @@ public class EarlyResultsTest extends AbstractSoakTest {
     }
 
     @Override
-    protected void init(JetInstance client) {
+    protected void init(HazelcastInstance client) {
         windowSize = propertyInt("windowSize", DEFAULT_WINDOW_SIZE);
         tradePerSecond = propertyInt("tradePerSecond", DEFAULT_TRADE_PER_SECOND);
         earlyResultsPeriod = windowSize * ONE_THOUSAND / tradePerSecond / 3;
     }
 
     @Override
-    protected void test(JetInstance client, String name) {
+    protected void test(HazelcastInstance client, String name) {
         JobConfig jobConfig = new JobConfig();
         jobConfig.setName(name);
-        Job job = client.newJob(pipeline(), jobConfig);
+        Job job = client.getJet().newJob(pipeline(), jobConfig);
 
         long begin = System.currentTimeMillis();
         while (System.currentTimeMillis() - begin < durationInMillis) {

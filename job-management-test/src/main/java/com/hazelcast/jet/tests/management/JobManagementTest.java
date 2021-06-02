@@ -18,7 +18,7 @@ package com.hazelcast.jet.tests.management;
 
 import com.hazelcast.config.Config;
 import com.hazelcast.config.MapConfig;
-import com.hazelcast.jet.JetInstance;
+import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.JobStateSnapshot;
 import com.hazelcast.jet.config.JobConfig;
@@ -57,10 +57,10 @@ public class JobManagementTest extends AbstractSoakTest {
     }
 
     @Override
-    public void init(JetInstance client) {
+    public void init(HazelcastInstance client) {
         snapshotIntervalMs = propertyInt("snapshotIntervalMs", DEFAULT_SNAPSHOT_INTERVAL);
 
-        Config config = client.getHazelcastInstance().getConfig();
+        Config config = client.getConfig();
         MapConfig mapConfig = new MapConfig(SOURCE);
         mapConfig.getEventJournalConfig()
                  .setCapacity(EVENT_JOURNAL_CAPACITY)
@@ -71,9 +71,9 @@ public class JobManagementTest extends AbstractSoakTest {
     }
 
     @Override
-    public void test(JetInstance client, String name) {
+    public void test(HazelcastInstance client, String name) {
         // Submit the job without initial snapshot
-        Job job = client.newJob(pipeline(), jobConfig(name, null));
+        Job job = client.getJet().newJob(pipeline(), jobConfig(name, null));
         waitForJobStatus(job, RUNNING);
         sleepMinutes(1);
 
@@ -103,7 +103,7 @@ public class JobManagementTest extends AbstractSoakTest {
 
 
             logger.info("New job with exported snapshot");
-            job = client.newJob(pipeline(), jobConfig(name, exportedSnapshot.name()));
+            job = client.getJet().newJob(pipeline(), jobConfig(name, exportedSnapshot.name()));
             waitForJobStatus(job, RUNNING);
             sleepMinutes(1);
 

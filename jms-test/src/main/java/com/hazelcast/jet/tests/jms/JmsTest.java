@@ -16,8 +16,8 @@
 
 package com.hazelcast.jet.tests.jms;
 
+import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.function.SupplierEx;
-import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.config.ProcessingGuarantee;
@@ -54,7 +54,7 @@ public class JmsTest extends AbstractSoakTest {
     }
 
     @Override
-    public void init(JetInstance client) throws IOException {
+    public void init(HazelcastInstance client) throws IOException {
         brokerURL = property("brokerURL", "tcp://localhost:61616");
     }
 
@@ -64,7 +64,7 @@ public class JmsTest extends AbstractSoakTest {
     }
 
     @Override
-    public void test(JetInstance client, String clusterName) throws Exception {
+    public void test(HazelcastInstance client, String clusterName) throws Exception {
         ILogger logger = getLogger(client, JmsTest.class);
 
         Pipeline p1 = Pipeline.create();
@@ -83,7 +83,7 @@ public class JmsTest extends AbstractSoakTest {
         if (clusterName.startsWith(STABLE_CLUSTER)) {
             jobConfig1.addClass(JmsTest.class, JmsMessageProducer.class, JmsMessageConsumer.class);
         }
-        Job job1 = client.newJob(p1, jobConfig1);
+        Job job1 = client.getJet().newJob(p1, jobConfig1);
         waitForJobStatus(job1, RUNNING);
         log(logger, "Job1 started", clusterName);
 
@@ -93,7 +93,7 @@ public class JmsTest extends AbstractSoakTest {
         if (clusterName.startsWith(STABLE_CLUSTER)) {
             jobConfig2.addClass(JmsTest.class, JmsMessageProducer.class, JmsMessageConsumer.class);
         }
-        Job job2 = client.newJob(p2, jobConfig2);
+        Job job2 = client.getJet().newJob(p2, jobConfig2);
         waitForJobStatus(job2, RUNNING);
         log(logger, "Job2 started", clusterName);
 

@@ -18,9 +18,8 @@ package com.hazelcast.jet.tests.remote;
 
 import com.google.common.collect.Iterables;
 import com.hazelcast.cluster.Member;
+import com.hazelcast.core.Hazelcast;
 import com.hazelcast.core.HazelcastInstance;
-import com.hazelcast.jet.Jet;
-import com.hazelcast.jet.JetInstance;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.remotecontroller.Lang;
 import com.hazelcast.remotecontroller.RemoteController;
@@ -72,8 +71,7 @@ public final class RemoteControllerClient {
 
         long duration = MINUTES.toMillis(durationInMinutes);
 
-        JetInstance jet = Jet.bootstrappedInstance();
-        HazelcastInstance instance = jet.getHazelcastInstance();
+        HazelcastInstance instance = Hazelcast.bootstrappedInstance();
         logger = instance.getLoggingService().getLogger(RemoteControllerClient.class);
 
         List<Member> members = new ArrayList<>(instance.getCluster().getMembers());

@@ -17,7 +17,7 @@
 package com.hazelcast.jet.tests.grpc;
 
 import com.hazelcast.collection.IList;
-import com.hazelcast.jet.JetInstance;
+import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.grpc.GrpcService;
 import com.hazelcast.jet.pipeline.Pipeline;
@@ -63,7 +63,7 @@ public class GrpcTest extends AbstractSoakTest {
     }
 
     @Override
-    protected void init(JetInstance client) throws Exception {
+    protected void init(HazelcastInstance client) throws Exception {
         server = GreeterService.createServer();
 
         sourceMap = client.getMap(SOURCE_MAP_NAME);
@@ -83,13 +83,13 @@ public class GrpcTest extends AbstractSoakTest {
     }
 
     @Override
-    protected void test(JetInstance client, String name) throws Throwable {
+    protected void test(HazelcastInstance client, String name) throws Throwable {
         long begin = System.currentTimeMillis();
         long jobCount = 0;
         while (System.currentTimeMillis() - begin < durationInMillis) {
             JobConfig jobConfig = new JobConfig();
             jobConfig.setName("GrpcTest" + jobCount);
-            client.newJob(pipeline(jobCount), jobConfig).join();
+            client.getJet().newJob(pipeline(jobCount), jobConfig).join();
 
             assertEquals(itemCount, sinkList.size());
             assertEquals(itemCount, sinkList.stream().filter(s -> s.startsWith("Hello")).count());

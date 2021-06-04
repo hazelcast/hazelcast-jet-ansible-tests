@@ -18,7 +18,7 @@ package com.hazelcast.jet.tests.rolling;
 
 import com.hazelcast.client.HazelcastClient;
 import com.hazelcast.client.config.ClientConfig;
-import com.hazelcast.jet.JetInstance;
+import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.pipeline.Pipeline;
@@ -46,7 +46,7 @@ public class RollingAggregateTest extends AbstractSoakTest {
     private long snapshotIntervalMs;
 
     private transient ClientConfig remoteClusterClientConfig;
-    private transient JetInstance remoteClient;
+    private transient HazelcastInstance remoteClient;
     private transient BasicEventJournalProducer producer;
 
     public static void main(String[] args) throws Exception {
@@ -54,17 +54,17 @@ public class RollingAggregateTest extends AbstractSoakTest {
     }
 
     @Override
-    public void init(JetInstance client) throws Exception {
+    public void init(HazelcastInstance client) throws Exception {
         snapshotIntervalMs = propertyInt("snapshotIntervalMs", DEFAULT_SNAPSHOT_INTERVAL);
         remoteClusterClientConfig = remoteClusterClientConfig();
-        remoteClient = HazelcastClient.newHazelcastClient(remoteClusterClientConfig).getJetInstance();
+        remoteClient = HazelcastClient.newHazelcastClient(remoteClusterClientConfig);
 
         producer = new BasicEventJournalProducer(remoteClient, SOURCE, EVENT_JOURNAL_CAPACITY);
         producer.start();
     }
 
     @Override
-    public void test(JetInstance client, String name) {
+    public void test(HazelcastInstance client, String name) {
         Pipeline p = Pipeline.create();
 
         p.readFrom(Sources.<Long, Long, Long>remoteMapJournal(SOURCE, remoteClusterClientConfig,
@@ -78,7 +78,7 @@ public class RollingAggregateTest extends AbstractSoakTest {
                 .setSnapshotIntervalMillis(snapshotIntervalMs)
                 .setProcessingGuarantee(EXACTLY_ONCE);
 
-        Job job = client.newJob(p, jobConfig);
+        Job job = client.getJet().newJob(p, jobConfig);
 
         long begin = System.currentTimeMillis();
         while (System.currentTimeMillis() - begin < durationInMillis) {

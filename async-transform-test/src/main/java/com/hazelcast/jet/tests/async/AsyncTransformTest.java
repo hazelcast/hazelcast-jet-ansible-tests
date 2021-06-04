@@ -21,7 +21,6 @@ import com.hazelcast.client.config.ClientConfig;
 import com.hazelcast.config.Config;
 import com.hazelcast.config.MapConfig;
 import com.hazelcast.core.HazelcastInstance;
-import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.config.ProcessingGuarantee;
@@ -70,7 +69,7 @@ public class AsyncTransformTest extends AbstractSoakTest {
     private long maxSchedulerDelayMillis;
 
     private transient ClientConfig remoteClusterClientConfig;
-    private transient JetInstance remoteClient;
+    private transient HazelcastInstance remoteClient;
     private transient BasicEventJournalProducer producer;
 
     public static void main(String[] args) throws Exception {
@@ -78,14 +77,14 @@ public class AsyncTransformTest extends AbstractSoakTest {
     }
 
     @Override
-    protected void init(JetInstance client) throws Exception {
+    protected void init(HazelcastInstance client) throws Exception {
         snapshotIntervalMs = propertyInt("snapshotIntervalMs", DEFAULT_SNAPSHOT_INTERVAL);
         maxSchedulerDelayMillis = propertyInt("maxSchedulerDelayMillis", DEFAULT_MAX_SCHEDULER_DELAY);
 
         remoteClusterClientConfig = remoteClusterClientConfig();
-        remoteClient = HazelcastClient.newHazelcastClient(remoteClusterClientConfig).getJetInstance();
+        remoteClient = HazelcastClient.newHazelcastClient(remoteClusterClientConfig);
 
-        Config config = remoteClient.getHazelcastInstance().getConfig();
+        Config config = remoteClient.getConfig();
         MapConfig mapConfig = new MapConfig(ORDERED_SINK);
         mapConfig.getEventJournalConfig()
                  .setCapacity(EVENT_JOURNAL_CAPACITY)
@@ -101,12 +100,12 @@ public class AsyncTransformTest extends AbstractSoakTest {
     }
 
     @Override
-    protected void test(JetInstance client, String name) throws InterruptedException {
+    protected void test(HazelcastInstance client, String name) throws InterruptedException {
         JobConfig jobConfig = new JobConfig();
         jobConfig.setName(name);
         jobConfig.setSnapshotIntervalMillis(snapshotIntervalMs);
         jobConfig.setProcessingGuarantee(ProcessingGuarantee.EXACTLY_ONCE);
-        Job job = client.newJob(pipeline(), jobConfig);
+        Job job = client.getJet().newJob(pipeline(), jobConfig);
 
         Verifier orderedVerifier = new Verifier(remoteClient, ORDERED_SINK);
         Verifier unorderedVerifier = new Verifier(remoteClient, UNORDERED_SINK);
@@ -193,11 +192,10 @@ public class AsyncTransformTest extends AbstractSoakTest {
         private volatile boolean running = true;
         private volatile Throwable error;
 
-        Verifier(JetInstance client, String mapName) {
-            HazelcastInstance hazelcastInstance = client.getHazelcastInstance();
-            logger = hazelcastInstance.getLoggingService().getLogger(Verifier.class.getSimpleName() + "-" + mapName);
-            int partitionCount = hazelcastInstance.getPartitionService().getPartitions().size();
-            map = hazelcastInstance.getMap(mapName);
+        Verifier(HazelcastInstance client, String mapName) {
+            logger = client.getLoggingService().getLogger(Verifier.class.getSimpleName() + "-" + mapName);
+            int partitionCount = client.getPartitionService().getPartitions().size();
+            map = client.getMap(mapName);
             consumer = new EventJournalConsumer<>(map, mapPutEvents(), partitionCount);
             thread = new Thread(this::run);
             thread.start();

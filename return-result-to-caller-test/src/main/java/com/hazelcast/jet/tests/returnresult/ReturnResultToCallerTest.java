@@ -16,7 +16,7 @@
 
 package com.hazelcast.jet.tests.returnresult;
 
-import com.hazelcast.jet.JetInstance;
+import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.Observable;
 import com.hazelcast.jet.config.JobConfig;
@@ -67,12 +67,12 @@ public class ReturnResultToCallerTest extends AbstractSoakTest {
     }
 
     @Override
-    public void init(JetInstance client) {
+    public void init(HazelcastInstance client) {
         windowSize = propertyInt("windowSize", DEFAULT_WINDOW_SIZE);
         allowedLag = propertyInt("allowedLag", DEFAULT_ALLOWED_LAG);
         logProgress = propertyInt("logProgress", DEFAULT_LOG_PROGRESS);
 
-        observable = client.getObservable(OBSERVABLE_NAME);
+        observable = client.getJet().getObservable(OBSERVABLE_NAME);
         observer = new TestObserver(logger);
         observable.addObserver(observer);
 
@@ -80,10 +80,10 @@ public class ReturnResultToCallerTest extends AbstractSoakTest {
     }
 
     @Override
-    public void test(JetInstance client, String name) throws Throwable {
+    public void test(HazelcastInstance client, String name) throws Throwable {
         JobConfig jobConfig = new JobConfig()
                 .setName(name);
-        Job job = client.newJob(pipeline(), jobConfig);
+        Job job = client.getJet().newJob(pipeline(), jobConfig);
         waitForJobStatus(job, RUNNING);
         producer.start();
         sleepMinutes(1);

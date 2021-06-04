@@ -17,7 +17,7 @@
 package com.hazelcast.jet.tests.elastic;
 
 import com.hazelcast.collection.IList;
-import com.hazelcast.jet.JetInstance;
+import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.elastic.ElasticSinks;
 import com.hazelcast.jet.elastic.ElasticSourceBuilder;
@@ -66,14 +66,14 @@ public class ElasticTest extends AbstractSoakTest {
     }
 
     @Override
-    public void init(JetInstance client) throws SQLException {
+    public void init(HazelcastInstance client) throws SQLException {
         elasticIp = property("elasticIp", "localhost");
         itemCount = propertyInt("itemCount", DEFAULT_ITEM_COUNT);
         inputItems = IntStream.range(0, itemCount).boxed().collect(toList());
     }
 
     @Override
-    public void test(JetInstance client, String name) throws Exception {
+    public void test(HazelcastInstance client, String name) throws Exception {
         logger.info("Elastic ip: " + elasticIp);
         clearSinkList(client);
         int jobCounter = 0;
@@ -103,7 +103,7 @@ public class ElasticTest extends AbstractSoakTest {
         }
     }
 
-    private void executeWriteToElasticPipeline(JetInstance client, int indexCounter) {
+    private void executeWriteToElasticPipeline(HazelcastInstance client, int indexCounter) {
         final String ip = elasticIp;
         Sink<Integer> elasticSink = ElasticSinks.builder()
                 .clientFn(() -> RestClient.builder(new HttpHost(ip, 9200, "http")))
@@ -121,10 +121,10 @@ public class ElasticTest extends AbstractSoakTest {
 
         JobConfig jobConfig = new JobConfig();
         jobConfig.setName("ElasticTest_writeTo_" + indexCounter);
-        client.newJob(toElastic, jobConfig).join();
+        client.getJet().newJob(toElastic, jobConfig).join();
     }
 
-    private void executeReadFromElasticPipeline(JetInstance client, int indexCounter) {
+    private void executeReadFromElasticPipeline(HazelcastInstance client, int indexCounter) {
         final String ip = elasticIp;
         BatchSource<String> elasticSource = new ElasticSourceBuilder<>()
                 .clientFn(() -> RestClient.builder(new HttpHost(ip, 9200, "http")))
@@ -142,10 +142,10 @@ public class ElasticTest extends AbstractSoakTest {
 
         JobConfig jobConfig = new JobConfig();
         jobConfig.setName("ElasticTest_readFrom_" + indexCounter);
-        client.newJob(fromElastic, jobConfig).join();
+        client.getJet().newJob(fromElastic, jobConfig).join();
     }
 
-    private void executeDeleteFromElasticPipeline(JetInstance client, int indexCounter) {
+    private void executeDeleteFromElasticPipeline(HazelcastInstance client, int indexCounter) {
         final String ip = elasticIp;
         Sink<Integer> elasticSink = ElasticSinks.builder()
                 .clientFn(() -> RestClient.builder(new HttpHost(ip, 9200, "http")))
@@ -161,10 +161,10 @@ public class ElasticTest extends AbstractSoakTest {
 
         JobConfig jobConfig = new JobConfig();
         jobConfig.setName("ElasticTest_deleteFrom_" + indexCounter);
-        client.newJob(toElastic, jobConfig).join();
+        client.getJet().newJob(toElastic, jobConfig).join();
     }
 
-    private void assertResults(JetInstance client, int indexCounter) {
+    private void assertResults(HazelcastInstance client, int indexCounter) {
         IList<String> list = client.getList(SINK_LIST_NAME);
         Set<String> set = new HashSet<>();
         String expected = "_index-" + indexCounter + "_";
@@ -188,7 +188,7 @@ public class ElasticTest extends AbstractSoakTest {
         }
     }
 
-    private void assertEmptyResults(JetInstance client) {
+    private void assertEmptyResults(HazelcastInstance client) {
         IList<String> list = client.getList(SINK_LIST_NAME);
         assertTrue(list.isEmpty());
     }
@@ -200,7 +200,7 @@ public class ElasticTest extends AbstractSoakTest {
         }
     }
 
-    private void clearSinkList(JetInstance client) {
+    private void clearSinkList(HazelcastInstance client) {
         client.getList(SINK_LIST_NAME).clear();
     }
 

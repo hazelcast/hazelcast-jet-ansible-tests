@@ -19,7 +19,6 @@ package com.hazelcast.jet.tests.common;
 import com.hazelcast.config.Config;
 import com.hazelcast.config.MapConfig;
 import com.hazelcast.core.HazelcastInstance;
-import com.hazelcast.jet.JetInstance;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.map.IMap;
 
@@ -43,17 +42,17 @@ public class BasicEventJournalProducer {
 
     private volatile boolean producing = true;
 
-    public BasicEventJournalProducer(JetInstance jet, String mapName, int capacity) {
-        HazelcastInstance hz = jet.getHazelcastInstance();
-        Config config = hz.getConfig();
+    public BasicEventJournalProducer(HazelcastInstance client, String mapName, int capacity) {
+        Config config = client.getConfig();
         MapConfig mapConfig = new MapConfig(mapName);
         mapConfig.getEventJournalConfig()
                 .setCapacity(capacity)
                 .setEnabled(true);
         config.addMapConfig(mapConfig);
-        this.logger = hz.getLoggingService().getLogger(BasicEventJournalProducer.class.getSimpleName() + "-" + mapName);
+        this.logger = client.getLoggingService()
+                .getLogger(BasicEventJournalProducer.class.getSimpleName() + "-" + mapName);
 
-        this.map = jet.getMap(mapName);
+        this.map = client.getMap(mapName);
         this.map.destroy();
 
         this.thread = new Thread(this::run);

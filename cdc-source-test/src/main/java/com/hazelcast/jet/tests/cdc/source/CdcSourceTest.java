@@ -16,7 +16,7 @@
 
 package com.hazelcast.jet.tests.cdc.source;
 
-import com.hazelcast.jet.JetInstance;
+import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.cdc.ChangeRecord;
 import com.hazelcast.jet.cdc.Operation;
@@ -67,7 +67,7 @@ public class CdcSourceTest extends AbstractSoakTest {
     }
 
     @Override
-    public void init(JetInstance client) throws Exception {
+    public void init(HazelcastInstance client) throws Exception {
         String connectionUrlProperty = property("connectionUrl", DEFAULT_DATABASE_URL);
         connectionUrl = connectionUrlProperty + "?useSSL=false";
         connectionIp = connectionUrlProperty.split("//")[1];
@@ -85,7 +85,7 @@ public class CdcSourceTest extends AbstractSoakTest {
     }
 
     @Override
-    public void test(JetInstance client, String name) throws Exception {
+    public void test(HazelcastInstance client, String name) throws Exception {
         String tableName = TABLE_NAME + name.replace("-", "_");
         createTable(tableName);
 
@@ -97,7 +97,7 @@ public class CdcSourceTest extends AbstractSoakTest {
             jobConfig.setSnapshotIntervalMillis(snapshotIntervalMs);
             jobConfig.setProcessingGuarantee(ProcessingGuarantee.AT_LEAST_ONCE);
         }
-        Job job = client.newJob(pipeline(name, tableName), jobConfig);
+        Job job = client.getJet().newJob(pipeline(name, tableName), jobConfig);
 
         waitForJobStatus(job, RUNNING);
 
@@ -130,7 +130,7 @@ public class CdcSourceTest extends AbstractSoakTest {
         log("Job completed", name);
     }
 
-    private int checkNewDataProcessed(JetInstance client, String clusterName, int latestChecked) {
+    private int checkNewDataProcessed(HazelcastInstance client, String clusterName, int latestChecked) {
         Map<String, Integer> latestCounterMap = client.getMap(VerificationProcessor.CONSUMED_MESSAGES_MAP_NAME);
         int latest = 0;
         for (int i = 0; i < ASSERTION_RETRY_COUNT; i++) {
@@ -224,7 +224,7 @@ public class CdcSourceTest extends AbstractSoakTest {
         }
     }
 
-    private void assertCountEventually(JetInstance client, String clusterName, long expectedTotalCount) {
+    private void assertCountEventually(HazelcastInstance client, String clusterName, long expectedTotalCount) {
         Map<String, Integer> latestCounterMap = client.getMap(VerificationProcessor.CONSUMED_MESSAGES_MAP_NAME);
         for (int i = 0; i < ASSERTION_RETRY_COUNT; i++) {
             int insertActualTotalCount = latestCounterMap.get(clusterName + "_insert");

@@ -113,7 +113,7 @@ public final class WordGenerator extends AbstractProcessor {
 
         @Override
         public void init(@Nonnull Context context) {
-            addressUuidMap = context.jetInstance().getCluster().getMembers()
+            addressUuidMap = context.hazelcastInstance().getCluster().getMembers()
                     .stream()
                     .collect(Collectors.toMap(Member::getAddress, Member::getUuid));
         }

@@ -20,7 +20,7 @@ import com.hazelcast.client.HazelcastClient;
 import com.hazelcast.client.config.ClientConfig;
 import com.hazelcast.config.Config;
 import com.hazelcast.config.MapConfig;
-import com.hazelcast.jet.JetInstance;
+import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.pipeline.Pipeline;
@@ -57,14 +57,14 @@ public class LargeSnapshotChunkTest extends AbstractSoakTest {
     private int lagMs;
 
     private transient ClientConfig remoteClientConfig;
-    private transient JetInstance remoteClient;
+    private transient HazelcastInstance remoteClient;
 
     public static void main(String[] args) throws Exception {
         new LargeSnapshotChunkTest().run(args);
     }
 
     @Override
-    public void init(JetInstance client) throws Exception {
+    public void init(HazelcastInstance client) throws Exception {
         snapshotIntervalMs = propertyInt("snapshotIntervalMs", DEFAULT_SNAPSHOT_INTERVAL);
         lagMs = propertyInt("lagMs", DEFAULT_LAG);
 
@@ -72,7 +72,7 @@ public class LargeSnapshotChunkTest extends AbstractSoakTest {
     }
 
     @Override
-    public void test(JetInstance client, String name) {
+    public void test(HazelcastInstance client, String name) {
         Pipeline p = Pipeline.create();
 
         p.readFrom(Sources.<String, int[]>remoteMapJournal(SOURCE, remoteClientConfig,
@@ -90,7 +90,7 @@ public class LargeSnapshotChunkTest extends AbstractSoakTest {
                 .setSnapshotIntervalMillis(snapshotIntervalMs)
                 .setProcessingGuarantee(EXACTLY_ONCE);
 
-        Job job = client.newJob(p, jobConfig);
+        Job job = client.getJet().newJob(p, jobConfig);
 
         long begin = System.currentTimeMillis();
         while (System.currentTimeMillis() - begin < durationInMillis) {
@@ -115,9 +115,9 @@ public class LargeSnapshotChunkTest extends AbstractSoakTest {
 
     private void configureProducer() throws IOException {
         remoteClientConfig = remoteClusterClientConfig();
-        remoteClient = HazelcastClient.newHazelcastClient(remoteClientConfig).getJetInstance();
+        remoteClient = HazelcastClient.newHazelcastClient(remoteClientConfig);
 
-        Config config = remoteClient.getHazelcastInstance().getConfig();
+        Config config = remoteClient.getConfig();
         MapConfig mapConfig = new MapConfig(SOURCE);
         mapConfig.getEventJournalConfig()
                  .setCapacity(EVENT_JOURNAL_CAPACITY)

@@ -16,7 +16,7 @@
 
 package com.hazelcast.jet.tests.cdc.sink;
 
-import com.hazelcast.jet.JetInstance;
+import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.cdc.CdcSinks;
 import com.hazelcast.jet.cdc.ChangeRecord;
@@ -65,7 +65,7 @@ public class CdcSinkTest extends AbstractSoakTest {
     }
 
     @Override
-    public void init(JetInstance client) throws Exception {
+    public void init(HazelcastInstance client) throws Exception {
         sleepMsBetweenItem = propertyInt("sleepMsBetweenItem", DEFAULT_SLEEP_MS_BETWEEN_ITEM);
         preserveItemMod = propertyInt("preserveItemMod", DEFAULT_PRESERVE_ITEM_MOD);
         snapshotIntervalMs = propertyInt("snapshotIntervalMs", DEFAULT_SNAPSHOT_INTERVAL);
@@ -77,7 +77,7 @@ public class CdcSinkTest extends AbstractSoakTest {
     }
 
     @Override
-    public void test(JetInstance client, String name) throws Exception {
+    public void test(HazelcastInstance client, String name) throws Exception {
         JobConfig jobConfig = new JobConfig();
         jobConfig.setName(name);
         if (name.startsWith(STABLE_CLUSTER)) {
@@ -86,7 +86,7 @@ public class CdcSinkTest extends AbstractSoakTest {
             jobConfig.setSnapshotIntervalMillis(snapshotIntervalMs);
             jobConfig.setProcessingGuarantee(ProcessingGuarantee.AT_LEAST_ONCE);
         }
-        Job job = client.newJob(pipeline(name), jobConfig);
+        Job job = client.getJet().newJob(pipeline(name), jobConfig);
 
         waitForJobStatus(job, RUNNING);
 

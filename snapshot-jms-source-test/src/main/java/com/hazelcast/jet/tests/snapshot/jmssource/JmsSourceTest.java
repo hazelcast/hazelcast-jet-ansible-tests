@@ -16,8 +16,8 @@
 
 package com.hazelcast.jet.tests.snapshot.jmssource;
 
+import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.function.SupplierEx;
-import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.config.ProcessingGuarantee;
@@ -59,7 +59,7 @@ public class JmsSourceTest extends AbstractSoakTest {
     }
 
     @Override
-    public void init(JetInstance client) throws IOException {
+    public void init(HazelcastInstance client) throws IOException {
         snapshotIntervalMs = propertyInt("snapshotIntervalMs", SNAPSHOT_INTERVAL);
         brokerURL = property("brokerURL", "tcp://localhost:61616");
     }
@@ -69,7 +69,7 @@ public class JmsSourceTest extends AbstractSoakTest {
         return true;
     }
 
-    public void test(JetInstance client, String clusterName) throws Exception {
+    public void test(HazelcastInstance client, String clusterName) throws Exception {
         ILogger logger = getLogger(client, JmsSourceTest.class);
         Pipeline p = Pipeline.create();
 
@@ -93,7 +93,7 @@ public class JmsSourceTest extends AbstractSoakTest {
             jobConfig.addClass(JmsSourceTest.class, JmsMessageProducer.class, VerificationProcessor.class,
                     JmsSourceTest.JmsFactorySupplier.class);
         }
-        Job job = client.newJob(p, jobConfig);
+        Job job = client.getJet().newJob(p, jobConfig);
         waitForJobStatus(job, RUNNING);
         log(logger, "Job started", clusterName);
 
@@ -128,8 +128,8 @@ public class JmsSourceTest extends AbstractSoakTest {
         logger.info("Cluster" + clusterName + "\t\t" + message);
     }
 
-    private static void assertCountEventually(JetInstance client, long expectedTotalCount, ILogger logger,
-                                              String clusterName) throws Exception {
+    private static void assertCountEventually(HazelcastInstance client, long expectedTotalCount, ILogger logger,
+            String clusterName) throws Exception {
         Map<String, Long> latestCounterMap = client.getMap(VerificationProcessor.CONSUMED_MESSAGES_MAP_NAME);
         for (int i = 0; i < ASSERTION_RETRY_COUNT; i++) {
             long actualTotalCount = latestCounterMap.get(clusterName);

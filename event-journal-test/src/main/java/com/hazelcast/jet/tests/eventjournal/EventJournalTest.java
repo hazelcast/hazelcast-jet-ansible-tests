@@ -22,7 +22,6 @@ import com.hazelcast.config.Config;
 import com.hazelcast.config.MapConfig;
 import com.hazelcast.core.EntryEventType;
 import com.hazelcast.core.HazelcastInstance;
-import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.aggregate.AggregateOperations;
 import com.hazelcast.jet.config.JobConfig;
@@ -72,14 +71,14 @@ public class EventJournalTest extends AbstractSoakTest {
 
     private transient ClientConfig remoteClusterClientConfig;
     private transient EventJournalTradeProducer tradeProducer;
-    private transient JetInstance remoteClient;
+    private transient HazelcastInstance remoteClient;
 
     public static void main(String[] args) throws Exception {
         new EventJournalTest().run(args);
     }
 
     @Override
-    public void init(JetInstance client) throws Exception {
+    public void init(HazelcastInstance client) throws Exception {
         lagMs = propertyInt("lagMs", DEFAULT_LAG);
         timestampPerSecond = propertyInt("timestampPerSecond", DEFAULT_TIMESTAMP_PER_SECOND);
         snapshotIntervalMs = propertyInt("snapshotIntervalMs", DEFAULT_SNAPSHOT_INTERVAL);
@@ -93,20 +92,20 @@ public class EventJournalTest extends AbstractSoakTest {
     }
 
     @Override
-    public void test(JetInstance client, String name) throws Exception {
+    public void test(HazelcastInstance client, String name) throws Exception {
         JobConfig jobConfig = new JobConfig();
         jobConfig.setName(name);
         jobConfig.setSnapshotIntervalMillis(snapshotIntervalMs);
         jobConfig.setProcessingGuarantee(ProcessingGuarantee.EXACTLY_ONCE);
-        Job job = client.newJob(pipeline(), jobConfig);
+        Job job = client.getJet().newJob(pipeline(), jobConfig);
         tradeProducer.start();
 
         int windowCount = windowSize / slideBy;
-        LoggingService loggingService = client.getHazelcastInstance().getLoggingService();
+        LoggingService loggingService = client.getLoggingService();
         QueueVerifier queueVerifier = new QueueVerifier(loggingService,
                 "Verifier[" + RESULTS_MAP_NAME + "]", windowCount).startVerification();
 
-        IMap<Long, Long> resultMap = remoteClient.getHazelcastInstance().getMap(RESULTS_MAP_NAME);
+        IMap<Long, Long> resultMap = remoteClient.getMap(RESULTS_MAP_NAME);
         EventJournalConsumer<Long, Long> consumer = new EventJournalConsumer<>(resultMap, mapPutEvents(), partitionCount);
 
         long begin = System.currentTimeMillis();
@@ -156,12 +155,11 @@ public class EventJournalTest extends AbstractSoakTest {
     }
 
     private void configureTradeProducer() throws IOException {
-        remoteClient = HazelcastClient.newHazelcastClient(remoteClusterClientConfig).getJetInstance();
-        HazelcastInstance hazelcastInstance = remoteClient.getHazelcastInstance();
+        remoteClient = HazelcastClient.newHazelcastClient(remoteClusterClientConfig);
 
-        memberSize = hazelcastInstance.getCluster().getMembers().size();
-        partitionCount = hazelcastInstance.getPartitionService().getPartitions().size();
-        Config config = hazelcastInstance.getConfig();
+        memberSize = remoteClient.getCluster().getMembers().size();
+        partitionCount = remoteClient.getPartitionService().getPartitions().size();
+        Config config = remoteClient.getConfig();
         MapConfig mapConfig = new MapConfig(MAP_NAME);
         mapConfig.getEventJournalConfig()
                  .setCapacity(EVENT_JOURNAL_CAPACITY)

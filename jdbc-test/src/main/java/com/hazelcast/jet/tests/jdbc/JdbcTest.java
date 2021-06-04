@@ -19,7 +19,7 @@ package com.hazelcast.jet.tests.jdbc;
 import com.hazelcast.collection.IQueue;
 import com.hazelcast.config.Config;
 import com.hazelcast.config.QueueConfig;
-import com.hazelcast.jet.JetInstance;
+import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.core.Processor.Context;
@@ -64,17 +64,17 @@ public class JdbcTest extends AbstractSoakTest {
     }
 
     @Override
-    public void init(JetInstance client) throws SQLException {
+    public void init(HazelcastInstance client) throws SQLException {
         connectionUrl = System.getProperty("connectionUrl", "jdbc:mysql://localhost") + DB_AND_USER;
 
-        Config config = client.getHazelcastInstance().getConfig();
+        Config config = client.getConfig();
         config.addQueueConfig(new QueueConfig().setName(QUEUE_NAME).setMaxSize(PERSON_COUNT * 2));
 
         createAndFillTable();
     }
 
     @Override
-    public void test(JetInstance client, String name) throws Exception {
+    public void test(HazelcastInstance client, String name) throws Exception {
         Sink<String> queueSink = SinkBuilder
                 .sinkBuilder("queueSink", c -> c.jetInstance().getHazelcastInstance().getQueue(QUEUE_NAME))
                 .<String>receiveFn(IQueue::put)
@@ -102,13 +102,14 @@ public class JdbcTest extends AbstractSoakTest {
                 resultSet -> resultSet.getString(2)))
                           .writeTo(queueSink);
 
-        Job streamJob = client.newJob(writeToDBPipeline, new JobConfig().setName("JDBC Test stream queue to table"));
+        Job streamJob = client.getJet()
+                .newJob(writeToDBPipeline, new JobConfig().setName("JDBC Test stream queue to table"));
 
         int jobCounter = 0;
         long begin = System.currentTimeMillis();
         while (System.currentTimeMillis() - begin < durationInMillis) {
             JobConfig jobConfig = new JobConfig().setName("JDBC Test read table to queue [" + jobCounter + "]");
-            client.newJob(readFromDBPipeline, jobConfig).join();
+            client.getJet().newJob(readFromDBPipeline, jobConfig).join();
             if (getJobStatusWithRetry(streamJob) == FAILED) {
                 streamJob.join();
             }
@@ -125,8 +126,9 @@ public class JdbcTest extends AbstractSoakTest {
     protected void teardown(Throwable t) throws Exception {
     }
 
-    private void assertTableCount(JetInstance client, long expectedTableCount) throws SQLException, InterruptedException {
-        IQueue<String> queue = client.getHazelcastInstance().getQueue(QUEUE_NAME);
+    private void assertTableCount(HazelcastInstance client, long expectedTableCount)
+            throws SQLException, InterruptedException {
+        IQueue<String> queue = client.getQueue(QUEUE_NAME);
         for (int i = 0; i < ASSERTION_RETRY_COUNT; i++) {
             if (queue.size() == 0 && expectedTableCount == getTableCount()) {
                 return;
@@ -172,7 +174,7 @@ public class JdbcTest extends AbstractSoakTest {
         private long counter;
 
         QueueSource(Context context) {
-            queue = context.jetInstance().getHazelcastInstance().getQueue(QUEUE_NAME);
+            queue = context.hazelcastInstance().getQueue(QUEUE_NAME);
             totalParallelism = context.totalParallelism();
             counter = context.globalProcessorIndex();
         }

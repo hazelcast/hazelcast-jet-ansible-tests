@@ -16,7 +16,7 @@
 
 package com.hazelcast.jet.tests.snapshot.file;
 
-import com.hazelcast.jet.JetInstance;
+import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.config.ProcessingGuarantee;
@@ -49,7 +49,7 @@ public class FileSinkTest extends AbstractSoakTest {
     }
 
     @Override
-    public void init(JetInstance client) throws Exception {
+    public void init(HazelcastInstance client) throws Exception {
         sleepMsBetweenItem = propertyInt("sleepMsBetweenItem", DEFAULT_SLEEP_MS_BETWEEN_ITEM);
         snapshotIntervalMs = propertyInt("snapshotIntervalMs", DEFAULT_SNAPSHOT_INTERVAL);
         jetShutdownMode = property("jetShutdownMode", DEFAULT_SHUTDOWN_MODE);
@@ -61,7 +61,7 @@ public class FileSinkTest extends AbstractSoakTest {
     }
 
     @Override
-    public void test(JetInstance client, String name) {
+    public void test(HazelcastInstance client, String name) {
         if (jetShutdownMode.equals("TERMINATE") && name.contains(DYNAMIC_CLUSTER)) {
             logger.info("FileSinkTest is ignored for DYNAMIC_CLUSTER in TERMINATE shutdown mode");
             return;
@@ -78,7 +78,7 @@ public class FileSinkTest extends AbstractSoakTest {
             if (name.startsWith(STABLE_CLUSTER)) {
                 jobConfig.addClass(FileSinkTest.class, GeneratedFilesVerifier.class);
             }
-            Job job = client.newJob(pipeline(), jobConfig);
+            Job job = client.getJet().newJob(pipeline(), jobConfig);
 
             try {
                 long begin = System.currentTimeMillis();

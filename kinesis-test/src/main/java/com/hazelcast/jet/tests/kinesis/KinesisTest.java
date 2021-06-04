@@ -18,7 +18,7 @@ package com.hazelcast.jet.tests.kinesis;
 
 import com.amazonaws.SDKGlobalConfiguration;
 import com.amazonaws.regions.Regions;
-import com.hazelcast.jet.JetInstance;
+import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.config.ProcessingGuarantee;
@@ -70,7 +70,7 @@ public class KinesisTest extends AbstractSoakTest {
     }
 
     @Override
-    protected void init(JetInstance client) {
+    protected void init(HazelcastInstance client) {
         awsConfig = new AwsConfig()
                 .withEndpoint(property("endpoint", "http://localhost:4566"))
                 .withRegion(Regions.US_EAST_1.getName())
@@ -108,16 +108,16 @@ public class KinesisTest extends AbstractSoakTest {
     }
 
     @Override
-    protected void test(JetInstance client, String cluster) throws Throwable {
+    protected void test(HazelcastInstance client, String cluster) throws Throwable {
         streamNames.add(cluster);
         helper.createStream(cluster, shardCount);
 
         JobConfig readJobConfig = jobConfig(cluster + "_read");
-        Job readJob = client.newJob(readPipeline(cluster, awsConfig, cluster), readJobConfig);
+        Job readJob = client.getJet().newJob(readPipeline(cluster, awsConfig, cluster), readJobConfig);
         waitForJobStatus(readJob, RUNNING);
 
         JobConfig writeJobConfig = jobConfig(cluster + "write");
-        Job writeJob = client.newJob(writePipeline(cluster, awsConfig), writeJobConfig);
+        Job writeJob = client.getJet().newJob(writePipeline(cluster, awsConfig), writeJobConfig);
         waitForJobStatus(writeJob, RUNNING);
 
         int cycles = 0;
@@ -211,7 +211,7 @@ public class KinesisTest extends AbstractSoakTest {
         return pipeline;
     }
 
-    private long checkNewDataProcessed(JetInstance client, String cluster, long latestChecked, int elapsedCycle) {
+    private long checkNewDataProcessed(HazelcastInstance client, String cluster, long latestChecked, int elapsedCycle) {
         Map<String, Long> latestCounterMap = client.getMap(KinesisVerificationP.CONSUMED_MESSAGES_MAP_NAME);
         long latest = 0;
         for (int i = 0; i < ASSERTION_RETRY_COUNT; i++) {

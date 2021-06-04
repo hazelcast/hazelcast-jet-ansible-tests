@@ -16,13 +16,13 @@
 
 package com.hazelcast.jet.tests.common;
 
+import com.hazelcast.client.HazelcastClient;
 import com.hazelcast.client.config.ClientConfig;
 import com.hazelcast.client.config.YamlClientConfigBuilder;
 import com.hazelcast.config.CacheSimpleConfig;
-import com.hazelcast.jet.Jet;
-import com.hazelcast.jet.JetInstance;
-import com.hazelcast.jet.config.JetClientConfig;
-import com.hazelcast.jet.config.JetConfig;
+import com.hazelcast.config.Config;
+import com.hazelcast.core.Hazelcast;
+import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.logging.ILogger;
 
 import java.io.IOException;
@@ -43,34 +43,35 @@ public abstract class AbstractSoakTest {
     private static final double WAIT_TIMEOUT_FACTOR = 1.1;
 
     protected transient ClientConfig stableClusterClientConfig;
-    protected transient JetInstance stableClusterClient;
+    protected transient HazelcastInstance stableClusterClient;
     protected transient ILogger logger;
     protected long durationInMillis;
 
-    private transient JetInstance jet;
+    private transient HazelcastInstance hz;
 
     protected final void run(String[] args) throws Exception {
         parseArguments(args);
 
-        JetInstance[] instances = null;
+        HazelcastInstance[] instances = null;
         if (isRunLocal()) {
-            JetConfig config = new JetConfig();
+            Config config = new Config();
             CacheSimpleConfig cacheConfig = new CacheSimpleConfig()
                     .setName("CooperativeMapCacheSourceTest_SourceCache");
             cacheConfig.getEvictionConfig().setSize(CACHE_EVICTION_SIZE);
-            config.getHazelcastConfig().addCacheConfig(cacheConfig);
+            config.addCacheConfig(cacheConfig);
 
-            instances = new JetInstance[]{Jet.newJetInstance(config), Jet.newJetInstance(config)};
-            jet = Jet.newJetClient();
+            instances = new HazelcastInstance[]{
+                Hazelcast.newHazelcastInstance(config), Hazelcast.newHazelcastInstance(config)};
+            hz = HazelcastClient.newHazelcastClient();
         } else {
-            jet = Jet.bootstrappedInstance();
+            hz = Hazelcast.bootstrappedInstance();
         }
         logger = getLogger(getClass());
 
         logger.info("Initializing...");
         try {
             durationInMillis = durationInMillis();
-            init(jet);
+            init(hz);
         } catch (Throwable t) {
             t.printStackTrace();
             logger.severe(t);
@@ -90,22 +91,22 @@ public abstract class AbstractSoakTest {
         }
         logger.info("Teardown...");
         teardown(null);
-        if (jet != null) {
-            jet.shutdown();
+        if (hz != null) {
+            hz.shutdown();
         }
         if (stableClusterClient != null) {
             stableClusterClient.shutdown();
         }
         if (instances != null) {
-            Jet.shutdownAll();
+            Hazelcast.shutdownAll();
         }
         logger.info("Finished OK");
         System.exit(0);
     }
 
-    protected abstract void init(JetInstance client) throws Exception;
+    protected abstract void init(HazelcastInstance client) throws Exception;
 
-    protected abstract void test(JetInstance client, String name) throws Throwable;
+    protected abstract void test(HazelcastInstance client, String name) throws Throwable;
 
     protected abstract void teardown(Throwable t) throws Exception;
 
@@ -129,7 +130,7 @@ public abstract class AbstractSoakTest {
 
     protected ClientConfig remoteClusterClientConfig() throws IOException {
         if (isRunLocal()) {
-            return new JetClientConfig();
+            return new ClientConfig();
         }
         String remoteClusterYaml = property("remoteClusterYaml", null);
         if (remoteClusterYaml == null) {
@@ -141,12 +142,12 @@ public abstract class AbstractSoakTest {
 
     private void testInternal() throws Throwable {
         if (!runOnBothClusters()) {
-            test(jet, getClass().getSimpleName());
+            test(hz, getClass().getSimpleName());
             return;
         }
 
         stableClusterClientConfig = remoteClusterClientConfig();
-        stableClusterClient = Jet.newJetClient(stableClusterClientConfig);
+        stableClusterClient = HazelcastClient.newHazelcastClient(stableClusterClientConfig);
 
         Throwable[] exceptions = new Throwable[2];
         String dynamicName = DYNAMIC_CLUSTER + "-" + getClass().getSimpleName();
@@ -154,7 +155,7 @@ public abstract class AbstractSoakTest {
         ExecutorService executorService = Executors.newFixedThreadPool(2);
         executorService.execute(() -> {
             try {
-                test(jet, dynamicName);
+                test(hz, dynamicName);
             } catch (Throwable t) {
                 logger.severe("Exception in " + dynamicName, t);
                 exceptions[0] = t;
@@ -194,7 +195,7 @@ public abstract class AbstractSoakTest {
     }
 
     protected ILogger getLogger(Class clazz) {
-        return jet.getHazelcastInstance().getLoggingService().getLogger(clazz);
+        return hz.getLoggingService().getLogger(clazz);
     }
 
     private static boolean isRunLocal() {
@@ -205,8 +206,8 @@ public abstract class AbstractSoakTest {
         System.setProperty("runLocal", "true");
     }
 
-    protected static ILogger getLogger(JetInstance instance, Class clazz) {
-        return instance.getHazelcastInstance().getLoggingService().getLogger(clazz);
+    protected static ILogger getLogger(HazelcastInstance instance, Class clazz) {
+        return instance.getLoggingService().getLogger(clazz);
     }
 
     protected static void assertEquals(int expected, int actual) {

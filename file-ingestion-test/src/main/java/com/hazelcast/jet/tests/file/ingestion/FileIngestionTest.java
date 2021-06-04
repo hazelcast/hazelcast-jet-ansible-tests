@@ -16,8 +16,8 @@
 
 package com.hazelcast.jet.tests.file.ingestion;
 
+import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.internal.nio.IOUtil;
-import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.Observable;
 import com.hazelcast.jet.avro.AvroSinks;
@@ -93,7 +93,7 @@ public class FileIngestionTest extends AbstractSoakTest {
     }
 
     @Override
-    protected void init(JetInstance client) throws Exception {
+    protected void init(HazelcastInstance client) throws Exception {
         hdfsUri = property("hdfsUri", DEFAULT_HDFS_URI);
         hdfsPath = hdfsUri + "/" + getClass().getSimpleName();
 
@@ -108,7 +108,7 @@ public class FileIngestionTest extends AbstractSoakTest {
     }
 
     @Override
-    protected void test(JetInstance client, String name) {
+    protected void test(HazelcastInstance client, String name) {
         long begin = System.currentTimeMillis();
         int jobCount = 0;
 
@@ -119,10 +119,10 @@ public class FileIngestionTest extends AbstractSoakTest {
                 JobType jobType = jobTypes[i];
                 JobConfig jobConfig = new JobConfig();
                 jobConfig.setName(name + "-" + jobType + "-" + jobCount);
-                jobs[i] = client.newJob(pipeline(jobType, jobCount), jobConfig);
+                jobs[i] = client.getJet().newJob(pipeline(jobType, jobCount), jobConfig);
             }
             for (int i = 0; i < jobTypes.length; i++) {
-                Observable<Long> observable = client.getObservable(observableName(jobTypes[i], jobCount));
+                Observable<Long> observable = client.getJet().getObservable(observableName(jobTypes[i], jobCount));
                 try {
                     jobs[i].join();
                     verifyObservable(observable);
@@ -237,7 +237,7 @@ public class FileIngestionTest extends AbstractSoakTest {
         return source;
     }
 
-    private void createSourceFiles(JetInstance client) throws Exception {
+    private void createSourceFiles(HazelcastInstance client) throws Exception {
         List<Integer> items = IntStream.range(0, ITEM_COUNT).boxed().collect(toList());
 
         // clear local directory
@@ -305,7 +305,7 @@ public class FileIngestionTest extends AbstractSoakTest {
                 .map(FileIngestionTest::avroUser)
                 .writeTo(HadoopSinks.outputFormat(job.getConfiguration(), o -> null, identity()));
 
-        client.newJob(p).join();
+        client.getJet().newJob(p).join();
     }
 
     private S3Client s3Client() {

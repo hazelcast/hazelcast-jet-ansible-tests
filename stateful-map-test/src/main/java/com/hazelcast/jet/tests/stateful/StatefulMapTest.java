@@ -16,8 +16,8 @@
 
 package com.hazelcast.jet.tests.stateful;
 
+import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.internal.util.UuidUtil;
-import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.kafka.KafkaSinks;
@@ -96,7 +96,7 @@ public class StatefulMapTest extends AbstractSoakTest {
     }
 
     @Override
-    protected void init(JetInstance client) throws Exception {
+    protected void init(HazelcastInstance client) throws Exception {
         brokerUri = property("brokerUri", "localhost:9092");
         txTimeout = propertyInt("txTimeout", DEFAULT_TX_TIMEOUT);
         txPerSecond = propertyInt("txPerSecond", DEFAULT_TX_PER_SECOND);
@@ -110,7 +110,7 @@ public class StatefulMapTest extends AbstractSoakTest {
     }
 
     @Override
-    public void test(JetInstance client, String name) throws Exception {
+    public void test(HazelcastInstance client, String name) throws Exception {
         KafkaTradeProducer producer = new KafkaTradeProducer(
                 logger, brokerUri, TOPIC_PREFIX + name, txPerSecond, generatorBatchCount, txTimeout);
         producer.start();
@@ -126,7 +126,7 @@ public class StatefulMapTest extends AbstractSoakTest {
                 .setProcessingGuarantee(EXACTLY_ONCE)
                 .setSnapshotIntervalMillis(snapshotIntervalMillis);
 
-        Job job = client.newJob(buildPipeline(name), jobConfig);
+        Job job = client.getJet().newJob(buildPipeline(name), jobConfig);
 
         long begin = System.currentTimeMillis();
         try {

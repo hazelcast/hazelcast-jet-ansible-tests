@@ -16,7 +16,7 @@
 
 package com.hazelcast.jet.tests.cdc.sink;
 
-import com.hazelcast.jet.JetInstance;
+import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.map.IMap;
 
@@ -41,7 +41,7 @@ public class CdcSinkVerifier {
     private volatile Throwable error;
     private volatile int lastPreserved;
 
-    public CdcSinkVerifier(JetInstance client, String name, int preserveItem, ILogger logger) throws SQLException {
+    public CdcSinkVerifier(HazelcastInstance client, String name, int preserveItem, ILogger logger) throws SQLException {
         this.consumerThread = new Thread(() -> uncheckRun(this::run));
         this.map = client.getMap(SINK_MAP_NAME + name);
         this.name = name;

@@ -16,8 +16,8 @@
 
 package com.hazelcast.jet.tests.snapshot.kafka;
 
+import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.internal.util.UuidUtil;
-import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.config.ProcessingGuarantee;
@@ -77,7 +77,7 @@ public class SnapshotKafkaTest extends AbstractSoakTest {
     }
 
     @Override
-    public void init(JetInstance client) throws Exception {
+    public void init(HazelcastInstance client) throws Exception {
         producerExecutorService = Executors.newSingleThreadExecutor();
         brokerUri = property("brokerUri", "localhost:9092");
         offsetReset = property("offsetReset", "earliest");
@@ -103,13 +103,13 @@ public class SnapshotKafkaTest extends AbstractSoakTest {
         return true;
     }
 
-    public void test(JetInstance client, String name) throws Exception {
+    public void test(HazelcastInstance client, String name) throws Exception {
         logger.info("[" + name + "] SnapshotTest jobCount: " + jobCount);
         Job[] atLeastOnceJobs = submitJobs(client, name, AT_LEAST_ONCE);
         Job[] exactlyOnceJobs = submitJobs(client, name, EXACTLY_ONCE);
 
         int windowCount = windowSize / slideBy;
-        LoggingService loggingService = client.getHazelcastInstance().getLoggingService();
+        LoggingService loggingService = client.getLoggingService();
         QueueVerifier atLeastOnceVerifier = new QueueVerifier(loggingService,
                 "Verifier[" + name + ", " + AT_LEAST_ONCE + "]", windowCount * jobCount);
         QueueVerifier exactlyOnceVerifier = new QueueVerifier(loggingService,
@@ -185,7 +185,7 @@ public class SnapshotKafkaTest extends AbstractSoakTest {
         return pipeline;
     }
 
-    private Job[] submitJobs(JetInstance client, String name, ProcessingGuarantee guarantee) {
+    private Job[] submitJobs(HazelcastInstance client, String name, ProcessingGuarantee guarantee) {
         Job[] jobs = new Job[jobCount];
         for (int i = 0; i < jobCount; i++) {
             System.out.println(String.format("[%s] Executing %s test[%d] job..", name, guarantee.name(), i));
@@ -194,7 +194,7 @@ public class SnapshotKafkaTest extends AbstractSoakTest {
             jobConfig.setSnapshotIntervalMillis(snapshotIntervalMs);
             jobConfig.setProcessingGuarantee(guarantee);
 
-            jobs[i] = client.newJob(pipeline(name, guarantee, i), jobConfig);
+            jobs[i] = client.getJet().newJob(pipeline(name, guarantee, i), jobConfig);
         }
         return jobs;
     }

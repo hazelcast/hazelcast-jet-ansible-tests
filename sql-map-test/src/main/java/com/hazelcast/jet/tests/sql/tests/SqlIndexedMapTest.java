@@ -16,8 +16,7 @@
 
 package com.hazelcast.jet.tests.sql.tests;
 
-import com.hazelcast.config.InMemoryFormat;
-import com.hazelcast.jet.JetInstance;
+import com.hazelcast.core.HazelcastInstance;
 
 public class SqlIndexedMapTest extends AbstractSqlMapTest {
 
@@ -32,13 +31,13 @@ public class SqlIndexedMapTest extends AbstractSqlMapTest {
     }
 
     @Override
-    protected void init(JetInstance client) {
+    protected void init(HazelcastInstance client) {
         super.client = client;
         populateMap();
     }
 
     @Override
-    protected void test(JetInstance client, String name) {
+    protected void test(HazelcastInstance client, String name) {
         runTest();
     }
 

@@ -21,6 +21,7 @@ import com.hazelcast.config.InMemoryFormat;
 import com.hazelcast.config.IndexConfig;
 import com.hazelcast.config.MapConfig;
 import com.hazelcast.config.IndexType;
+import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.internal.util.UuidUtil;
 import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
@@ -45,7 +46,7 @@ public abstract class AbstractSqlMapTest extends AbstractSoakTest {
     private static final int PROGRESS_PRINT_QUERIES_INTERVAL = 500;
 
     protected boolean isIndexed;
-    protected JetInstance client;
+    protected HazelcastInstance client;
     protected int dataSetSize = propertyInt("dataSetSize", DEFAULT_DATA_SET_SIZE);
     protected int queryTimeout = propertyInt("queryTimeout", DEFAULT_QUERY_TIMEOUT_MILLIS);
     private String mapName;
@@ -63,7 +64,7 @@ public abstract class AbstractSqlMapTest extends AbstractSoakTest {
         int index = 0;
         begin = System.currentTimeMillis();
 
-        SqlService sql = client.getHazelcastInstance().getSql();
+        SqlService sql = client.getSql();
         while (System.currentTimeMillis() - begin < durationInMillis) {
             int queryKey = index++;
             //Execute query
@@ -117,7 +118,7 @@ public abstract class AbstractSqlMapTest extends AbstractSoakTest {
     }
 
     protected void populateMap() {
-        IMap<Key, Pojo> map = client.getHazelcastInstance().getMap(mapName);
+        IMap<Key, Pojo> map = client.getMap(mapName);
         for (long i = 0; i < DEFAULT_DATA_SET_SIZE; i++) {
             map.put(new Key(i), new Pojo(i));
         }
@@ -196,6 +197,6 @@ public abstract class AbstractSqlMapTest extends AbstractSoakTest {
             indexConfig.addAttribute(fieldName);
         }
 
-        client.getHazelcastInstance().getMap(mapName).addIndex(indexConfig);
+        client.getMap(mapName).addIndex(indexConfig);
     }
 }

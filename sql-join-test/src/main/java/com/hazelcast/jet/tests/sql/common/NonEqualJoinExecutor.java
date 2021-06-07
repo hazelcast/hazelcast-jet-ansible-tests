@@ -1,3 +1,19 @@
+/*
+ * Copyright (c) 2008-2018, Hazelcast, Inc. All Rights Reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.hazelcast.jet.tests.sql.common;
 
 import com.hazelcast.core.HazelcastInstance;
@@ -51,7 +67,8 @@ public class NonEqualJoinExecutor extends BaseExecutor implements Callable<Integ
 
     public String getSqlQuery() {
         return String.format("SELECT * FROM TABLE(generate_stream(1)) streaming LEFT JOIN %s " +
-                "AS map ON CAST(map.bigIntVal AS BIGINT) BETWEEN %d AND %d", MAP_NAME, getBetweenFromValue(), getBetweenToValue());
+                "AS map ON CAST(map.bigIntVal AS BIGINT) BETWEEN %d AND %d",
+                MAP_NAME, getBetweenFromValue(), getBetweenToValue());
     }
 
     private int getBetweenFromValue() {
@@ -59,7 +76,7 @@ public class NonEqualJoinExecutor extends BaseExecutor implements Callable<Integ
     }
 
     private int getBetweenToValue() {
-        return ThreadLocalRandom.current().nextInt( (MAP_SIZE / 2) + 1, MAP_SIZE - 1);
+        return ThreadLocalRandom.current().nextInt((MAP_SIZE / 2) + 1, MAP_SIZE - 1);
     }
 
     private void createSqlMapping() {

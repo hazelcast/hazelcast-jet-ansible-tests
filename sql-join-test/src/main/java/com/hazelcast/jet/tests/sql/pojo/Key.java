@@ -20,17 +20,17 @@ import java.io.Serializable;
 
 public class Key implements Serializable {
 
-    private long __key;
+    private long key;
 
-    public Key(long __key) {
-        this.__key = __key;
+    public Key(long key) {
+        this.key = key;
     }
 
     public long getKey() {
-        return __key;
+        return key;
     }
 
     public String toString() {
-        return String.valueOf(__key);
+        return String.valueOf(key);
     }
 }

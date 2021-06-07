@@ -1,7 +1,6 @@
 package com.hazelcast.jet.tests.sql.tests;
 
 import com.hazelcast.core.HazelcastInstance;
-import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
 import com.hazelcast.jet.tests.common.Util;
 import com.hazelcast.jet.tests.sql.common.JoinByKeyExecutor;

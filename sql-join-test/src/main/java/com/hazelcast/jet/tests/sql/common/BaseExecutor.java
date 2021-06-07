@@ -11,7 +11,7 @@ import java.util.concurrent.TimeUnit;
 
 public class BaseExecutor {
 
-    private static final long PROGRESS_PRINT_INTERVAL = TimeUnit.SECONDS.toMillis(5);
+    private static final long PROGRESS_PRINT_INTERVAL = TimeUnit.SECONDS.toMillis(60);
     private static final long MAXIMUM_TIME_BETWEEN_QUERIES = TimeUnit.SECONDS.toMillis(30);
 
     private ILogger logger;

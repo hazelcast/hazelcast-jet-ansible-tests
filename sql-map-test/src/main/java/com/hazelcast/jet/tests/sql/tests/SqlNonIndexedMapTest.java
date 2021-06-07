@@ -17,7 +17,6 @@
 package com.hazelcast.jet.tests.sql.tests;
 
 import com.hazelcast.core.HazelcastInstance;
-import com.hazelcast.jet.JetInstance;
 
 public class SqlNonIndexedMapTest extends AbstractSqlMapTest {
 

@@ -41,7 +41,7 @@
         <dependency>
             <groupId>com.hazelcast</groupId>
             <artifactId>hazelcast-sql</artifactId>
-            <version>${imdg.version}</version>
+            <version>${hazelcast.version}</version>
         </dependency>
     </dependencies>
 

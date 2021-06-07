@@ -17,7 +17,6 @@
 package com.hazelcast.jet.tests.sql.tests;
 
 import com.hazelcast.core.HazelcastInstance;
-import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
 import com.hazelcast.jet.tests.common.Util;
 import com.hazelcast.jet.tests.sql.kafka.KafkaPojoProducer;
@@ -89,6 +88,7 @@ public class SqlKafkaTest extends AbstractSoakTest {
                 " bigIntVal BIGINT," +
                 " realVal REAL," +
                 " doubleVal DOUBLE," +
+                " timestampVal BIGINT," +
                 " decimalVal DECIMAL," +
                 " varcharVal VARCHAR)" +
                 " TYPE Kafka" +

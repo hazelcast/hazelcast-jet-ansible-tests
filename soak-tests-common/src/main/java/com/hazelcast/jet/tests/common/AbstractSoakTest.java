@@ -23,6 +23,7 @@ import com.hazelcast.config.CacheSimpleConfig;
 import com.hazelcast.config.Config;
 import com.hazelcast.core.Hazelcast;
 import com.hazelcast.core.HazelcastInstance;
+import com.hazelcast.jet.config.JetConfig;
 import com.hazelcast.logging.ILogger;
 
 import java.io.IOException;
@@ -61,6 +62,7 @@ public abstract class AbstractSoakTest {
                     .setName("CooperativeMapCacheSourceTest_SourceCache");
             cacheConfig.getEvictionConfig().setSize(CACHE_EVICTION_SIZE);
             config.addCacheConfig(cacheConfig);
+            config.setJetConfig(new JetConfig().setEnabled(true));
 
             instances = new HazelcastInstance[]{
                 Hazelcast.newHazelcastInstance(config), Hazelcast.newHazelcastInstance(config)};

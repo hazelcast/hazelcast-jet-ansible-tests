@@ -30,6 +30,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import static com.hazelcast.jet.tests.common.Util.parseArguments;
+import static com.hazelcast.jet.tests.common.Util.sleepSeconds;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.MINUTES;
 
@@ -41,6 +42,7 @@ public abstract class AbstractSoakTest {
     private static final int DEFAULT_DURATION_MINUTES = 30;
     private static final int CACHE_EVICTION_SIZE = 2000000;
     private static final double WAIT_TIMEOUT_FACTOR = 1.1;
+    private static final int DELAY_BETWEEN_INIT_AND_TEST_SECONDS = 15;
 
     protected transient ClientConfig stableClusterClientConfig;
     protected transient HazelcastInstance stableClusterClient;
@@ -72,6 +74,7 @@ public abstract class AbstractSoakTest {
         try {
             durationInMillis = durationInMillis();
             init(hz);
+            sleepSeconds(DELAY_BETWEEN_INIT_AND_TEST_SECONDS);
         } catch (Throwable t) {
             t.printStackTrace();
             logger.severe(t);
@@ -111,7 +114,7 @@ public abstract class AbstractSoakTest {
     protected abstract void teardown(Throwable t) throws Exception;
 
     /**
-     * If {@code true} then {@link #test(JetInstance, String)} method will be
+     * If {@code true} then {@link #test(HazelcastInstance, String)} method will be
      * called with the dynamic cluster client (which should be the bootstrapped
      * instance) and stable cluster client (which needs a `remoteClusterYaml`
      * defined).

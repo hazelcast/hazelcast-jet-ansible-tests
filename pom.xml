@@ -26,6 +26,7 @@
         <module>kafka-session-window-test</module>
         <module>kinesis-test</module>
         <module>large-snapshot-chunk-test</module>
+        <module>missing-permission-test</module>
         <module>python-test</module>
         <module>remote-controller-client</module>
         <module>return-result-to-caller-test</module>

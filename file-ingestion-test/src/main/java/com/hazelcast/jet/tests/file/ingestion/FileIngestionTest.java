@@ -324,7 +324,7 @@ public class FileIngestionTest extends AbstractSoakTest {
     }
 
     private static String observableName(JobType jobType, int jobNumber) {
-        return jobType.name() + "-" + jobNumber;
+        return FileIngestionTest.class.getSimpleName() + "-" + jobType.name() + "-" + jobNumber;
     }
 
     private static AvroUser avroUser(int i) {

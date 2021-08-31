@@ -197,6 +197,14 @@ public abstract class AbstractSoakTest {
         return defaultValue;
     }
 
+    protected boolean propertyBoolean(String name, boolean defaultValue) {
+        String value = System.getProperty(name);
+        if (value != null) {
+            return Boolean.parseBoolean(value);
+        }
+        return defaultValue;
+    }
+
     protected ILogger getLogger(Class clazz) {
         return hz.getLoggingService().getLogger(clazz);
     }

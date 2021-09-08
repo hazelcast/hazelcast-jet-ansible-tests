@@ -63,6 +63,7 @@ public class KinesisTest extends AbstractSoakTest {
     private int shardCount;
     private long sleepMsBetweenItem;
     private long snapshotIntervalMs;
+    private String runIdSuffix;
 
     public static void main(String[] args) throws Exception {
         System.setProperty(SDKGlobalConfiguration.AWS_CBOR_DISABLE_SYSTEM_PROPERTY, "true");
@@ -81,6 +82,8 @@ public class KinesisTest extends AbstractSoakTest {
 
         sleepMsBetweenItem = propertyInt("sleepMsBetweenItem", DEFAULT_SLEEP_MS_BETWEEN_ITEM);
         snapshotIntervalMs = propertyInt("snapshotIntervalMs", DEFAULT_SNAPSHOT_INTERVAL);
+
+        runIdSuffix = property("runIdSuffix", "defaultStreamSuffix");
 
         helper = new Helper(awsConfig.buildClient(), logger);
     }
@@ -109,15 +112,16 @@ public class KinesisTest extends AbstractSoakTest {
 
     @Override
     protected void test(HazelcastInstance client, String cluster) throws Throwable {
-        streamNames.add(cluster);
-        helper.createStream(cluster, shardCount);
+        String name = cluster + runIdSuffix;
+        streamNames.add(name);
+        helper.createStream(name, shardCount);
 
-        JobConfig readJobConfig = jobConfig(cluster + "_read");
-        Job readJob = client.getJet().newJob(readPipeline(cluster, awsConfig, cluster), readJobConfig);
+        JobConfig readJobConfig = jobConfig(name + "_read");
+        Job readJob = client.getJet().newJob(readPipeline(name, awsConfig, name), readJobConfig);
         waitForJobStatus(readJob, RUNNING);
 
-        JobConfig writeJobConfig = jobConfig(cluster + "write");
-        Job writeJob = client.getJet().newJob(writePipeline(cluster, awsConfig), writeJobConfig);
+        JobConfig writeJobConfig = jobConfig(name + "write");
+        Job writeJob = client.getJet().newJob(writePipeline(name, awsConfig), writeJobConfig);
         waitForJobStatus(writeJob, RUNNING);
 
         int cycles = 0;
@@ -137,17 +141,17 @@ public class KinesisTest extends AbstractSoakTest {
             cycles++;
             if (cycles % NEW_DATA_PROCESSED_CHECK_CYCLE == 0) {
                 latestCycle = cycles;
-                latestCheckedCount =
-                        checkNewDataProcessed(client, cluster, latestCheckedCount, NEW_DATA_PROCESSED_CHECK_CYCLE);
-                log("Check for insert changes succeeded, latestCheckedCount: " + latestCheckedCount, cluster);
+                latestCheckedCount
+                        = checkNewDataProcessed(client, name, latestCheckedCount, NEW_DATA_PROCESSED_CHECK_CYCLE);
+                log("Check for insert changes succeeded, latestCheckedCount: " + latestCheckedCount, name);
             }
             sleepMinutes(1);
         }
         if (latestCycle != cycles) {
-            latestCheckedCount = checkNewDataProcessed(client, cluster, latestCheckedCount, cycles - latestCycle);
-            log("Check for insert changes succeeded, latestCheckedCount: " + latestCheckedCount, cluster);
+            latestCheckedCount = checkNewDataProcessed(client, name, latestCheckedCount, cycles - latestCycle);
+            log("Check for insert changes succeeded, latestCheckedCount: " + latestCheckedCount, name);
         }
-        log("Job completed", cluster);
+        log("Job completed", name);
     }
 
     private JobConfig jobConfig(String name) {

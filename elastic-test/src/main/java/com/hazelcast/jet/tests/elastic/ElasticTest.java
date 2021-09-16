@@ -194,9 +194,18 @@ public class ElasticTest extends AbstractSoakTest {
     }
 
     private void deleteIndex(int indexCounter) throws IOException {
-        try (RestHighLevelClient client = new RestHighLevelClient(
-                RestClient.builder(new HttpHost(elasticIp, 9200, "http")))) {
-            client.indices().delete(new DeleteIndexRequest("elastictest-index" + indexCounter), RequestOptions.DEFAULT);
+        int counter = 0;
+        while (counter < 30) {
+            try (RestHighLevelClient client = new RestHighLevelClient(
+                    RestClient.builder(new HttpHost(elasticIp, 9200, "http")))) {
+                client.indices().delete(
+                        new DeleteIndexRequest("elastictest-index" + indexCounter), RequestOptions.DEFAULT);
+                return;
+            } catch (IOException ex) {
+                logger.info("elastictest-index" + indexCounter + " cannot be deleted, counter " + counter, ex);
+                counter++;
+                sleepSeconds(5);
+            }
         }
     }
 

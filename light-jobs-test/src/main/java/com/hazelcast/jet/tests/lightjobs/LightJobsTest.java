@@ -42,8 +42,8 @@ public class LightJobsTest extends AbstractSoakTest {
     private static final String EXPECTED_FAIL_MESSAGE = "LightJobsTest - incorrectPipeline - expected exception";
 
     private static final int DEFAULT_ITEM_COUNT = 400;
-    private static final int DEFAULT_LOG_JOB_COUNT_THRESHOLD = 1_000;
-    private static final int DEFAULT_SLEEP_BETWEEN_JOBS_MS = 1_000;
+    private static final int DEFAULT_LOG_JOB_COUNT_THRESHOLD = 100;
+    private static final int DEFAULT_SLEEP_BETWEEN_JOBS_MS = 2_000;
 
     private IMap<String, String> sourceBatchMap;
     private IMap<String, String> sourceJournalMap;

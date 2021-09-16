@@ -194,10 +194,21 @@ public class ElasticTest extends AbstractSoakTest {
     }
 
     private void deleteIndex(int indexCounter) throws IOException {
-        try (RestHighLevelClient client = new RestHighLevelClient(
-                RestClient.builder(new HttpHost(elasticIp, 9200, "http")))) {
-            client.indices().delete(new DeleteIndexRequest("elastictest-index" + indexCounter), RequestOptions.DEFAULT);
+        int counter = 0;
+        IOException exToLog = null;
+        while (counter < 30) {
+            try (RestHighLevelClient client = new RestHighLevelClient(
+                    RestClient.builder(new HttpHost(elasticIp, 9200, "http")))) {
+                client.indices().delete(
+                        new DeleteIndexRequest("elastictest-index" + indexCounter), RequestOptions.DEFAULT);
+                return;
+            } catch (IOException ex) {
+                counter++;
+                exToLog = ex;
+                sleepSeconds(5);
+            }
         }
+        logger.info("elastictest-index" + indexCounter + " cannot be deleted.", exToLog);
     }
 
     private void clearSinkList(HazelcastInstance client) {

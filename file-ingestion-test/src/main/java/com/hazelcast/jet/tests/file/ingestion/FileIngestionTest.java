@@ -129,11 +129,12 @@ public class FileIngestionTest extends AbstractSoakTest {
                 } catch (Throwable t) {
                     logger.severe("Failure while verifying job: " + jobs[i].getName(), t);
                     throwableList.add(t);
-                } finally {
-                    observable.destroy();
                 }
             }
             sleepSeconds(sleepSeconds);
+            for (JobType jobType : jobTypes) {
+                client.getJet().getObservable(observableName(jobType, jobCount)).destroy();
+            }
             jobCount++;
             if (jobCount % 100 == 0) {
                 logger.info("Job count " + jobCount);

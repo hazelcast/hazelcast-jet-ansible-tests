@@ -26,6 +26,8 @@ import com.hazelcast.jet.pipeline.Sources;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
 import com.hazelcast.map.IMap;
 
+import java.util.Map;
+
 import static com.hazelcast.jet.tests.common.Util.sleepMillis;
 
 public class LightJobsTest extends AbstractSoakTest {
@@ -151,14 +153,11 @@ public class LightJobsTest extends AbstractSoakTest {
     private Pipeline incorrectPipeline() {
         Pipeline p = Pipeline.create();
         p.readFrom(Sources.map(SOURCE_INCORRECT_MAP_NAME))
-                .map(t -> {
-                    if (true) {
-                        RuntimeException ex = new RuntimeException(EXPECTED_FAIL_MESSAGE);
-                        // set empty stacktrace to decrease log size
-                        ex.setStackTrace(new StackTraceElement[0]);
-                        throw ex;
-                    }
-                    return t;
+                .<Map.Entry<Object, Object>>map(t -> {
+                    RuntimeException ex = new RuntimeException(EXPECTED_FAIL_MESSAGE);
+                    // set empty stacktrace to decrease log size
+                    ex.setStackTrace(new StackTraceElement[0]);
+                    throw ex;
                 }).setLocalParallelism(1)
                 .writeTo(Sinks.map(OUTPUT_INCORRECT_MAP_NAME));
         return p;

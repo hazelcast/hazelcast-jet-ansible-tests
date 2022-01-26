@@ -33,8 +33,8 @@ public class MissingPermissionTest extends AbstractSoakTest {
     private static final String SINK_MAP_NAME = "missingMapPermissionSinkMap";
 
     private static final int DEFAULT_ITEM_COUNT = 1_000;
-    private static final int LOG_JOB_COUNT_THRESHOLD = 2_000;
-    private static final int DEFAULT_SLEEP_AFTER_TEST_MS = 1_000;
+    private static final int LOG_JOB_COUNT_THRESHOLD = 200;
+    private static final int DEFAULT_SLEEP_AFTER_TEST_MS = 2_000;
     private static final boolean DEFAULT_RUN_ON_SECURED_CLUSTER = false;
 
     private IMap<Integer, Integer> sourceMap;

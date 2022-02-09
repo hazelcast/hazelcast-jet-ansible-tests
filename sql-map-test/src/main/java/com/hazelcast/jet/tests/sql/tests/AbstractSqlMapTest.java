@@ -21,6 +21,7 @@ import com.hazelcast.config.IndexConfig;
 import com.hazelcast.config.IndexType;
 import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.internal.util.UuidUtil;
+import com.hazelcast.jet.sql.impl.connector.map.IMapSqlConnector;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
 import com.hazelcast.jet.tests.common.Util;
 import com.hazelcast.jet.tests.sql.pojo.Key;
@@ -33,6 +34,8 @@ import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
 
+import static com.hazelcast.jet.sql.impl.connector.SqlConnector.*;
+import static com.hazelcast.jet.sql.impl.connector.SqlConnector.OPTION_VALUE_CLASS;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
 
@@ -46,11 +49,14 @@ public abstract class AbstractSqlMapTest extends AbstractSoakTest {
     protected HazelcastInstance client;
     protected int dataSetSize = propertyInt("dataSetSize", DEFAULT_DATA_SET_SIZE);
     protected int queryTimeout = propertyInt("queryTimeout", DEFAULT_QUERY_TIMEOUT_MILLIS);
-    private String mapName;
+    private final String mapName;
     private long begin;
     private long currentQueryCount;
     private long lastQueryCount;
     private long lastProgressPrintCount;
+
+    private final Class<?> keyClass = Key.class;
+    private final Class<?> valueClass = Pojo.class;
 
     public AbstractSqlMapTest(String mapName, boolean isIndexed) {
         this.mapName = mapName;
@@ -62,6 +68,16 @@ public abstract class AbstractSqlMapTest extends AbstractSoakTest {
         begin = System.currentTimeMillis();
 
         SqlService sql = client.getSql();
+
+        sql.execute("CREATE OR REPLACE MAPPING " + mapName + " TYPE " + IMapSqlConnector.TYPE_NAME + "\n"
+                + "OPTIONS (\n"
+                + '\'' + OPTION_KEY_FORMAT + "'='" + JAVA_FORMAT + "'\n"
+                + ", '" + OPTION_KEY_CLASS + "'='" + keyClass.getName() + "'\n"
+                + ", '" + OPTION_VALUE_FORMAT + "'='" + JAVA_FORMAT + "'\n"
+                + ", '" + OPTION_VALUE_CLASS + "'='" + valueClass.getName() + "'\n"
+                + ")"
+        );
+
         while (System.currentTimeMillis() - begin < durationInMillis) {
             int queryKey = index++;
             //Execute query

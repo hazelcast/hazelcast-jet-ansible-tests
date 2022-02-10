@@ -16,9 +16,7 @@
 
 package com.hazelcast.jet.tests.sql.tests;
 
-import com.hazelcast.config.InMemoryFormat;
-import com.hazelcast.config.IndexConfig;
-import com.hazelcast.config.IndexType;
+import com.hazelcast.config.*;
 import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.internal.util.UuidUtil;
 import com.hazelcast.jet.sql.impl.connector.map.IMapSqlConnector;
@@ -203,8 +201,7 @@ public abstract class AbstractSqlMapTest extends AbstractSoakTest {
     }
 
     protected void setInMemoryFormat(InMemoryFormat inMemoryFormat) {
-//        client.getConfig().configureHazelcast(config1 ->
-//                new Config().addMapConfig(new MapConfig(mapName).setInMemoryFormat(inMemoryFormat)));
+        client.getConfig().addMapConfig(new MapConfig(mapName).setInMemoryFormat(inMemoryFormat));
     }
 
     protected void addIndexing() {

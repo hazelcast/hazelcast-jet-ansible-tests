@@ -34,7 +34,7 @@ public class SqlObjectMapTest extends AbstractSqlMapTest {
     @Override
     protected void init(HazelcastInstance client) {
         super.client = client;
-        setInMemoryFormat(InMemoryFormat.NATIVE);
+        setInMemoryFormat(InMemoryFormat.OBJECT);
         populateMap();
     }
 

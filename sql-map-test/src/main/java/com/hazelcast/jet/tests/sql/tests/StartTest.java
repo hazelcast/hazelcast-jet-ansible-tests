@@ -38,6 +38,13 @@ public final class StartTest {
             case "sqlObjectIndexedMap":
                 SqlObjectIndexedMapTest.main(args);
                 break;
+            case "sqlBinaryMap":
+                SqlBinaryMapTest.main(args);
+                break;
+            case "sqlBinaryIndexedMap":
+                SqlBinaryIndexedMapTest.main(args);
+                break;
+
             default:
                 throw new RuntimeException("unknown test " + testName);
         }

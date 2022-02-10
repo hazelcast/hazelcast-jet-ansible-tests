@@ -44,6 +44,12 @@ public final class StartTest {
             case "sqlBinaryIndexedMap":
                 SqlBinaryIndexedMapTest.main(args);
                 break;
+            case "sqlNativeMap":
+                SqlNativeMapTest.main(args);
+                break;
+            case "sqlNativeIndexedMap":
+                SqlNativeIndexedMapTest.main(args);
+                break;
 
             default:
                 throw new RuntimeException("unknown test " + testName);

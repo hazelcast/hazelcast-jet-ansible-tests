@@ -16,7 +16,10 @@
 
 package com.hazelcast.jet.tests.sql.tests;
 
-import com.hazelcast.config.*;
+import com.hazelcast.config.InMemoryFormat;
+import com.hazelcast.config.IndexConfig;
+import com.hazelcast.config.IndexType;
+import com.hazelcast.config.MapConfig;
 import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.internal.util.UuidUtil;
 import com.hazelcast.jet.sql.impl.connector.map.IMapSqlConnector;
@@ -32,10 +35,13 @@ import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
 
-import static com.hazelcast.jet.sql.impl.connector.SqlConnector.*;
+import static com.hazelcast.jet.sql.impl.connector.SqlConnector.OPTION_KEY_CLASS;
+import static com.hazelcast.jet.sql.impl.connector.SqlConnector.OPTION_KEY_FORMAT;
+import static com.hazelcast.jet.sql.impl.connector.SqlConnector.OPTION_VALUE_FORMAT;
 import static com.hazelcast.jet.sql.impl.connector.SqlConnector.OPTION_VALUE_CLASS;
-import static java.util.concurrent.TimeUnit.MILLISECONDS;
+import static com.hazelcast.jet.sql.impl.connector.SqlConnector.JAVA_FORMAT;
 
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
 public abstract class AbstractSqlMapTest extends AbstractSoakTest {
 

@@ -64,8 +64,6 @@ public abstract class AbstractSoakTest {
             config.addCacheConfig(cacheConfig);
             config.setJetConfig(new JetConfig().setEnabled(true));
 
-            config.setLicenseKey(System.getenv("HZ_LICENSEKEY"));
-
             instances = new HazelcastInstance[]{
                 Hazelcast.newHazelcastInstance(config), Hazelcast.newHazelcastInstance(config)};
             hz = HazelcastClient.newHazelcastClient();

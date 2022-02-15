@@ -10,40 +10,8 @@
     <version>5.1-SNAPSHOT</version>
     <description>Soak Tests for Hazelcast Jet</description>
     <modules>
-        <module>async-transform-test</module>
-        <module>attach-ml-model-test</module>
-        <module>cdc-sink-test</module>
-        <module>cdc-source-test</module>
-        <module>cooperative-map-cache-source-test</module>
-        <module>early-results-test</module>
-        <module>elastic-test</module>
-        <module>event-journal-test</module>
-        <module>hdfs-test</module>
-        <module>jdbc-test</module>
-        <module>jms-test</module>
-        <module>job-level-serializers-test</module>
-        <module>job-management-test</module>
-        <module>kafka-session-window-test</module>
-        <module>kinesis-test</module>
-        <module>large-snapshot-chunk-test</module>
-        <module>light-jobs-test</module>
-        <module>missing-permission-test</module>
-        <module>python-test</module>
         <module>remote-controller-client</module>
-        <module>return-result-to-caller-test</module>
-        <module>rolling-aggregate-test</module>
-        <module>snapshot-file-test</module>
-        <module>snapshot-jdbc-test</module>
-        <module>snapshot-jms-sink-test</module>
-        <module>snapshot-jms-source-test</module>
-        <module>snapshot-kafka-test</module>
         <module>soak-tests-common</module>
-        <module>stateful-map-test</module>
-        <module>s3-test</module>
-        <module>grpc-test</module>
-        <module>sort-test</module>
-        <module>file-ingestion-test</module>
-        <module>sql-map-test</module>
     </modules>
 
     <properties>
@@ -146,5 +114,100 @@
             <url>https://oss.sonatype.org/content/repositories/releases</url>
         </repository>
     </repositories>
+
+    <profiles>
+        <profile>
+            <id>all</id>
+            <activation>
+                <activeByDefault>true</activeByDefault>
+            </activation>
+            <modules>
+                <module>async-transform-test</module>
+                <module>attach-ml-model-test</module>
+                <module>cdc-sink-test</module>
+                <module>cdc-source-test</module>
+                <module>cooperative-map-cache-source-test</module>
+                <module>early-results-test</module>
+                <module>elastic-test</module>
+                <module>event-journal-test</module>
+                <module>hdfs-test</module>
+                <module>jdbc-test</module>
+                <module>jms-test</module>
+                <module>job-level-serializers-test</module>
+                <module>job-management-test</module>
+                <module>kafka-session-window-test</module>
+                <module>kinesis-test</module>
+                <module>large-snapshot-chunk-test</module>
+                <module>light-jobs-test</module>
+                <module>missing-permission-test</module>
+                <module>python-test</module>
+                <module>return-result-to-caller-test</module>
+                <module>rolling-aggregate-test</module>
+                <module>snapshot-file-test</module>
+                <module>snapshot-jdbc-test</module>
+                <module>snapshot-jms-sink-test</module>
+                <module>snapshot-jms-source-test</module>
+                <module>snapshot-kafka-test</module>
+                <module>stateful-map-test</module>
+                <module>s3-test</module>
+                <module>grpc-test</module>
+                <module>sort-test</module>
+                <module>file-ingestion-test</module>
+                <module>sql-map-test</module>
+            </modules>
+        </profile>
+        <profile>
+            <id>jet</id>
+            <activation>
+                <property>
+                    <name>jet</name>
+                </property>
+            </activation>
+            <modules>
+                <module>async-transform-test</module>
+                <module>attach-ml-model-test</module>
+                <module>cdc-sink-test</module>
+                <module>cdc-source-test</module>
+                <module>cooperative-map-cache-source-test</module>
+                <module>early-results-test</module>
+                <module>elastic-test</module>
+                <module>event-journal-test</module>
+                <module>hdfs-test</module>
+                <module>jdbc-test</module>
+                <module>jms-test</module>
+                <module>job-level-serializers-test</module>
+                <module>job-management-test</module>
+                <module>kafka-session-window-test</module>
+                <module>kinesis-test</module>
+                <module>large-snapshot-chunk-test</module>
+                <module>light-jobs-test</module>
+                <module>missing-permission-test</module>
+                <module>python-test</module>
+                <module>return-result-to-caller-test</module>
+                <module>rolling-aggregate-test</module>
+                <module>snapshot-file-test</module>
+                <module>snapshot-jdbc-test</module>
+                <module>snapshot-jms-sink-test</module>
+                <module>snapshot-jms-source-test</module>
+                <module>snapshot-kafka-test</module>
+                <module>stateful-map-test</module>
+                <module>s3-test</module>
+                <module>grpc-test</module>
+                <module>sort-test</module>
+                <module>file-ingestion-test</module>
+            </modules>
+        </profile>
+        <profile>
+            <id>sql</id>
+            <activation>
+                <property>
+                    <name>sql</name>
+                </property>
+            </activation>
+            <modules>
+                <module>sql-map-test</module>
+            </modules>
+        </profile>
+    </profiles>
 
 </project>

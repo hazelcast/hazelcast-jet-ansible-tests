@@ -180,7 +180,7 @@ public class AsyncTransformTest extends AbstractSoakTest {
 
     public static class Verifier {
 
-        private static final int QUEUE_SIZE_LIMIT = 10_000;
+        private static final int QUEUE_SIZE_LIMIT = 50_000;
         private static final int LOG_COUNTER = 10_000;
         private static final int PARK_MS = 10;
 
@@ -204,6 +204,7 @@ public class AsyncTransformTest extends AbstractSoakTest {
         private void run() {
             try {
                 long counter = 0;
+                long cyclesWithoutUpdate = 0;
                 // PriorityQueue returns the lowest enqueued item first
                 PriorityQueue<Long> queue = new PriorityQueue<>();
                 while (running) {
@@ -224,12 +225,18 @@ public class AsyncTransformTest extends AbstractSoakTest {
                         } else if (peeked == counter) {
                             queue.remove();
                             counter++;
+                            cyclesWithoutUpdate = 0;
                         }
                         if (counter % LOG_COUNTER == 0) {
                             logger.info("counter: " + counter);
                             // clear the map from time to time, we only need the journal
                             map.clear();
                         }
+                    }
+                    cyclesWithoutUpdate++;
+                    if (cyclesWithoutUpdate > 2_000) {
+                        logger.info("Not proccessed for longer time for counter: " + counter);
+                        cyclesWithoutUpdate = 0;
                     }
                     if (queue.size() >= QUEUE_SIZE_LIMIT) {
                         throw new AssertionError(String.format("Queue size exceeded while waiting for the next item. "

@@ -20,7 +20,7 @@ import com.hazelcast.core.HazelcastInstance;
 
 import java.io.IOException;
 
-public class SqlJsonValueStringTest extends AbstractJValueMapTest {
+public class SqlJsonValueStringTest extends AbstractJsonValueMapTest {
 
     private static final String JSON_MAP_NAME = "json_value_string_map";
     private static final String SQL_QUERY = "SELECT JSON_VALUE(this, '$.userRecords[100].about')  FROM  "

@@ -20,7 +20,7 @@ import com.hazelcast.core.HazelcastInstance;
 
 import java.io.IOException;
 
-public class SqlJsonQueryDirectNodeTest extends AbstractJQueryMapTest {
+public class SqlJsonQueryDirectNodeTest extends AbstractJsonQueryMapTest {
 
     private static final String JSON_MAP_NAME = "json_direct_node_sql_map";
     private static final String SQL_QUERY = "SELECT JSON_QUERY(this, '$.userRecords[0]') FROM " + JSON_MAP_NAME;

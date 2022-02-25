@@ -51,7 +51,7 @@ public abstract class AbstractJsonMapTest extends AbstractSoakTest {
     protected final String mapName;
     protected final String sqlQuery;
     protected final Boolean resultRequiredSort;
-    protected final String expectedJqueryResultString;
+    protected final String expectedJsonResultString;
     protected HazelcastInstance client;
 
     protected int queryTimeout = propertyInt("queryTimeout", DEFAULT_QUERY_TIMEOUT_MILLIS);
@@ -68,7 +68,7 @@ public abstract class AbstractJsonMapTest extends AbstractSoakTest {
         this.mapName = mapName;
         this.sqlQuery = sqlQuery;
         this.jsonInputString = readJsonFromFile(inputJsonFile);
-        this.expectedJqueryResultString = retrieveExpectedJsonStructure(jsonInputString, expectedJsonPath,
+        this.expectedJsonResultString = retrieveExpectedJsonStructure(jsonInputString, expectedJsonPath,
                 resultIsArray);
         this.resultRequiredSort = resultRequiredSort;
     }
@@ -98,7 +98,7 @@ public abstract class AbstractJsonMapTest extends AbstractSoakTest {
 
             //Check that query returned results
             assertTrue("The following query was not successful: " + sqlQuery, isQuerySuccessful(sqlResult,
-                    expectedJqueryResultString));
+                    expectedJsonResultString));
             currentQueryCount++;
 
             //Print progress
@@ -159,7 +159,7 @@ public abstract class AbstractJsonMapTest extends AbstractSoakTest {
         // when comparing node records sort is mandatory as JSONObject keys in records are unsorted
         if (resultRequiredSort) {
             jsonQueryResult = JsonSorter.sortJsonAsCharArray(jsonQueryResult);
-            expectedJsonQueryResult = JsonSorter.sortJsonAsCharArray(expectedJqueryResultString);
+            expectedJsonQueryResult = JsonSorter.sortJsonAsCharArray(expectedJsonResultString);
         }
         return jsonQueryResult.equals(expectedJsonQueryResult);
     }

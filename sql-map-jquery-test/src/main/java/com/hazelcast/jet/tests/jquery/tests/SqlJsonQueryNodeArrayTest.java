@@ -20,7 +20,7 @@ import com.hazelcast.core.HazelcastInstance;
 
 import java.io.IOException;
 
-public class SqlJsonQueryNodeArrayTest extends AbstractJQueryMapTest {
+public class SqlJsonQueryNodeArrayTest extends AbstractJsonQueryMapTest {
 
     private static final String JSON_MAP_NAME = "json_node_array_sql_map";
     private static final String SQL_QUERY = "SELECT JSON_QUERY(this, '$.userRecords[1 to 3]' WITH WRAPPER)  FROM  " +

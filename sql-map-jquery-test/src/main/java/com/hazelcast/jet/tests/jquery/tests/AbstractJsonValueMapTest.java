@@ -19,10 +19,10 @@ package com.hazelcast.jet.tests.jquery.tests;
 import java.io.IOException;
 
 
-public abstract class AbstractJValueMapTest extends AbstractJsonMapTest {
+public abstract class AbstractJsonValueMapTest extends AbstractJsonMapTest {
 
-    public AbstractJValueMapTest(String mapName, String sqlQuery, String jsonPath, Boolean resultIsArray,
-                                 Boolean resultRequiredSort) throws IOException {
+    public AbstractJsonValueMapTest(String mapName, String sqlQuery, String jsonPath, Boolean resultIsArray,
+                                    Boolean resultRequiredSort) throws IOException {
         super(mapName, sqlQuery, jsonPath, resultIsArray, resultRequiredSort);
     }
 

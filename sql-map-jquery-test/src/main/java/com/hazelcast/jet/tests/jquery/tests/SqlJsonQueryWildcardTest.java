@@ -20,7 +20,7 @@ import com.hazelcast.core.HazelcastInstance;
 
 import java.io.IOException;
 
-public class SqlJsonQueryWildcardTest extends AbstractJQueryMapTest {
+public class SqlJsonQueryWildcardTest extends AbstractJsonQueryMapTest {
 
     private static final String JSON_MAP_NAME = "json_wildcard_sql_map";
     private static final String SQL_QUERY = "SELECT JSON_QUERY(this, '$.userRecords[*].friends[*].*' WITH WRAPPER)" +

@@ -21,14 +21,13 @@ import java.io.IOException;
 
 public abstract class AbstractJValueMapTest extends AbstractJsonMapTest {
 
-    public AbstractJValueMapTest(String mapName, String sqlQuery, String expectedJsonPath,
-                                 Boolean resultIsArray, Boolean resultRequiredSort) throws IOException {
-        super(mapName, sqlQuery, expectedJsonPath, resultIsArray, resultRequiredSort);
+    public AbstractJValueMapTest(String mapName, String sqlQuery, String jsonPath, Boolean resultIsArray,
+                                 Boolean resultRequiredSort) throws IOException {
+        super(mapName, sqlQuery, jsonPath, resultIsArray, resultRequiredSort);
     }
 
     @Override
-    protected String retrieveExpectedJsonStructure(String expectedJsonInputString, String expectedJsonPath,
-                                                   Boolean resultIsArray) {
-        return JsonExtractor.getInstance().getJsonValueByJsonPath(expectedJsonInputString, expectedJsonPath);
+    protected String retrieveExpectedJsonStructure(String jsonInputString, String jsonPath, Boolean resultIsArray) {
+        return JsonExtractor.getJsonValueByJsonPath(jsonInputString, jsonPath);
     }
 }

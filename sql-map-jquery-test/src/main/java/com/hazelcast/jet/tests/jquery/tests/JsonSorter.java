@@ -20,19 +20,7 @@ import java.util.Arrays;
 
 public final class JsonSorter {
 
-    private static JsonSorter instance;
-
-    private JsonSorter() {
-    }
-
-    public static JsonSorter getInstance() {
-        if (instance == null) {
-            instance = new JsonSorter();
-        }
-        return instance;
-    }
-
-    public String sortJsonAsCharArray(String jsonInputString) {
+    public static String sortJsonAsCharArray(String jsonInputString) {
         char[] chars = jsonInputString.toCharArray();
         Arrays.sort(chars);
         return new String(chars);

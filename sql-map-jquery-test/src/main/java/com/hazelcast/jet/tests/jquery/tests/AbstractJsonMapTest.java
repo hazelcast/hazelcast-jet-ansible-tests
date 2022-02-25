@@ -45,7 +45,8 @@ public abstract class AbstractJsonMapTest extends AbstractSoakTest {
 
     protected static final int DEFAULT_QUERY_TIMEOUT_MILLIS = 100;
     private static final int PROGRESS_PRINT_QUERIES_INTERVAL = 500;
-    private static final String JSON_DATA_PATH_DEFAULT = "/home/ec2-user/ansible/dataFile.json";
+    //private static final String JSON_DATA_PATH_DEFAULT = "/home/ec2-user/ansible/dataFile.json";
+    private static final String JSON_DATA_PATH_DEFAULT = "c:\\tmp\\dataFile.json";
 
     protected final String mapName;
     protected final String sqlQuery;
@@ -72,9 +73,8 @@ public abstract class AbstractJsonMapTest extends AbstractSoakTest {
         this.resultRequiredSort = resultRequiredSort;
     }
 
-    protected abstract String retrieveExpectedJsonStructure(String expectedJsonInputString, String expectedJsonPath,
+    protected abstract String retrieveExpectedJsonStructure(String jsonInputString, String jsonPath,
                                                             Boolean resultIsArray);
-
     protected void runTest() {
         begin = System.currentTimeMillis();
 
@@ -82,9 +82,10 @@ public abstract class AbstractJsonMapTest extends AbstractSoakTest {
 
         String sqlString = "CREATE OR REPLACE MAPPING " + mapName +
                 " TYPE " + IMapSqlConnector.TYPE_NAME + "\n" +
-                "OPTIONS (\n" + '\''
-                + OPTION_KEY_FORMAT + "'='" + "bigint" + "'\n" + ", '"
-                + OPTION_VALUE_FORMAT + "'='" + "json" + "'\n" + ")";
+                "OPTIONS (\n" +
+                '\'' + OPTION_KEY_FORMAT + "'='bigint'\n" + "," +
+                '\'' + OPTION_VALUE_FORMAT + "'='json'\n" +
+                ")";
 
         try (SqlResult result = client.getSql().execute(sqlString)) {
             assertEquals(result.updateCount(), 0L);
@@ -157,8 +158,8 @@ public abstract class AbstractJsonMapTest extends AbstractSoakTest {
 
         // when comparing node records sort is mandatory as JSONObject keys in records are unsorted
         if (resultRequiredSort) {
-            jsonQueryResult = JsonSorter.getInstance().sortJsonAsCharArray(jsonQueryResult);
-            expectedJsonQueryResult = JsonSorter.getInstance().sortJsonAsCharArray(expectedJqueryResultString);
+            jsonQueryResult = JsonSorter.sortJsonAsCharArray(jsonQueryResult);
+            expectedJsonQueryResult = JsonSorter.sortJsonAsCharArray(expectedJqueryResultString);
         }
         return jsonQueryResult.equals(expectedJsonQueryResult);
     }

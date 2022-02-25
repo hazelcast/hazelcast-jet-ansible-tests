@@ -25,19 +25,7 @@ import com.jayway.jsonpath.spi.json.GsonJsonProvider;
 
 public final class JsonExtractor {
 
-    private static JsonExtractor instance;
-
-    private JsonExtractor() {
-    }
-
-    public static JsonExtractor getInstance() {
-        if (instance == null) {
-            instance = new JsonExtractor();
-        }
-        return instance;
-    }
-
-    public String getJsonByJsonPath(String jsonStructureString, String jsonPath, Boolean isArray) {
+    public static String getJsonByJsonPath(String jsonStructureString, String jsonPath, Boolean isArray) {
         Configuration conf = Configuration.builder().jsonProvider(new GsonJsonProvider()).build();
         if (isArray) {
             JsonArray jsonArray = JsonPath.using(conf).parse(jsonStructureString).read(jsonPath);
@@ -48,7 +36,7 @@ public final class JsonExtractor {
         }
     }
 
-    public String getJsonValueByJsonPath(String jsonStructureString, String jsonPath) {
+    public static String getJsonValueByJsonPath(String jsonStructureString, String jsonPath) {
         Configuration conf = Configuration.builder().jsonProvider(new GsonJsonProvider()).build();
         JsonPrimitive jsonPrimitive = JsonPath.using(conf).parse(jsonStructureString).read(jsonPath);
         String result = jsonPrimitive.toString();

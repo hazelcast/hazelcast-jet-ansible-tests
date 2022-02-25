@@ -19,25 +19,22 @@ package com.hazelcast.jet.tests.jquery.tests;
 import com.hazelcast.core.HazelcastInstance;
 
 import java.io.IOException;
-import java.net.URISyntaxException;
 
 public class SqlJsonQueryRecursiveChildTest extends AbstractJQueryMapTest {
 
     private static final String JSON_MAP_NAME = "json_recursive_child_sql_map";
-    private static final String INPUT_JSON_FILE = "dataFile.json";
     private static final String SQL_QUERY = "SELECT JSON_QUERY(this, '$..email' WITH WRAPPER) FROM " + JSON_MAP_NAME;
     private static final String RESULT_JSON_PATH = "$..email";
     private static final boolean RESULT_IS_ARRAY = true;
     private static final boolean RESULT_REQUIRED_SORT = false;
 
-    public SqlJsonQueryRecursiveChildTest(String mapName, String inputJsonFile, String sqlQuery,
-                                          String expectedJsonFile, Boolean resultIsArray, Boolean resultRequiredSort)
-            throws IOException, URISyntaxException {
-        super(mapName, inputJsonFile, sqlQuery, expectedJsonFile, resultIsArray, resultRequiredSort);
+    public SqlJsonQueryRecursiveChildTest(String mapName, String sqlQuery, String expectedJsonFile,
+                                          Boolean resultIsArray, Boolean resultRequiredSort) throws IOException {
+        super(mapName, sqlQuery, expectedJsonFile, resultIsArray, resultRequiredSort);
     }
 
     public static void main(String... args) throws Exception {
-        new SqlJsonQueryRecursiveChildTest(JSON_MAP_NAME, INPUT_JSON_FILE, SQL_QUERY, RESULT_JSON_PATH, RESULT_IS_ARRAY,
+        new SqlJsonQueryRecursiveChildTest(JSON_MAP_NAME, SQL_QUERY, RESULT_JSON_PATH, RESULT_IS_ARRAY,
                 RESULT_REQUIRED_SORT).run(args);
     }
 

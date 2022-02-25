@@ -24,17 +24,12 @@ import com.hazelcast.jet.tests.common.Util;
 import com.hazelcast.map.IMap;
 import com.hazelcast.sql.SqlResult;
 import com.hazelcast.sql.SqlService;
+
 import java.io.IOException;
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.nio.file.FileSystem;
-import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.Duration;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Objects;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -42,32 +37,39 @@ import static com.hazelcast.jet.sql.impl.connector.SqlConnector.OPTION_KEY_FORMA
 import static com.hazelcast.jet.sql.impl.connector.SqlConnector.OPTION_VALUE_FORMAT;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.not;
+import static org.hamcrest.Matchers.notNullValue;
 
 public abstract class AbstractJsonMapTest extends AbstractSoakTest {
+
     protected static final int DEFAULT_QUERY_TIMEOUT_MILLIS = 100;
     private static final int PROGRESS_PRINT_QUERIES_INTERVAL = 500;
+    private static final String JSON_DATA_PATH_DEFAULT = "/home/ec2-user/ansible/dataFile.json";
+
     protected final String mapName;
     protected final String sqlQuery;
-    protected final Boolean requiredSort;
+    protected final Boolean resultRequiredSort;
     protected final String expectedJqueryResultString;
     protected HazelcastInstance client;
+
     protected int queryTimeout = propertyInt("queryTimeout", DEFAULT_QUERY_TIMEOUT_MILLIS);
+    protected String inputJsonFile = property("jsonDataFilePath", JSON_DATA_PATH_DEFAULT);
+
     protected String jsonInputString;
     private long begin;
     private long currentQueryCount;
     private long lastQueryCount;
     private long lastProgressPrintCount;
 
-    public AbstractJsonMapTest(String mapName, String inputJsonFile, String sqlQuery, Boolean requiredSort,
-                               String expectedJsonPath, Boolean resultIsArray) throws IOException, URISyntaxException {
+    public AbstractJsonMapTest(String mapName, String sqlQuery, String expectedJsonPath,
+                               Boolean resultIsArray, Boolean resultRequiredSort) throws IOException {
         this.mapName = mapName;
-        this.jsonInputString = readJsonFromFile(inputJsonFile);
         this.sqlQuery = sqlQuery;
-        this.requiredSort = requiredSort;
+        this.jsonInputString = readJsonFromFile(inputJsonFile);
         this.expectedJqueryResultString = retrieveExpectedJsonStructure(jsonInputString, expectedJsonPath,
                 resultIsArray);
+        this.resultRequiredSort = resultRequiredSort;
     }
 
     protected abstract String retrieveExpectedJsonStructure(String expectedJsonInputString, String expectedJsonPath,
@@ -140,23 +142,13 @@ public abstract class AbstractJsonMapTest extends AbstractSoakTest {
         assertThat(map.get(1L), is(notNullValue()));
     }
 
-    // this is a nasty workaround for uber jar accessing a packaged resource - check on local needed
-    protected String readJsonFromFile(String fileName) throws URISyntaxException, IOException {
-        URI uri = Objects.requireNonNull(getClass().getResource("/" + fileName)).toURI();
-
-        final Map<String, String> env = new HashMap<>();
-        final String[] array = uri.toString().split("!");
-        final FileSystem fs = FileSystems.newFileSystem(URI.create(array[0]), env);
-        final Path path = fs.getPath(array[1]);
-
-        Stream<String> lines = Files.lines(path);
-        jsonInputString = lines.collect(Collectors.joining("\n"));
-
-        lines.close();
-        fs.close();
-
-        assertThat(jsonInputString, is(notNullValue()));
-
+    protected String readJsonFromFile(String fileName) throws IOException {
+        Path inputJsonDataFilePath = Paths.get(fileName);
+        assertTrue("Json data input file does not exist", Files.exists(inputJsonDataFilePath));
+        try (Stream<String> lines = Files.lines(inputJsonDataFilePath)) {
+            jsonInputString = lines.collect(Collectors.joining("\n"));
+        }
+        assertThat(jsonInputString.length(), is(not(0)));
         return jsonInputString;
     }
 
@@ -164,11 +156,10 @@ public abstract class AbstractJsonMapTest extends AbstractSoakTest {
         String jsonQueryResult = sqlResult.iterator().next().getObject(0).toString();
 
         // when comparing node records sort is mandatory as JSONObject keys in records are unsorted
-        if (requiredSort) {
+        if (resultRequiredSort) {
             jsonQueryResult = JsonSorter.getInstance().sortJsonAsCharArray(jsonQueryResult);
             expectedJsonQueryResult = JsonSorter.getInstance().sortJsonAsCharArray(expectedJqueryResultString);
         }
-
         return jsonQueryResult.equals(expectedJsonQueryResult);
     }
 }

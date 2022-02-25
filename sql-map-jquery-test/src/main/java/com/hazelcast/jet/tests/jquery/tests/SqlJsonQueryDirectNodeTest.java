@@ -19,25 +19,22 @@ package com.hazelcast.jet.tests.jquery.tests;
 import com.hazelcast.core.HazelcastInstance;
 
 import java.io.IOException;
-import java.net.URISyntaxException;
 
 public class SqlJsonQueryDirectNodeTest extends AbstractJQueryMapTest {
 
     private static final String JSON_MAP_NAME = "json_direct_node_sql_map";
-    private static final String INPUT_JSON_FILE = "dataFile.json";
     private static final String SQL_QUERY = "SELECT JSON_QUERY(this, '$.userRecords[0]') FROM " + JSON_MAP_NAME;
     private static final String RESULT_JSON_PATH = "$.userRecords[0]";
     private static final boolean RESULT_IS_ARRAY = false;
     private static final boolean RESULT_REQUIRED_SORT = true;
 
-    public SqlJsonQueryDirectNodeTest(String mapName, String inputJsonFile, String sqlQuery, String resultJsonPath,
-                                      Boolean resultIsArray, Boolean resultRequiredSort) throws IOException,
-            URISyntaxException {
-        super(mapName, inputJsonFile, sqlQuery, resultJsonPath, resultIsArray, resultRequiredSort);
+    public SqlJsonQueryDirectNodeTest(String mapName, String sqlQuery, String resultJsonPath, Boolean resultIsArray,
+                                      Boolean resultRequiredSort) throws IOException {
+        super(mapName, sqlQuery, resultJsonPath, resultIsArray, resultRequiredSort);
     }
 
     public static void main(String... args) throws Exception {
-        new SqlJsonQueryDirectNodeTest(JSON_MAP_NAME, INPUT_JSON_FILE, SQL_QUERY, RESULT_JSON_PATH, RESULT_IS_ARRAY,
+        new SqlJsonQueryDirectNodeTest(JSON_MAP_NAME, SQL_QUERY, RESULT_JSON_PATH, RESULT_IS_ARRAY,
                 RESULT_REQUIRED_SORT).run(args);
     }
 

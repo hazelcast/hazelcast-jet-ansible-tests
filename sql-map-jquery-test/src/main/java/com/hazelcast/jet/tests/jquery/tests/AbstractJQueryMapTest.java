@@ -17,14 +17,13 @@
 package com.hazelcast.jet.tests.jquery.tests;
 
 import java.io.IOException;
-import java.net.URISyntaxException;
 
 
 public abstract class AbstractJQueryMapTest extends AbstractJsonMapTest {
 
-    public AbstractJQueryMapTest(String mapName, String inputJsonFile, String sqlQuery, String expectedJsonPath,
-                                 Boolean resultIsArray, Boolean requiredSort) throws IOException, URISyntaxException {
-        super(mapName, inputJsonFile, sqlQuery, requiredSort, expectedJsonPath, resultIsArray);
+    public AbstractJQueryMapTest(String mapName, String sqlQuery, String expectedJsonPath,
+                                 Boolean resultIsArray, Boolean resultRequiredSort) throws IOException {
+        super(mapName, sqlQuery, expectedJsonPath, resultIsArray, resultRequiredSort);
     }
 
     @Override

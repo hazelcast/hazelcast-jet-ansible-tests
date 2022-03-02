@@ -16,8 +16,6 @@
 
 package com.hazelcast.jet.tests.jquery.tests;
 
-import com.google.gson.JsonArray;
-import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
 import com.jayway.jsonpath.Configuration;
 import com.jayway.jsonpath.JsonPath;
@@ -25,21 +23,14 @@ import com.jayway.jsonpath.spi.json.GsonJsonProvider;
 
 public final class JsonExtractor {
 
-    public static String getJsonByJsonPath(String jsonStructureString, String jsonPath, Boolean isArray) {
+    public static String getJsonByJsonPath(String jsonStructureString, String jsonPath) {
         Configuration conf = Configuration.builder().jsonProvider(new GsonJsonProvider()).build();
-        if (isArray) {
-            JsonArray jsonArray = JsonPath.using(conf).parse(jsonStructureString).read(jsonPath);
-            return jsonArray.toString();
-        } else {
-            JsonObject jsonObject = JsonPath.using(conf).parse(jsonStructureString).read(jsonPath);
-            return jsonObject.toString();
-        }
+        return JsonPath.using(conf).parse(jsonStructureString).read(jsonPath).toString();
     }
 
     public static String getJsonValueByJsonPath(String jsonStructureString, String jsonPath) {
         Configuration conf = Configuration.builder().jsonProvider(new GsonJsonProvider()).build();
         JsonPrimitive jsonPrimitive = JsonPath.using(conf).parse(jsonStructureString).read(jsonPath);
-        String result = jsonPrimitive.toString();
-        return result.replace("\"", "");
+        return jsonPrimitive.getAsString();
     }
 }

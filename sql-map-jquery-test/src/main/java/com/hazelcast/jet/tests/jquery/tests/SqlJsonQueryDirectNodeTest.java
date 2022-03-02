@@ -25,17 +25,15 @@ public class SqlJsonQueryDirectNodeTest extends AbstractJsonQueryMapTest {
     private static final String JSON_MAP_NAME = "json_direct_node_sql_map";
     private static final String SQL_QUERY = "SELECT JSON_QUERY(this, '$.userRecords[0]') FROM " + JSON_MAP_NAME;
     private static final String RESULT_JSON_PATH = "$.userRecords[0]";
-    private static final boolean RESULT_IS_ARRAY = false;
     private static final boolean RESULT_REQUIRED_SORT = true;
 
-    public SqlJsonQueryDirectNodeTest(String mapName, String sqlQuery, String resultJsonPath, Boolean resultIsArray,
+    public SqlJsonQueryDirectNodeTest(String mapName, String sqlQuery, String resultJsonPath,
                                       Boolean resultRequiredSort) throws IOException {
-        super(mapName, sqlQuery, resultJsonPath, resultIsArray, resultRequiredSort);
+        super(mapName, sqlQuery, resultJsonPath, resultRequiredSort);
     }
 
     public static void main(String... args) throws Exception {
-        new SqlJsonQueryDirectNodeTest(JSON_MAP_NAME, SQL_QUERY, RESULT_JSON_PATH, RESULT_IS_ARRAY,
-                RESULT_REQUIRED_SORT).run(args);
+        new SqlJsonQueryDirectNodeTest(JSON_MAP_NAME, SQL_QUERY, RESULT_JSON_PATH, RESULT_REQUIRED_SORT).run(args);
     }
 
     @Override
@@ -51,6 +49,5 @@ public class SqlJsonQueryDirectNodeTest extends AbstractJsonQueryMapTest {
 
     @Override
     protected void teardown(Throwable t) {
-
     }
 }

@@ -26,17 +26,15 @@ public class SqlJsonQueryNodeArrayTest extends AbstractJsonQueryMapTest {
     private static final String SQL_QUERY = "SELECT JSON_QUERY(this, '$.userRecords[1 to 3]' WITH WRAPPER)  FROM  " +
             JSON_MAP_NAME;
     private static final String RESULT_JSON_PATH = "$.userRecords[1:4]";
-    private static final boolean RESULT_IS_ARRAY = true;
     private static final boolean RESULT_REQUIRED_SORT = true;
 
-    public SqlJsonQueryNodeArrayTest(String mapName, String sqlQuery, String expectedJsonFile, Boolean resultIsArray,
+    public SqlJsonQueryNodeArrayTest(String mapName, String sqlQuery, String expectedJsonFile,
                                      Boolean resultRequiredSort) throws IOException {
-        super(mapName, sqlQuery, expectedJsonFile, resultIsArray, resultRequiredSort);
+        super(mapName, sqlQuery, expectedJsonFile, resultRequiredSort);
     }
 
     public static void main(String... args) throws Exception {
-        new SqlJsonQueryNodeArrayTest(JSON_MAP_NAME, SQL_QUERY, RESULT_JSON_PATH, RESULT_IS_ARRAY,
-                RESULT_REQUIRED_SORT).run(args);
+        new SqlJsonQueryNodeArrayTest(JSON_MAP_NAME, SQL_QUERY, RESULT_JSON_PATH, RESULT_REQUIRED_SORT).run(args);
     }
 
     @Override

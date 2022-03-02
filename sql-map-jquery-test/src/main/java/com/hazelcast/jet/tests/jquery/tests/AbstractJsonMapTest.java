@@ -45,8 +45,7 @@ public abstract class AbstractJsonMapTest extends AbstractSoakTest {
 
     protected static final int DEFAULT_QUERY_TIMEOUT_MILLIS = 100;
     private static final int PROGRESS_PRINT_QUERIES_INTERVAL = 500;
-    //private static final String JSON_DATA_PATH_DEFAULT = "/home/ec2-user/ansible/dataFile.json";
-    private static final String JSON_DATA_PATH_DEFAULT = "c:\\tmp\\dataFile.json";
+    private static final String JSON_DATA_PATH_DEFAULT = "/home/ec2-user/ansible/dataFile.json";
 
     protected final String mapName;
     protected final String sqlQuery;
@@ -63,18 +62,16 @@ public abstract class AbstractJsonMapTest extends AbstractSoakTest {
     private long lastQueryCount;
     private long lastProgressPrintCount;
 
-    public AbstractJsonMapTest(String mapName, String sqlQuery, String expectedJsonPath,
-                               Boolean resultIsArray, Boolean resultRequiredSort) throws IOException {
+    public AbstractJsonMapTest(String mapName, String sqlQuery, String expectedJsonPath, Boolean resultRequiredSort)
+            throws IOException {
         this.mapName = mapName;
         this.sqlQuery = sqlQuery;
         this.jsonInputString = readJsonFromFile(inputJsonFile);
-        this.expectedJsonResultString = retrieveExpectedJsonStructure(jsonInputString, expectedJsonPath,
-                resultIsArray);
+        this.expectedJsonResultString = retrieveExpectedJsonStructure(jsonInputString, expectedJsonPath);
         this.resultRequiredSort = resultRequiredSort;
     }
 
-    protected abstract String retrieveExpectedJsonStructure(String jsonInputString, String jsonPath,
-                                                            Boolean resultIsArray);
+    protected abstract String retrieveExpectedJsonStructure(String jsonInputString, String jsonPath);
     protected void runTest() {
         begin = System.currentTimeMillis();
 

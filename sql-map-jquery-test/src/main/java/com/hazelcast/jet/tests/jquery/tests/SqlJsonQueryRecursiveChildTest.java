@@ -25,17 +25,15 @@ public class SqlJsonQueryRecursiveChildTest extends AbstractJsonQueryMapTest {
     private static final String JSON_MAP_NAME = "json_recursive_child_sql_map";
     private static final String SQL_QUERY = "SELECT JSON_QUERY(this, '$..email' WITH WRAPPER) FROM " + JSON_MAP_NAME;
     private static final String RESULT_JSON_PATH = "$..email";
-    private static final boolean RESULT_IS_ARRAY = true;
     private static final boolean RESULT_REQUIRED_SORT = false;
 
     public SqlJsonQueryRecursiveChildTest(String mapName, String sqlQuery, String expectedJsonFile,
-                                          Boolean resultIsArray, Boolean resultRequiredSort) throws IOException {
-        super(mapName, sqlQuery, expectedJsonFile, resultIsArray, resultRequiredSort);
+                                          Boolean resultRequiredSort) throws IOException {
+        super(mapName, sqlQuery, expectedJsonFile, resultRequiredSort);
     }
 
     public static void main(String... args) throws Exception {
-        new SqlJsonQueryRecursiveChildTest(JSON_MAP_NAME, SQL_QUERY, RESULT_JSON_PATH, RESULT_IS_ARRAY,
-                RESULT_REQUIRED_SORT).run(args);
+        new SqlJsonQueryRecursiveChildTest(JSON_MAP_NAME, SQL_QUERY, RESULT_JSON_PATH, RESULT_REQUIRED_SORT).run(args);
     }
 
     @Override

@@ -26,17 +26,15 @@ public class SqlJsonValueStringTest extends AbstractJsonValueMapTest {
     private static final String SQL_QUERY = "SELECT JSON_VALUE(this, '$.userRecords[100].about')  FROM  "
             + JSON_MAP_NAME;
     private static final String RESULT_JSON_PATH = "$.userRecords[100].about";
-    private static final boolean RESULT_IS_ARRAY = false;
     private static final boolean RESULT_REQUIRED_SORT = false;
 
-    public SqlJsonValueStringTest(String mapName, String sqlQuery, String expectedJsonFile, Boolean resultIsArray,
-                                  Boolean resultRequiredSort) throws IOException {
-        super(mapName, sqlQuery, expectedJsonFile, resultIsArray, resultRequiredSort);
+    public SqlJsonValueStringTest(String mapName, String sqlQuery, String expectedJsonFile, Boolean resultRequiredSort)
+            throws IOException {
+        super(mapName, sqlQuery, expectedJsonFile, resultRequiredSort);
     }
 
     public static void main(String... args) throws Exception {
-        new SqlJsonValueStringTest(JSON_MAP_NAME, SQL_QUERY, RESULT_JSON_PATH, RESULT_IS_ARRAY,
-                RESULT_REQUIRED_SORT).run(args);
+        new SqlJsonValueStringTest(JSON_MAP_NAME, SQL_QUERY, RESULT_JSON_PATH, RESULT_REQUIRED_SORT).run(args);
     }
 
     @Override

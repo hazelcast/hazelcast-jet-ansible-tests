@@ -26,17 +26,15 @@ public class SqlJsonQueryWildcardTest extends AbstractJsonQueryMapTest {
     private static final String SQL_QUERY = "SELECT JSON_QUERY(this, '$.userRecords[*].friends[*].*' WITH WRAPPER)" +
             " FROM " + JSON_MAP_NAME;
     private static final String RESULT_JSON_PATH = "$.userRecords[*].friends[*].*";
-    private static final boolean RESULT_IS_ARRAY = true;
     private static final boolean RESULT_REQUIRED_SORT = false;
 
-    public SqlJsonQueryWildcardTest(String mapName, String sqlQuery, String expectedJsonFile, Boolean resultIsArray,
+    public SqlJsonQueryWildcardTest(String mapName, String sqlQuery, String expectedJsonFile,
                                     Boolean resultRequiredSort) throws IOException {
-        super(mapName, sqlQuery, expectedJsonFile, resultIsArray, resultRequiredSort);
+        super(mapName, sqlQuery, expectedJsonFile, resultRequiredSort);
     }
 
     public static void main(String... args) throws Exception {
-        new SqlJsonQueryWildcardTest(JSON_MAP_NAME, SQL_QUERY, RESULT_JSON_PATH, RESULT_IS_ARRAY,
-                RESULT_REQUIRED_SORT).run(args);
+        new SqlJsonQueryWildcardTest(JSON_MAP_NAME, SQL_QUERY, RESULT_JSON_PATH, RESULT_REQUIRED_SORT).run(args);
     }
 
     @Override

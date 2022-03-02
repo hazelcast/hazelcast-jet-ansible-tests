@@ -16,8 +16,6 @@
 
 package com.hazelcast.jet.tests.jquery.tests;
 
-import com.hazelcast.core.HazelcastInstance;
-
 import java.io.IOException;
 
 public class SqlJsonQueryRecursiveChildTest extends AbstractJsonQueryMapTest {
@@ -36,18 +34,4 @@ public class SqlJsonQueryRecursiveChildTest extends AbstractJsonQueryMapTest {
         new SqlJsonQueryRecursiveChildTest(JSON_MAP_NAME, SQL_QUERY, RESULT_JSON_PATH, RESULT_REQUIRED_SORT).run(args);
     }
 
-    @Override
-    protected void init(HazelcastInstance client) {
-        super.client = client;
-        populateMap();
-    }
-
-    @Override
-    protected void test(HazelcastInstance client, String name) {
-        runTest();
-    }
-
-    @Override
-    protected void teardown(Throwable t) {
-    }
 }

@@ -16,8 +16,6 @@
 
 package com.hazelcast.jet.tests.jquery.tests;
 
-import com.hazelcast.core.HazelcastInstance;
-
 import java.io.IOException;
 
 public class SqlJsonValueStringTest extends AbstractJsonValueMapTest {
@@ -37,18 +35,4 @@ public class SqlJsonValueStringTest extends AbstractJsonValueMapTest {
         new SqlJsonValueStringTest(JSON_MAP_NAME, SQL_QUERY, RESULT_JSON_PATH, RESULT_REQUIRED_SORT).run(args);
     }
 
-    @Override
-    protected void init(HazelcastInstance client) {
-        super.client = client;
-        populateMap();
-    }
-
-    @Override
-    protected void test(HazelcastInstance client, String name) {
-        runTest();
-    }
-
-    @Override
-    protected void teardown(Throwable t) {
-    }
 }

@@ -71,7 +71,24 @@ public abstract class AbstractJsonMapTest extends AbstractSoakTest {
         this.resultRequiredSort = resultRequiredSort;
     }
 
+    @Override
+    protected void init(HazelcastInstance client) {
+        this.client = client;
+        populateMap();
+    }
+
+    @Override
+    protected void test(HazelcastInstance client, String name) {
+        runTest();
+    }
+
+    @Override
+    protected void teardown(Throwable t) {
+    }
+
     protected abstract String retrieveExpectedJsonStructure(String jsonInputString, String jsonPath);
+
+
     protected void runTest() {
         begin = System.currentTimeMillis();
 

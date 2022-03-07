@@ -23,6 +23,7 @@ import com.hazelcast.jet.tests.common.AbstractSoakTest;
 import com.hazelcast.jet.tests.common.Util;
 import com.hazelcast.map.IMap;
 import com.hazelcast.sql.SqlResult;
+import com.hazelcast.sql.SqlRow;
 import com.hazelcast.sql.SqlService;
 
 import java.io.IOException;
@@ -30,6 +31,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
+import java.util.Iterator;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -111,8 +113,7 @@ public abstract class AbstractJsonMapTest extends AbstractSoakTest {
             SqlResult sqlResult = sql.execute(sqlQuery);
 
             //Check that query returned results
-            assertTrue("The following query was not successful: " + sqlQuery, isQuerySuccessful(sqlResult,
-                    expectedJsonResultString));
+            assertQuerySuccessful(sqlResult,expectedJsonResultString);
             currentQueryCount++;
 
             //Print progress
@@ -167,14 +168,17 @@ public abstract class AbstractJsonMapTest extends AbstractSoakTest {
         return jsonInputString;
     }
 
-    protected boolean isQuerySuccessful(SqlResult sqlResult, String expectedJsonQueryResult) {
-        String jsonQueryResult = sqlResult.iterator().next().getObject(0).toString();
+    protected void assertQuerySuccessful(SqlResult sqlResult, String expectedJsonQueryResult) {
+        Iterator<SqlRow> sqlRowIterator = sqlResult.iterator();
+        assertTrue("The SQL result is empty: " , sqlRowIterator.hasNext());
+
+        String jsonQueryResult = sqlRowIterator.next().getObject(0).toString();
 
         // when comparing node records sort is mandatory as JSONObject keys in records are unsorted
         if (resultRequiredSort) {
             jsonQueryResult = JsonSorter.sortJsonAsCharArray(jsonQueryResult);
             expectedJsonQueryResult = JsonSorter.sortJsonAsCharArray(expectedJsonResultString);
         }
-        return jsonQueryResult.equals(expectedJsonQueryResult);
+        assertEquals("The following query result is different than expected: ", expectedJsonQueryResult, jsonQueryResult);
     }
 }

@@ -29,10 +29,12 @@ import com.hazelcast.jet.tests.sql.pojo.Key;
 import com.hazelcast.jet.tests.sql.pojo.Pojo;
 import com.hazelcast.map.IMap;
 import com.hazelcast.sql.SqlResult;
+import com.hazelcast.sql.SqlRow;
 import com.hazelcast.sql.SqlService;
 
 import java.time.Duration;
 import java.util.Arrays;
+import java.util.Iterator;
 import java.util.List;
 
 import static com.hazelcast.jet.sql.impl.connector.SqlConnector.OPTION_KEY_CLASS;
@@ -89,8 +91,7 @@ public abstract class AbstractSqlMapTest extends AbstractSoakTest {
             SqlResult sqlResult = sql.execute(query);
 
             //Check that query returned results
-            assertTrue("The following query returned not results: " + query,
-                    isQuerySuccessful(sqlResult, queryKey));
+            assertQuerySuccessful(query, sqlResult, queryKey);
             currentQueryCount++;
 
             //Print progress
@@ -202,8 +203,11 @@ public abstract class AbstractSqlMapTest extends AbstractSoakTest {
         );
     }
 
-    private boolean isQuerySuccessful(SqlResult sqlResult, int queryKey) {
-        return sqlResult.iterator().next().getObject("intVal").equals(queryKey);
+    private void assertQuerySuccessful(String query, SqlResult sqlResult, int queryKey) {
+        Iterator<SqlRow> sqlRowIterator = sqlResult.iterator();
+        assertTrue("The SQL result is empty: ", sqlRowIterator.hasNext());
+        assertEquals("Query response for: " + query + " is different then expected: ",
+                (int) sqlRowIterator.next().getObject("intVal"), queryKey);
     }
 
     protected void setInMemoryFormat(InMemoryFormat inMemoryFormat) {

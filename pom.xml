@@ -154,6 +154,7 @@
                 <module>sort-test</module>
                 <module>file-ingestion-test</module>
                 <module>sql-map-test</module>
+                <module>sql-map-jquery-test</module>
             </modules>
         </profile>
         <profile>
@@ -206,8 +207,10 @@
             </activation>
             <modules>
                 <module>sql-map-test</module>
+                <module>sql-map-jquery-test</module>
             </modules>
         </profile>
     </profiles>
 
 </project>
+

@@ -14,13 +14,14 @@
  * limitations under the License.
  */
 
-package com.hazelcast.jet.tests.jquery.tests;
+package com.hazelcast.jet.sql.tests.json;
 
 import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.core.HazelcastJsonValue;
 import com.hazelcast.jet.sql.impl.connector.map.IMapSqlConnector;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
 import com.hazelcast.jet.tests.common.Util;
+import com.hazelcast.jet.tests.common.sql.SqlResultProcessor;
 import com.hazelcast.map.IMap;
 import com.hazelcast.sql.SqlResult;
 import com.hazelcast.sql.SqlRow;
@@ -32,12 +33,15 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.Iterator;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static com.hazelcast.jet.sql.impl.connector.SqlConnector.OPTION_KEY_FORMAT;
 import static com.hazelcast.jet.sql.impl.connector.SqlConnector.OPTION_VALUE_FORMAT;
-import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.not;
@@ -61,8 +65,9 @@ public abstract class AbstractJsonMapTest extends AbstractSoakTest {
     protected String jsonInputString;
     private long begin;
     private long currentQueryCount;
-    private long lastQueryCount;
     private long lastProgressPrintCount;
+
+    private ExecutorService threadPool;
 
     public AbstractJsonMapTest(String mapName, String sqlQuery, String expectedJsonPath, Boolean resultRequiredSort)
             throws IOException {
@@ -77,6 +82,7 @@ public abstract class AbstractJsonMapTest extends AbstractSoakTest {
     protected void init(HazelcastInstance client) {
         this.client = client;
         populateMap();
+        threadPool = Executors.newSingleThreadExecutor();
     }
 
     @Override
@@ -86,6 +92,15 @@ public abstract class AbstractJsonMapTest extends AbstractSoakTest {
 
     @Override
     protected void teardown(Throwable t) {
+        threadPool.shutdown();
+        try {
+            if (!threadPool.awaitTermination(10, TimeUnit.SECONDS)) {
+                threadPool.shutdownNow();
+            }
+        } catch (InterruptedException ex) {
+            threadPool.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
     }
 
     protected abstract String retrieveExpectedJsonStructure(String jsonInputString, String jsonPath);
@@ -94,26 +109,29 @@ public abstract class AbstractJsonMapTest extends AbstractSoakTest {
     protected void runTest() {
         begin = System.currentTimeMillis();
 
-        SqlService sql = client.getSql();
+        SqlService sqlService = client.getSql();
 
-        String sqlString = "CREATE OR REPLACE MAPPING " + mapName +
+        String sqlCreateMappingQueryString = "CREATE OR REPLACE MAPPING " + mapName +
                 " TYPE " + IMapSqlConnector.TYPE_NAME + "\n" +
                 "OPTIONS (\n" +
                 '\'' + OPTION_KEY_FORMAT + "'='bigint'\n" + "," +
                 '\'' + OPTION_VALUE_FORMAT + "'='json'\n" +
                 ")";
 
-        try (SqlResult result = client.getSql().execute(sqlString)) {
+        try (SqlResult result = sqlService.execute(sqlCreateMappingQueryString)) {
             assertEquals(result.updateCount(), 0L);
         }
 
         while (System.currentTimeMillis() - begin < durationInMillis) {
 
             //Execute query
-            SqlResult sqlResult = sql.execute(sqlQuery);
+            SqlResult sqlResult = null;
+            SqlResultProcessor sqlResultProcessor = new SqlResultProcessor(sqlQuery, sqlService, threadPool);
+            Future<SqlResult> sqlResultFuture = sqlResultProcessor.runQueryAsync();
+            sqlResult = sqlResultProcessor.awaitQueryExecutionWithTimeout(sqlResultFuture, 10);
 
             //Check that query returned results
-            assertQuerySuccessful(sqlResult,expectedJsonResultString);
+            assertQuerySuccessful(sqlResult, expectedJsonResultString);
             currentQueryCount++;
 
             //Print progress
@@ -133,8 +151,6 @@ public abstract class AbstractJsonMapTest extends AbstractSoakTest {
             logger.info(String.format("Time elapsed: %s. Executed %d queries", getTimeElapsed(), currentQueryCount));
             lastProgressPrintCount = currentQueryCount;
         }
-        assertNotStuck();
-        lastQueryCount = currentQueryCount;
     }
 
     private String getTimeElapsed() {
@@ -144,12 +160,6 @@ public abstract class AbstractJsonMapTest extends AbstractSoakTest {
         long minutes = timeElapsed.minusDays(days).minusHours(hours).toMinutes();
         long seconds = timeElapsed.minusDays(days).minusHours(hours).minusMinutes(minutes).toMillis() / 1000;
         return String.format("%dd, %dh, %dm, %ds", days, hours, minutes, seconds);
-    }
-
-    private void assertNotStuck() {
-        assertNotEquals(
-                String.format("No queries executed in %d seconds.", MILLISECONDS.toSeconds(durationInMillis)),
-                lastQueryCount, currentQueryCount);
     }
 
     protected void populateMap() {
@@ -169,8 +179,10 @@ public abstract class AbstractJsonMapTest extends AbstractSoakTest {
     }
 
     protected void assertQuerySuccessful(SqlResult sqlResult, String expectedJsonQueryResult) {
+        assertNotEquals("The SQL results is null: ", sqlResult, null);
+
         Iterator<SqlRow> sqlRowIterator = sqlResult.iterator();
-        assertTrue("The SQL result is empty: " , sqlRowIterator.hasNext());
+        assertTrue("The SQL result contains now rows: ", sqlRowIterator.hasNext());
 
         String jsonQueryResult = sqlRowIterator.next().getObject(0).toString();
 

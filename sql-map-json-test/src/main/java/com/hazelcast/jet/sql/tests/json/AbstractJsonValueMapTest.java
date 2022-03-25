@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.hazelcast.jet.tests.jquery.tests;
+package com.hazelcast.jet.sql.tests.json;
 
 import java.io.IOException;
 

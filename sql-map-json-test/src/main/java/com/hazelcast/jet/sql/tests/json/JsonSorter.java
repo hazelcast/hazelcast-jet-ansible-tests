@@ -14,11 +14,14 @@
  * limitations under the License.
  */
 
-package com.hazelcast.jet.tests.jquery.tests;
+package com.hazelcast.jet.sql.tests.json;
 
 import java.util.Arrays;
 
 public final class JsonSorter {
+
+    private JsonSorter() {
+    }
 
     public static String sortJsonAsCharArray(String jsonInputString) {
         char[] chars = jsonInputString.toCharArray();

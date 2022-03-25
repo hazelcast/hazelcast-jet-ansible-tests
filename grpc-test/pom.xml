@@ -9,7 +9,7 @@
     <parent>
         <artifactId>hazelcast-jet-ansible-tests</artifactId>
         <groupId>com.hazelcast.jet.tests</groupId>
-        <version>5.1-SNAPSHOT</version>
+        <version>5.2-SNAPSHOT</version>
     </parent>
     <properties>
         <main.basedir>${project.parent.basedir}</main.basedir>
@@ -92,8 +92,10 @@
                             <goal>compile-custom</goal>
                         </goals>
                         <configuration>
+                            <!--suppress UnresolvedMavenProperty -->
                             <protocArtifact>com.google.protobuf:protoc:${protobuf.version}:exe:${os.detected.classifier}</protocArtifact>
                             <pluginId>grpc-java</pluginId>
+                            <!--suppress UnresolvedMavenProperty -->
                             <pluginArtifact>io.grpc:protoc-gen-grpc-java:${grpc.version}:exe:${os.detected.classifier}</pluginArtifact>
                             <outputDirectory>${project.build.directory}/generated-sources/protobuf/java</outputDirectory>
                             <clearOutputDirectory>false</clearOutputDirectory>

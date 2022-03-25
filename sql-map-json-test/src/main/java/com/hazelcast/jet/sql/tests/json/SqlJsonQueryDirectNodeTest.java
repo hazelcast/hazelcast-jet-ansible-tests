@@ -14,25 +14,24 @@
  * limitations under the License.
  */
 
-package com.hazelcast.jet.tests.jquery.tests;
+package com.hazelcast.jet.sql.tests.json;
 
 import java.io.IOException;
 
-public class SqlJsonQueryNodeArrayTest extends AbstractJsonQueryMapTest {
+public class SqlJsonQueryDirectNodeTest extends AbstractJsonQueryMapTest {
 
-    private static final String JSON_MAP_NAME = "json_node_array_sql_map";
-    private static final String SQL_QUERY = "SELECT JSON_QUERY(this, '$.userRecords[1 to 3]' WITH WRAPPER)  FROM  " +
-            JSON_MAP_NAME;
-    private static final String RESULT_JSON_PATH = "$.userRecords[1:4]";
+    private static final String JSON_MAP_NAME = "json_direct_node_sql_map";
+    private static final String SQL_QUERY = "SELECT JSON_QUERY(this, '$.userRecords[0]') FROM " + JSON_MAP_NAME;
+    private static final String RESULT_JSON_PATH = "$.userRecords[0]";
     private static final boolean RESULT_REQUIRED_SORT = true;
 
-    public SqlJsonQueryNodeArrayTest(String mapName, String sqlQuery, String expectedJsonFile,
-                                     Boolean resultRequiredSort) throws IOException {
-        super(mapName, sqlQuery, expectedJsonFile, resultRequiredSort);
+    public SqlJsonQueryDirectNodeTest(String mapName, String sqlQuery, String resultJsonPath,
+                                      Boolean resultRequiredSort) throws IOException {
+        super(mapName, sqlQuery, resultJsonPath, resultRequiredSort);
     }
 
     public static void main(String... args) throws Exception {
-        new SqlJsonQueryNodeArrayTest(JSON_MAP_NAME, SQL_QUERY, RESULT_JSON_PATH, RESULT_REQUIRED_SORT).run(args);
+        new SqlJsonQueryDirectNodeTest(JSON_MAP_NAME, SQL_QUERY, RESULT_JSON_PATH, RESULT_REQUIRED_SORT).run(args);
     }
 
 }

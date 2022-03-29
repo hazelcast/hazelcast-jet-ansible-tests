@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.hazelcast.jet.tests.jquery.tests;
+package com.hazelcast.jet.sql.tests.json;
 
 import static com.hazelcast.jet.tests.common.Util.parseArguments;
 
@@ -47,6 +47,10 @@ public final class StartTest {
 
             case "sqlJsonQueryWildcard":
                 SqlJsonQueryWildcardTest.main(args);
+                break;
+
+            case "sqlJsonQueryExpression":
+                SqlJsonQueryExpressionTest.main(args);
                 break;
 
             case "sqlJsonValueString":

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.hazelcast.jet.tests.jquery.tests;
+package com.hazelcast.jet.sql.tests.json;
 
 import com.google.gson.JsonPrimitive;
 import com.jayway.jsonpath.Configuration;
@@ -22,6 +22,9 @@ import com.jayway.jsonpath.JsonPath;
 import com.jayway.jsonpath.spi.json.GsonJsonProvider;
 
 public final class JsonExtractor {
+
+    private JsonExtractor() {
+    }
 
     public static String getJsonByJsonPath(String jsonStructureString, String jsonPath) {
         Configuration conf = Configuration.builder().jsonProvider(new GsonJsonProvider()).build();

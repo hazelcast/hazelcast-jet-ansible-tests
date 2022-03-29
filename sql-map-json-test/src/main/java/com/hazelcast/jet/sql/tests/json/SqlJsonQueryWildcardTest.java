@@ -14,25 +14,25 @@
  * limitations under the License.
  */
 
-package com.hazelcast.jet.tests.jquery.tests;
+package com.hazelcast.jet.sql.tests.json;
 
 import java.io.IOException;
 
-public class SqlJsonValueStringTest extends AbstractJsonValueMapTest {
+public class SqlJsonQueryWildcardTest extends AbstractJsonQueryMapTest {
 
-    private static final String JSON_MAP_NAME = "json_value_string_map";
-    private static final String SQL_QUERY = "SELECT JSON_VALUE(this, '$.userRecords[100].about')  FROM  "
-            + JSON_MAP_NAME;
-    private static final String RESULT_JSON_PATH = "$.userRecords[100].about";
+    private static final String JSON_MAP_NAME = "json_wildcard_sql_map";
+    private static final String SQL_QUERY = "SELECT JSON_QUERY(this, '$.userRecords[*].friends[*].*' WITH WRAPPER)" +
+            " FROM " + JSON_MAP_NAME;
+    private static final String RESULT_JSON_PATH = "$.userRecords[*].friends[*].*";
     private static final boolean RESULT_REQUIRED_SORT = false;
 
-    public SqlJsonValueStringTest(String mapName, String sqlQuery, String expectedJsonFile, Boolean resultRequiredSort)
-            throws IOException {
+    public SqlJsonQueryWildcardTest(String mapName, String sqlQuery, String expectedJsonFile,
+                                    Boolean resultRequiredSort) throws IOException {
         super(mapName, sqlQuery, expectedJsonFile, resultRequiredSort);
     }
 
     public static void main(String... args) throws Exception {
-        new SqlJsonValueStringTest(JSON_MAP_NAME, SQL_QUERY, RESULT_JSON_PATH, RESULT_REQUIRED_SORT).run(args);
+        new SqlJsonQueryWildcardTest(JSON_MAP_NAME, SQL_QUERY, RESULT_JSON_PATH, RESULT_REQUIRED_SORT).run(args);
     }
 
 }

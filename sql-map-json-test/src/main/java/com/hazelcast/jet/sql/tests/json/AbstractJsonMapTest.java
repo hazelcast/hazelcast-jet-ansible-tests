@@ -122,11 +122,12 @@ public abstract class AbstractJsonMapTest extends AbstractSoakTest {
             assertEquals(result.updateCount(), 0L);
         }
 
+        SqlResultProcessor sqlResultProcessor = new SqlResultProcessor(sqlQuery, sqlService, threadPool);
+
         while (System.currentTimeMillis() - begin < durationInMillis) {
 
             //Execute query
             SqlResult sqlResult = null;
-            SqlResultProcessor sqlResultProcessor = new SqlResultProcessor(sqlQuery, sqlService, threadPool);
             Future<SqlResult> sqlResultFuture = sqlResultProcessor.runQueryAsync();
             sqlResult = sqlResultProcessor.awaitQueryExecutionWithTimeout(sqlResultFuture, 10);
 
@@ -182,7 +183,7 @@ public abstract class AbstractJsonMapTest extends AbstractSoakTest {
         assertNotEquals("The SQL results is null: ", sqlResult, null);
 
         Iterator<SqlRow> sqlRowIterator = sqlResult.iterator();
-        assertTrue("The SQL result contains now rows: ", sqlRowIterator.hasNext());
+        assertTrue("The SQL result contains no rows: ", sqlRowIterator.hasNext());
 
         String jsonQueryResult = sqlRowIterator.next().getObject(0).toString();
 

@@ -67,13 +67,8 @@ public class SqlResultProcessor {
             sqlResult = sqlResultFuture.get(timeoutSeconds, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
             e.printStackTrace();
-        } catch (ExecutionException e) {
-            e.printStackTrace();
-            throw new RuntimeException("SQL Query: " + sqlString + " has failed with reason " + e.getMessage());
-        } catch (TimeoutException e) {
-            e.printStackTrace();
-            throw new RuntimeException("SQL Query: " + sqlString + " have not return value " + timeoutSeconds +
-                    e.getMessage());
+        } catch (ExecutionException | TimeoutException e) {
+            throw new RuntimeException("SQL Query failed or timed out for request: " + sqlString, e);
         }
 
         return sqlResult;

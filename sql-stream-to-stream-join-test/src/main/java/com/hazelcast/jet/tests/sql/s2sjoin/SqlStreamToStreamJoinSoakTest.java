@@ -95,7 +95,12 @@ public class SqlStreamToStreamJoinSoakTest extends AbstractSoakTest {
         AbstractSoakTest.assertEquals(0L, sourceMappingCreateResult.updateCount());
 
         String initialIngestionQuery = "INSERT INTO " + sourceName + " VALUES" +
-                TestRecordProducer.produceTradeRecords(EVENTS_START_TIME, EVENTS_COUNT_PER_BATCH, EVENT_TIME_INTERVAL);
+                TestRecordProducer.produceTradeRecords(
+                        EVENTS_START_TIME,
+                        EVENTS_COUNT_PER_BATCH,
+                        EVENT_TIME_INTERVAL,
+                        SqlStreamToStreamJoinSoakTest::createSingleRecord
+                );
         logger.info("Initial ingestion query: " + initialIngestionQuery);
         SqlResult initialDataIngestionResult = sqlService.execute(initialIngestionQuery);
         AbstractSoakTest.assertEquals(0L, initialDataIngestionResult.updateCount());
@@ -197,7 +202,9 @@ public class SqlStreamToStreamJoinSoakTest extends AbstractSoakTest {
                         TestRecordProducer.produceTradeRecords(
                                 currentEventStartTime.addAndGet(EVENTS_COUNT_PER_BATCH),
                                 EVENTS_COUNT_PER_BATCH,
-                                EVENT_TIME_INTERVAL);
+                                EVENT_TIME_INTERVAL,
+                                SqlStreamToStreamJoinSoakTest::createSingleRecord
+                        );
 
                 try (SqlResult res = sqlService.execute(sql)) {
                     AbstractSoakTest.assertEquals(0L, res.updateCount());
@@ -237,6 +244,13 @@ public class SqlStreamToStreamJoinSoakTest extends AbstractSoakTest {
         long minutes = timeElapsed.minusDays(days).minusHours(hours).toMinutes();
         long seconds = timeElapsed.minusDays(days).minusHours(hours).minusMinutes(minutes).toMillis() / 1000;
         return String.format("%dd, %dh, %dm, %ds", days, hours, minutes, seconds);
+    }
+
+    private static StringBuilder createSingleRecord(StringBuilder sb, Number idx) {
+        sb.append(" (TO_TIMESTAMP_TZ(").append(idx).append("), ")
+                .append(idx)
+                .append(")");
+        return sb;
     }
 
     public static String randomName() {

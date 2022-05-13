@@ -157,6 +157,7 @@
                 <module>sql-map-test</module>
                 <module>sql-map-json-test</module>
                 <module>sql-stream-to-stream-join-test</module>
+                <module>sql-tumble-window-test</module>
             </modules>
         </profile>
         <profile>
@@ -211,6 +212,7 @@
                 <module>sql-map-test</module>
                 <module>sql-map-json-test</module>
                 <module>sql-stream-to-stream-join-test</module>
+                <module>sql-tumble-window-test</module>
             </modules>
         </profile>
     </profiles>

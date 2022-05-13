@@ -1,0 +1,272 @@
+/*
+ * Copyright (c) 2008-2018, Hazelcast, Inc. All Rights Reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package com.hazelcast.jet.sql.tests.tumblewindow;
+
+import com.hazelcast.core.HazelcastInstance;
+import com.hazelcast.internal.util.UuidUtil;
+import com.hazelcast.jet.sql.impl.connector.kafka.KafkaSqlConnector;
+import com.hazelcast.jet.tests.common.AbstractSoakTest;
+import com.hazelcast.jet.tests.common.Util;
+import com.hazelcast.jet.tests.common.sql.TestRecordProducer;
+import com.hazelcast.logging.ILogger;
+import com.hazelcast.sql.HazelcastSqlException;
+import com.hazelcast.sql.SqlResult;
+import com.hazelcast.sql.SqlRow;
+import com.hazelcast.sql.SqlService;
+
+import java.time.Duration;
+import java.util.Iterator;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import static com.hazelcast.jet.sql.impl.connector.SqlConnector.OPTION_KEY_FORMAT;
+import static com.hazelcast.jet.sql.impl.connector.SqlConnector.OPTION_VALUE_FORMAT;
+
+public abstract class AbstractTumbleWindowTest extends AbstractSoakTest {
+    private static final int DEFAULT_QUERY_TIMEOUT_MILLIS = 100;
+    private static final int PROGRESS_PRINT_QUERIES_INTERVAL = 500;
+
+    private static final int EVENT_START_TIME = 0;
+    private static final int EVENT_WINDOW_COUNT = 10;
+    private static final int EVENT_TIME_INTERVAL = 1;
+    private static final int LAG_TIME = 2;
+    private static final int STREAM_RESULTS_TIMEOUT_SECONDS = 600;
+
+    private final int queryTimeout = propertyInt("queryTimeout", DEFAULT_QUERY_TIMEOUT_MILLIS);
+    private final String brokerUri = property("brokerUri", "localhost:9092");
+
+    private long begin;
+    private long currentQueryCount;
+    private long lastProgressPrintCount;
+    private SqlService sqlService;
+    private ExecutorService ingestionExecutor;
+    private ExecutorService aggregationResultsExecutor;
+    private final int streamingResultsTimeout = propertyInt("streamingResultsTimeout", STREAM_RESULTS_TIMEOUT_SECONDS);
+
+    private final String sourceName;
+    private final String aggregationType;
+    private DataIngestionTask producerTask;
+
+    public AbstractTumbleWindowTest(String sourceName, String aggregationType) {
+        this.sourceName = sourceName;
+        this.aggregationType = aggregationType;
+    }
+
+    @Override
+    protected void init(HazelcastInstance client) {
+        sqlService = client.getSql();
+        ingestionExecutor = Executors.newSingleThreadExecutor();
+        producerTask = new DataIngestionTask(sqlService, sourceName, queryTimeout, logger);
+        aggregationResultsExecutor = Executors.newSingleThreadExecutor();
+
+        SqlResult sourceMappingCreateResult = sqlService.execute("CREATE MAPPING " + sourceName + " ("
+                + "tick BIGINT,"
+                + "ticker VARCHAR,"
+                + "price DECIMAL" + ") "
+                + "TYPE " + KafkaSqlConnector.TYPE_NAME + ' '
+                + "OPTIONS ( "
+                + '\'' + OPTION_KEY_FORMAT + "'='int'"
+                + ", '" + OPTION_VALUE_FORMAT + "'='json-flat'"
+                + ", 'bootstrap.servers'='" + brokerUri + '\''
+                + ", 'auto.offset.reset'='earliest'"
+                + ")"
+        );
+        assertEquals(0L, sourceMappingCreateResult.updateCount());
+
+        producerTask.produceTradeRecords(EVENT_START_TIME, EVENT_WINDOW_COUNT, false);
+        Util.sleepMillis(queryTimeout);
+    }
+
+    @Override
+    protected void test(HazelcastInstance client, String name) throws ExecutionException, InterruptedException {
+        runTest();
+    }
+
+    protected void runTest() throws ExecutionException, InterruptedException {
+        begin = System.currentTimeMillis();
+        ingestionExecutor.execute(producerTask);
+
+        String sinkRowSqlQuery;
+        int currentEventStartTime = EVENT_START_TIME;
+
+        Util.sleepSeconds(30);
+
+        String streamingSql = "SELECT window_start, window_end, " + aggregationType + "(price) FROM" +
+                " TABLE(TUMBLE(" +
+                "    (SELECT * FROM TABLE(IMPOSE_ORDER(TABLE " + sourceName + ", DESCRIPTOR(tick), " + LAG_TIME + ")))," +
+                "    DESCRIPTOR(tick), " +
+                EVENT_WINDOW_COUNT +
+                " ))" +
+                " GROUP BY window_start, window_end";
+        try (SqlResult sqlResult = sqlService.execute(streamingSql)) {
+
+            Iterator<SqlRow> iterator = sqlResult.iterator();
+            while (System.currentTimeMillis() - begin < durationInMillis) {
+
+                final Future<SqlRow> sqlRowFuture = aggregationResultsExecutor.submit(iterator::next);
+                try {
+                    SqlRow sqlRow = sqlRowFuture.get(streamingResultsTimeout, TimeUnit.SECONDS);
+//                    logger.info(sqlRow.toString());
+                    assertQuerySuccessful(sqlRow, currentEventStartTime,
+                            currentEventStartTime + EVENT_WINDOW_COUNT);
+
+                    currentEventStartTime += EVENT_WINDOW_COUNT;
+                } catch (TimeoutException e) {
+                    throw new RuntimeException("Timed out after " + streamingResultsTimeout
+                            + " secs waiting for new records", e);
+                }
+
+                currentQueryCount++;
+                printProgress();
+            }
+        }
+
+        producerTask.stopProducingEvents();
+        logger.info(String.format("Test completed successfully. Executed %d queries in %s.", currentQueryCount,
+                getTimeElapsed()));
+    }
+
+    static class DataIngestionTask implements Runnable {
+        private static final int PRODUCER_RETRY_DELAY_SECONDS = 10;
+        private final SqlService sqlService;
+        private final String sourceName;
+        private final long queryTimeout;
+        private final AtomicBoolean continueProducing;
+        private final ILogger logger;
+
+        DataIngestionTask(
+                SqlService sqlService,
+                String sourceName,
+                long queryTimeout,
+                ILogger logger) {
+            this.sqlService = sqlService;
+            this.sourceName = sourceName;
+            this.queryTimeout = queryTimeout;
+            this.continueProducing = new AtomicBoolean(true);
+            this.logger = logger;
+        }
+
+        @Override
+        public void run() {
+
+            AtomicInteger currentEventStartTime = new AtomicInteger(EVENT_WINDOW_COUNT);
+
+            while (continueProducing.get()) {
+                // produce late events at rate inversely proportional to queryTimeout
+                boolean includeLateEvent = currentEventStartTime.get() % (queryTimeout * 120) == 0;
+
+                // ingest data to Kafka using new timestamps
+                try (SqlResult res = produceTradeRecords(currentEventStartTime.getAndAdd(EVENT_WINDOW_COUNT),
+                        currentEventStartTime.get(), includeLateEvent)) {
+                    AbstractSoakTest.assertEquals(0L, res.updateCount());
+                } catch (HazelcastSqlException e) {
+                    logger.warning("Failed to produce new records. Retrying in 10 seconds.", e);
+                    Util.sleepSeconds(PRODUCER_RETRY_DELAY_SECONDS);
+                    continue;
+                }
+
+                Util.sleepMillis(queryTimeout);
+            }
+        }
+
+        public void stopProducingEvents() {
+            continueProducing.set(false);
+        }
+
+        private SqlResult produceTradeRecords(int currentEventStartTime, int currentEventEndTime, boolean includeLate) {
+
+            StringBuilder queryBuilder = new StringBuilder("INSERT INTO " + sourceName + " VALUES");
+            queryBuilder.append(TestRecordProducer.produceTradeRecords(
+                    currentEventStartTime,
+                    EVENT_WINDOW_COUNT, EVENT_TIME_INTERVAL,
+                    AbstractTumbleWindowTest::createSingleRecord
+            ));
+
+            if (includeLate) {
+                queryBuilder.append(", ").append(TestRecordProducer.produceTradeRecords(
+                        currentEventStartTime - LAG_TIME,
+                        1, 1,
+                        AbstractTumbleWindowTest::createSingleRecord
+                ));
+            }
+
+            return sqlService.execute(queryBuilder.toString());
+        }
+    }
+
+    @Override
+    protected void teardown(Throwable t) throws Exception {
+        aggregationResultsExecutor.shutdown();
+        try {
+            if (!aggregationResultsExecutor.awaitTermination(10, TimeUnit.SECONDS)) {
+                aggregationResultsExecutor.shutdownNow();
+            }
+        } catch (InterruptedException ex) {
+            aggregationResultsExecutor.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
+
+        ingestionExecutor.shutdown();
+        try {
+            if (!ingestionExecutor.awaitTermination(10, TimeUnit.SECONDS)) {
+                ingestionExecutor.shutdownNow();
+            }
+        } catch (InterruptedException ex) {
+            ingestionExecutor.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    protected abstract void assertQuerySuccessful(SqlRow sqlRow, int currentEventStartTime, int currentEventEndTime);
+
+    private void printProgress() {
+        long nextPrintCount = lastProgressPrintCount + PROGRESS_PRINT_QUERIES_INTERVAL;
+        boolean toPrint = currentQueryCount >= nextPrintCount;
+        if (toPrint) {
+            logger.info(String.format("Time elapsed: %s. Executed %d queries", getTimeElapsed(), currentQueryCount));
+            lastProgressPrintCount = currentQueryCount;
+        }
+    }
+
+    private static StringBuilder createSingleRecord(StringBuilder sb, Number a) {
+        sb.append("(")
+                .append(a + ",")
+                .append("'" + "value-" + a + "'" + ",")
+                .append(a)
+                .append(")");
+        return sb;
+    }
+
+    private String getTimeElapsed() {
+        Duration timeElapsed = Duration.ofMillis(System.currentTimeMillis() - begin);
+        long days = timeElapsed.toDays();
+        long hours = timeElapsed.minusDays(days).toHours();
+        long minutes = timeElapsed.minusDays(days).minusHours(hours).toMinutes();
+        long seconds = timeElapsed.minusDays(days).minusHours(hours).minusMinutes(minutes).toMillis() / 1000;
+        return String.format("%dd, %dh, %dm, %ds", days, hours, minutes, seconds);
+    }
+
+    public static String randomName() {
+        return "o_" + UuidUtil.newUnsecureUuidString().replace('-', '_');
+    }
+}

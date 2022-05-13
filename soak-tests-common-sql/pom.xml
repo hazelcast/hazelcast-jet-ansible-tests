@@ -12,6 +12,14 @@
         <version>5.2-SNAPSHOT</version>
     </parent>
 
+    <dependencies>
+        <dependency>
+            <groupId>com.hazelcast.jet.tests</groupId>
+            <artifactId>soak-tests-common</artifactId>
+            <version>5.2-SNAPSHOT</version>
+        </dependency>
+    </dependencies>
+
     <properties>
         <main.basedir>${project.parent.basedir}</main.basedir>
     </properties>

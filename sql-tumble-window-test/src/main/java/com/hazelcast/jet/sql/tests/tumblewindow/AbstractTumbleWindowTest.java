@@ -132,8 +132,8 @@ public abstract class AbstractTumbleWindowTest extends AbstractSoakTest {
                 }
         );
 
-        // pace between initial ingestion and sink verification
-        Util.sleepMillis(120000);
+        // pause between initial ingestion and sink verification
+        Util.sleepSeconds(120);
 
         while (System.currentTimeMillis() - begin < durationInMillis) {
             // prepare sink row query

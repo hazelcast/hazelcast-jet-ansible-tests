@@ -25,7 +25,6 @@ import com.hazelcast.sql.SqlStatement;
 import java.util.Iterator;
 import java.util.concurrent.*;
 
-
 public class SqlRowProcessor {
 
     private final String sqlString;
@@ -52,19 +51,18 @@ public class SqlRowProcessor {
 
                         while (!iterator.hasNext()) {
                             if (elapsedTimeIndicatorSeconds < noResultTimeoutSeconds) {
-
                                 result = sqlService.execute(statement);
                                 iterator = result.iterator();
 
                                 Util.sleepMillis(noResultWaitIntervalSeconds);
-                                elapsedTimeIndicatorSeconds = elapsedTimeIndicatorSeconds + noResultWaitIntervalSeconds;
-                                System.out.println("No result from async executor at elapsed time" + elapsedTimeIndicatorSeconds + " for query:" + sqlString);
+                                elapsedTimeIndicatorSeconds += noResultWaitIntervalSeconds;
+                                System.out.println("No result from async executor at elapsed time" + elapsedTimeIndicatorSeconds + " for query: " + sqlString);
                             } else {
-                                System.out.println("Non zero result did not arrive within specified timeout: " + noResultTimeoutSeconds + " for query:" + sqlString);
+                                System.out.println("Non zero result did not arrive within specified timeout: " + noResultTimeoutSeconds + " for query: " + sqlString);
                                 completableFuture.completeExceptionally(new RuntimeException("SQL query is still empty, stopping after timeout: " + noResultTimeoutSeconds));
                             }
                         }
-                        System.out.println("Existing result from async executor arrived at elapsed time: " + elapsedTimeIndicatorSeconds + " for query:" + sqlString);
+                        System.out.println("Existing result from async executor arrived at elapsed time: " + elapsedTimeIndicatorSeconds + " for query: " + sqlString);
                         completableFuture.complete(iterator.next());
 
                     } catch (Throwable e) {

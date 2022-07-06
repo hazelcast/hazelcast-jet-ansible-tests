@@ -20,6 +20,7 @@ import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.cdc.CdcSinks;
 import com.hazelcast.jet.cdc.ChangeRecord;
+import com.hazelcast.jet.cdc.Operation;
 import com.hazelcast.jet.cdc.impl.ChangeRecordImpl;
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.config.ProcessingGuarantee;
@@ -34,7 +35,12 @@ import com.hazelcast.query.Predicates;
 
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Supplier;
 
+import static com.hazelcast.jet.cdc.Operation.DELETE;
+import static com.hazelcast.jet.cdc.Operation.INSERT;
+import static com.hazelcast.jet.cdc.Operation.SYNC;
+import static com.hazelcast.jet.cdc.Operation.UPDATE;
 import static com.hazelcast.jet.core.JobStatus.FAILED;
 import static com.hazelcast.jet.core.JobStatus.RUNNING;
 import static com.hazelcast.jet.tests.common.Util.getJobStatusWithRetry;
@@ -202,7 +208,7 @@ public class CdcSinkTest extends AbstractSoakTest {
      * value = {"id":entryId, "name":"name_entryId_0_0", "__op":"c", "__ts_ms":1588927306264, "__deleted":false}
      */
     private static ChangeRecord insert(String key, int entryId, int messageId) {
-        return record(messageId, key, String.format(VALUE_PATTERN, entryId, entryId, 0, 0, "c", false));
+        return record(messageId, INSERT, key, String.format(VALUE_PATTERN, entryId, entryId, 0, 0, "c", false));
     }
 
     /**
@@ -210,7 +216,7 @@ public class CdcSinkTest extends AbstractSoakTest {
      * value = {"id":entryId, "name":"name_entryId_1_0", "__op":"u", "__ts_ms":1588927306264, "__deleted":false}
      */
     private static ChangeRecord update(String key, int entryId, int messageId) {
-        return record(messageId, key, String.format(VALUE_PATTERN, entryId, entryId, 1, 0, "u", false));
+        return record(messageId, UPDATE, key, String.format(VALUE_PATTERN, entryId, entryId, 1, 0, "u", false));
     }
 
     /**
@@ -220,13 +226,30 @@ public class CdcSinkTest extends AbstractSoakTest {
      */
     private static ChangeRecord delete(String key, int entryId, int messageId, int preserveItem) {
         if (entryId % preserveItem == 0) {
-            return record(messageId, key, String.format(VALUE_PATTERN, entryId, entryId, 1, 1, "u", false));
+            return record(messageId, UPDATE, key, String.format(VALUE_PATTERN, entryId, entryId, 1, 1, "u", false));
         }
-        return record(messageId, key, String.format(VALUE_PATTERN, entryId, entryId, entryId, 0, "d", true));
+        return record(messageId, DELETE, key, String.format(VALUE_PATTERN, entryId, entryId, entryId, 0, "d", true));
     }
 
-    private static ChangeRecord record(int messageId, String key, String value) {
-        return new ChangeRecordImpl(0, messageId, key, value);
+    private static ChangeRecord record(int messageId, Operation op, String key, String value) {
+        Supplier<String> oldValue = op == INSERT || op == SYNC
+                ? () -> null
+                : () -> value;
+        Supplier<String> newValue = op == DELETE
+                ? () -> null
+                : () -> value;
+        return new ChangeRecordImpl(
+                0,
+                0,
+                messageId,
+                op,
+                key,
+                oldValue,
+                newValue,
+                "table",
+                "schema",
+                "database"
+        );
     }
 
     private static String prepareExpectedValue(int entryId) {

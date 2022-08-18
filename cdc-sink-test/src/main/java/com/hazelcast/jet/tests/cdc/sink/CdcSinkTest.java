@@ -233,10 +233,10 @@ public class CdcSinkTest extends AbstractSoakTest {
 
     private static ChangeRecord record(int messageId, Operation op, String key, String value) {
         Supplier<String> oldValue = op == INSERT || op == SYNC
-                ? () -> null
+                ? null
                 : () -> value;
         Supplier<String> newValue = op == DELETE
-                ? () -> null
+                ? null
                 : () -> value;
         return new ChangeRecordImpl(
                 0,

@@ -160,7 +160,7 @@ public class JdbcSinkTest extends AbstractSoakTest {
                 MysqlXADataSource ds = new MysqlXADataSource();
                 ds.setUrl(connectionUrl);
                 ds.setUser("root");
-                ds.setPassword("soak-test");
+                ds.setPassword("Soak-test,1");
                 ds.setDatabaseName(DATABASE_NAME);
                 return ds;
             };

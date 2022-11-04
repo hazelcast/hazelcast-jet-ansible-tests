@@ -47,7 +47,7 @@ public class MessageProducer {
         this.logger = logger;
         this.tableName = tableName;
         this.producerThread = new Thread(() -> Util.uncheckRun(this::run));
-        connection = DriverManager.getConnection(connectionUrl, "root", "soak-test");
+        connection = DriverManager.getConnection(connectionUrl, "root", "Soak-test,1");
         insertStatement = connection.prepareStatement("INSERT INTO " + tableName + " VALUES (?,?)");
         updateStatement = connection.prepareStatement("UPDATE " + tableName + " SET value=? WHERE id=?");
         deleteStatement = connection.prepareStatement("DELETE FROM " + tableName + " WHERE id=?");

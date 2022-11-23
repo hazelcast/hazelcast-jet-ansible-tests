@@ -60,7 +60,7 @@ public class HdfsWordCountTest extends AbstractSoakTest {
     private static final String TAB_STRING = "\t";
     private static final int DEFAULT_TOTAL = 4800000;
     private static final int DEFAULT_DISTINCT = 500000;
-    private static final int PAUSE_BETWEEN_JOBS = 100;
+    private static final int PAUSE_BETWEEN_JOBS = 2_000;
 
     private String hdfsUri;
     private String inputPath;

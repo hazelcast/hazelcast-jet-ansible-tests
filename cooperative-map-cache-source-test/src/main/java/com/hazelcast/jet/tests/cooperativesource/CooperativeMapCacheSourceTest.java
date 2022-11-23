@@ -61,7 +61,7 @@ public class CooperativeMapCacheSourceTest extends AbstractSoakTest {
 
     private static final int DEFAULT_THREAD_COUNT = 1;
 
-    private static final int PAUSE_BETWEEN_JOBS = 100;
+    private static final int PAUSE_BETWEEN_JOBS = 2_000;
 
     private int threadCount;
     /**

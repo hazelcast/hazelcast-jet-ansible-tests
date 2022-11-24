@@ -155,7 +155,7 @@ public class CdcSourceTest extends AbstractSoakTest {
                 .setDatabaseAddress(connectionIp)
                 .setDatabasePort(3306)
                 .setDatabaseUser("debezium")
-                .setDatabasePassword("dbz")
+                .setDatabasePassword("Dbz,1234")
                 .setClusterName("dbserver1")
                 .setDatabaseClientId(clusterName.contains(STABLE_CLUSTER) ? 444444 : 555555)
                 .setDatabaseWhitelist(DATABASE_NAME)
@@ -196,7 +196,7 @@ public class CdcSourceTest extends AbstractSoakTest {
         // remove database only if test finished without failure
         if (t == null) {
             try (
-                    Connection connection = DriverManager.getConnection(connectionUrl, "root", "soak-test");
+                    Connection connection = DriverManager.getConnection(connectionUrl, "root", "Soak-test,1");
                     Statement statement = connection.createStatement()
             ) {
                 statement.executeUpdate("DROP DATABASE " + DATABASE_NAME);
@@ -206,7 +206,7 @@ public class CdcSourceTest extends AbstractSoakTest {
 
     private void createDatabase() throws SQLException {
         try (
-                Connection connection = DriverManager.getConnection(connectionUrl, "root", "soak-test");
+                Connection connection = DriverManager.getConnection(connectionUrl, "root", "Soak-test,1");
                 Statement statement = connection.createStatement()
         ) {
             statement.executeUpdate("DROP DATABASE IF EXISTS " + DATABASE_NAME);
@@ -216,7 +216,7 @@ public class CdcSourceTest extends AbstractSoakTest {
 
     private void createTable(String tableName) throws SQLException {
         try (
-                Connection connection = DriverManager.getConnection(connectionUrlWithDb, "root", "soak-test");
+                Connection connection = DriverManager.getConnection(connectionUrlWithDb, "root", "Soak-test,1");
                 Statement statement = connection.createStatement()
         ) {
             statement.executeUpdate("DROP TABLE IF EXISTS " + tableName);

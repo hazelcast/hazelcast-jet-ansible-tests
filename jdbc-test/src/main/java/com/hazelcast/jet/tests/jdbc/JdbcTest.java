@@ -51,7 +51,7 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 
 public class JdbcTest extends AbstractSoakTest {
 
-    private static final String DB_AND_USER = "/soak-test?user=root&password=soak-test";
+    private static final String DB_AND_USER = "/soak-test?user=root&password=Soak-test,1";
     private static final String QUEUE_NAME = JdbcTest.class.getSimpleName();
     private static final int PERSON_COUNT = 20_000;
     private static final int ASSERTION_RETRY_COUNT = 100;

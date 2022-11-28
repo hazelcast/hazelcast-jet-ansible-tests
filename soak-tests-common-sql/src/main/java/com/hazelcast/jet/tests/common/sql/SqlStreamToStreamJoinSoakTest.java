@@ -1,21 +1,21 @@
 package com.hazelcast.jet.tests.common.sql;
 
 import com.hazelcast.core.HazelcastInstance;
+import com.hazelcast.internal.util.UuidUtil;
 import com.hazelcast.jet.sql.impl.connector.kafka.KafkaSqlConnector;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
 import com.hazelcast.jet.tests.common.Util;
+import com.hazelcast.sql.HazelcastSqlException;
 import com.hazelcast.sql.SqlResult;
 import com.hazelcast.sql.SqlRow;
 import com.hazelcast.sql.SqlService;
 
 import java.time.Duration;
-import java.util.HashSet;
 import java.util.Iterator;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static com.hazelcast.jet.sql.impl.connector.SqlConnector.OPTION_KEY_FORMAT;
@@ -23,7 +23,7 @@ import static com.hazelcast.jet.sql.impl.connector.SqlConnector.OPTION_VALUE_FOR
 import static com.hazelcast.jet.tests.common.sql.TestRecordProducer.produceTradeRecords;
 
 public class SqlStreamToStreamJoinSoakTest extends AbstractSoakTest {
-    private static final String EVENTS_SOURCE = "events_topic";
+    private static final String EVENTS_SOURCE_PREFIX = "events_topic_";
 
     private final static int DEFAULT_QUERY_TIMEOUT_MILLIS = 10;
     private final static int PROGRESS_PRINT_QUERIES_INTERVAL = 500;
@@ -31,7 +31,6 @@ public class SqlStreamToStreamJoinSoakTest extends AbstractSoakTest {
     private final static int EVENTS_START_TIME = 0;
     private final static int EVENTS_COUNT_PER_BATCH = 100;
     private final static int EVENT_TIME_INTERVAL = 1;
-//    private final static int LAG_TIME = 2;
 
     private final int queryTimeout = propertyInt("queryTimeout", DEFAULT_QUERY_TIMEOUT_MILLIS);
     private final String brokerUri = property("brokerUri", "localhost:9092");
@@ -43,10 +42,6 @@ public class SqlStreamToStreamJoinSoakTest extends AbstractSoakTest {
     private ExecutorService ingestionExecutorService;
 
     private final String sourceName;
-    private String sqlQuery;
-
-//    private final Set<Long> expectedRows = ConcurrentHashMap.newKeySet(1024 * 32);
-//    private final Set<Long> processedRows = new HashSet<>();
 
     public SqlStreamToStreamJoinSoakTest(String sourceName) {
         this.sourceName = sourceName;
@@ -73,13 +68,9 @@ public class SqlStreamToStreamJoinSoakTest extends AbstractSoakTest {
 
         String initialIngestionQuery = "INSERT INTO " + sourceName + " VALUES" +
                 produceTradeRecords(EVENTS_START_TIME, EVENTS_COUNT_PER_BATCH, EVENT_TIME_INTERVAL);
-        System.out.println(initialIngestionQuery);
+        logger.info("Initial ingestion query: " + initialIngestionQuery);
         SqlResult initialDataIngestionResult = sqlService.execute(initialIngestionQuery);
         assertEquals(0L, initialDataIngestionResult.updateCount());
-
-//        for (long i = EVENTS_START_TIME; i < EVENTS_COUNT_PER_BATCH; i += EVENT_TIME_INTERVAL) {
-//            expectedRows.add(i);
-//        }
 
         sqlService.execute("CREATE VIEW v1 AS "
                 + "SELECT * FROM TABLE(IMPOSE_ORDER(TABLE "
@@ -94,8 +85,9 @@ public class SqlStreamToStreamJoinSoakTest extends AbstractSoakTest {
 
     @Override
     protected final void test(HazelcastInstance client, String name) {
-        ingestionExecutorService.execute(
-                new DataIngestionTask(sqlService, /*expectedRows,*/ sourceName, durationInMillis, queryTimeout));
+
+        DataIngestionTask producerTask = new DataIngestionTask(sqlService, sourceName, queryTimeout);
+        ingestionExecutorService.execute(producerTask);
 
         Util.sleepMillis(30_000L);
 
@@ -112,13 +104,12 @@ public class SqlStreamToStreamJoinSoakTest extends AbstractSoakTest {
             Long leftRowIndex = sqlRow.getObject(1);
             Long rightRowIndex = sqlRow.getObject(3);
             assertEquals(leftRowIndex, rightRowIndex);
-//            assertTrue("Unexpected row index : " + leftRowIndex, expectedRows.remove(leftRowIndex));
 
+            currentQueryCount++;
             printProgress();
         }
-//        if (expectedRows.size() <= Duration.ofSeconds(1).toMillis()) {
-//            throw new AssertionError("Too much unprocessed rows " + expectedRows.size());
-//        }
+
+        producerTask.stopProducingEvents();
     }
 
     @Override
@@ -137,32 +128,26 @@ public class SqlStreamToStreamJoinSoakTest extends AbstractSoakTest {
     static class DataIngestionTask implements Runnable {
         private final SqlService sqlService;
         private final String sourceName;
-        //        private final Set<Long> expectedRows;
-        private final long durationInMillis;
         private final long queryTimeout;
+        private final AtomicBoolean continueProducing;
 
         public DataIngestionTask(
                 SqlService sqlService,
-//                Set<Long> expectedRows,
                 String sourceName,
-                long durationInMillis,
                 long queryTimeout) {
             this.sqlService = sqlService;
-//            this.expectedRows = expectedRows;
             this.sourceName = sourceName;
-            this.durationInMillis = durationInMillis;
             this.queryTimeout = queryTimeout;
+            this.continueProducing = new AtomicBoolean(true);
         }
 
         @Override
         public void run() {
             long startTime = System.currentTimeMillis();
-            long executedQueries = 0L;
             AtomicInteger currentEventStartTime = new AtomicInteger(EVENTS_START_TIME);
             AtomicInteger currentEventEndTime = new AtomicInteger();
 
-            System.err.println(System.currentTimeMillis() + " -> " + startTime + " -> " + durationInMillis);
-            while (System.currentTimeMillis() - startTime < durationInMillis) {
+            while (continueProducing.get()) {
                 // ingest data to Kafka using new timestamps
                 currentEventStartTime.set(currentEventStartTime.get() + EVENTS_COUNT_PER_BATCH);
                 currentEventEndTime.set(currentEventStartTime.get() + EVENTS_COUNT_PER_BATCH);
@@ -173,14 +158,17 @@ public class SqlStreamToStreamJoinSoakTest extends AbstractSoakTest {
                                 currentEventEndTime.get(),
                                 EVENT_TIME_INTERVAL);
 
-//                for (long i = currentEventStartTime.get(); i < currentEventEndTime.get(); i += EVENT_TIME_INTERVAL) {
-//                    expectedRows.add(i);
-//                }
-
-                assertEquals(0L, sqlService.execute(sql).updateCount());
-                ++executedQueries;
+                try (SqlResult res = sqlService.execute(sql)) {
+                    assertEquals(0L, res.updateCount());
+                } catch (HazelcastSqlException e) {
+                    continue;
+                }
                 Util.sleepMillis(queryTimeout);
             }
+        }
+
+        public void stopProducingEvents() {
+            continueProducing.set(false);
         }
     }
 
@@ -188,7 +176,12 @@ public class SqlStreamToStreamJoinSoakTest extends AbstractSoakTest {
         long nextPrintCount = lastProgressPrintCount + PROGRESS_PRINT_QUERIES_INTERVAL;
         boolean toPrint = currentQueryCount >= nextPrintCount;
         if (toPrint) {
-            System.err.printf("Time elapsed: %s. Executed %d queries.", getTimeElapsed(), currentQueryCount);
+            logger.info(
+                    String.format(
+                            "Time elapsed: %s. Executed %d queries.",
+                            getTimeElapsed(),
+                            currentQueryCount
+                    ));
             lastProgressPrintCount = currentQueryCount;
         }
     }
@@ -202,7 +195,11 @@ public class SqlStreamToStreamJoinSoakTest extends AbstractSoakTest {
         return String.format("%dd, %dh, %dm, %ds", days, hours, minutes, seconds);
     }
 
+    public static String randomName() {
+        return "o_" + UuidUtil.newUnsecureUuidString().replace('-', '_');
+    }
+
     public static void main(String[] args) throws Exception {
-        new SqlStreamToStreamJoinSoakTest(EVENTS_SOURCE).run(args);
+        new SqlStreamToStreamJoinSoakTest(EVENTS_SOURCE_PREFIX + randomName()).run(args);
     }
 }

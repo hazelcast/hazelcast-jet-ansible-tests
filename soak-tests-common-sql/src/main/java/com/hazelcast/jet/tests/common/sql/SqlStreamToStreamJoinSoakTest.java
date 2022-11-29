@@ -1,3 +1,19 @@
+/*
+ * Copyright (c) 2008-2018, Hazelcast, Inc. All Rights Reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.hazelcast.jet.tests.common.sql;
 
 import com.hazelcast.core.HazelcastInstance;
@@ -25,12 +41,12 @@ import static com.hazelcast.jet.tests.common.sql.TestRecordProducer.produceTrade
 public class SqlStreamToStreamJoinSoakTest extends AbstractSoakTest {
     private static final String EVENTS_SOURCE_PREFIX = "events_topic_";
 
-    private final static int DEFAULT_QUERY_TIMEOUT_MILLIS = 10;
-    private final static int PROGRESS_PRINT_QUERIES_INTERVAL = 500;
+    private static final int DEFAULT_QUERY_TIMEOUT_MILLIS = 10;
+    private static final int PROGRESS_PRINT_QUERIES_INTERVAL = 500;
 
-    private final static int EVENTS_START_TIME = 0;
-    private final static int EVENTS_COUNT_PER_BATCH = 100;
-    private final static int EVENT_TIME_INTERVAL = 1;
+    private static final int EVENTS_START_TIME = 0;
+    private static final int EVENTS_COUNT_PER_BATCH = 100;
+    private static final int EVENT_TIME_INTERVAL = 1;
 
     private final int queryTimeout = propertyInt("queryTimeout", DEFAULT_QUERY_TIMEOUT_MILLIS);
     private final String brokerUri = property("brokerUri", "localhost:9092");
@@ -131,7 +147,7 @@ public class SqlStreamToStreamJoinSoakTest extends AbstractSoakTest {
         private final long queryTimeout;
         private final AtomicBoolean continueProducing;
 
-        public DataIngestionTask(
+        DataIngestionTask(
                 SqlService sqlService,
                 String sourceName,
                 long queryTimeout) {

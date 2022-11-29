@@ -20,9 +20,9 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 
-public class TestRecordProducer {
+public final class TestRecordProducer {
 
-    public TestRecordProducer() {
+    private TestRecordProducer() {
     }
 
     public static String produceTradeRecords(long itemsSubmitted, long itemsCountToSubmit, int timeInterval) {

@@ -14,13 +14,15 @@
  * limitations under the License.
  */
 
-package com.hazelcast.jet.tests.common.sql;
+package com.hazelcast.jet.tests.sql;
 
 import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.internal.util.UuidUtil;
+import com.hazelcast.jet.sql.impl.connector.SqlConnector;
 import com.hazelcast.jet.sql.impl.connector.kafka.KafkaSqlConnector;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
 import com.hazelcast.jet.tests.common.Util;
+import com.hazelcast.jet.tests.common.sql.TestRecordProducer;
 import com.hazelcast.sql.HazelcastSqlException;
 import com.hazelcast.sql.SqlResult;
 import com.hazelcast.sql.SqlRow;
@@ -34,10 +36,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static com.hazelcast.jet.sql.impl.connector.SqlConnector.OPTION_KEY_FORMAT;
-import static com.hazelcast.jet.sql.impl.connector.SqlConnector.OPTION_VALUE_FORMAT;
-import static com.hazelcast.jet.tests.common.sql.TestRecordProducer.produceTradeRecords;
-
 public class SqlStreamToStreamJoinSoakTest extends AbstractSoakTest {
     private static final String EVENTS_SOURCE_PREFIX = "events_topic_";
 
@@ -48,8 +46,7 @@ public class SqlStreamToStreamJoinSoakTest extends AbstractSoakTest {
     private static final int EVENTS_COUNT_PER_BATCH = 100;
     private static final int EVENT_TIME_INTERVAL = 1;
 
-    private final int queryTimeout = propertyInt("queryTimeout", DEFAULT_QUERY_TIMEOUT_MILLIS);
-    private final String brokerUri = property("brokerUri", "localhost:9092");
+    private int queryTimeout;
 
     private long startTime;
     private long currentQueryCount;
@@ -68,25 +65,28 @@ public class SqlStreamToStreamJoinSoakTest extends AbstractSoakTest {
         sqlService = client.getSql();
         ingestionExecutorService = Executors.newSingleThreadExecutor();
         startTime = System.currentTimeMillis();
+        queryTimeout = propertyInt("queryTimeout", DEFAULT_QUERY_TIMEOUT_MILLIS);
+        String brokerUri = property("brokerUri", "localhost:9092");
 
+        logger.info("Creating mapping to Kafka with brokerUri: " + brokerUri);
         SqlResult sourceMappingCreateResult = sqlService.execute("CREATE MAPPING " + sourceName + " ("
                 + "event_time TIMESTAMP WITH TIME ZONE,"
                 + "event_tick BIGINT )"
                 + "TYPE " + KafkaSqlConnector.TYPE_NAME + ' '
                 + "OPTIONS ( "
-                + '\'' + OPTION_KEY_FORMAT + "'='int'"
-                + ", '" + OPTION_VALUE_FORMAT + "'='json-flat'"
+                + '\'' + SqlConnector.OPTION_KEY_FORMAT + "'='int'"
+                + ", '" + SqlConnector.OPTION_VALUE_FORMAT + "'='json-flat'"
                 + ", 'bootstrap.servers'='" + brokerUri + '\''
                 + ", 'auto.offset.reset'='earliest'"
                 + ")"
         );
-        assertEquals(0L, sourceMappingCreateResult.updateCount());
+        AbstractSoakTest.assertEquals(0L, sourceMappingCreateResult.updateCount());
 
         String initialIngestionQuery = "INSERT INTO " + sourceName + " VALUES" +
-                produceTradeRecords(EVENTS_START_TIME, EVENTS_COUNT_PER_BATCH, EVENT_TIME_INTERVAL);
+                TestRecordProducer.produceTradeRecords(EVENTS_START_TIME, EVENTS_COUNT_PER_BATCH, EVENT_TIME_INTERVAL);
         logger.info("Initial ingestion query: " + initialIngestionQuery);
         SqlResult initialDataIngestionResult = sqlService.execute(initialIngestionQuery);
-        assertEquals(0L, initialDataIngestionResult.updateCount());
+        AbstractSoakTest.assertEquals(0L, initialDataIngestionResult.updateCount());
 
         sqlService.execute("CREATE VIEW v1 AS "
                 + "SELECT * FROM TABLE(IMPOSE_ORDER(TABLE "
@@ -119,7 +119,7 @@ public class SqlStreamToStreamJoinSoakTest extends AbstractSoakTest {
             // checking only event_tick to simplify our destiny.
             Long leftRowIndex = sqlRow.getObject(1);
             Long rightRowIndex = sqlRow.getObject(3);
-            assertEquals(leftRowIndex, rightRowIndex);
+            AbstractSoakTest.assertEquals(leftRowIndex, rightRowIndex);
 
             currentQueryCount++;
             printProgress();
@@ -169,13 +169,13 @@ public class SqlStreamToStreamJoinSoakTest extends AbstractSoakTest {
                 currentEventEndTime.set(currentEventStartTime.get() + EVENTS_COUNT_PER_BATCH);
 
                 String sql = "INSERT INTO " + sourceName + " VALUES" +
-                        produceTradeRecords(
+                        TestRecordProducer.produceTradeRecords(
                                 currentEventStartTime.get(),
                                 currentEventEndTime.get(),
                                 EVENT_TIME_INTERVAL);
 
                 try (SqlResult res = sqlService.execute(sql)) {
-                    assertEquals(0L, res.updateCount());
+                    AbstractSoakTest.assertEquals(0L, res.updateCount());
                 } catch (HazelcastSqlException e) {
                     continue;
                 }

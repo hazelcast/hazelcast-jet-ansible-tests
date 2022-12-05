@@ -14,11 +14,13 @@
  * limitations under the License.
  */
 
-package com.hazelcast.jet.sql.tests.json;
+package com.hazelcast.jet.sql.tests.json.query;
+
+import com.hazelcast.jet.sql.tests.json.AbstractJsonInputMapTest;
 
 import java.io.IOException;
 
-public class SqlJsonQueryNodeArrayTest extends AbstractJsonQueryMapTest {
+public class SqlJsonQueryNodeArrayTest extends AbstractJsonInputMapTest {
 
     private static final String JSON_MAP_NAME = "json_node_array_sql_map";
     private static final String SQL_QUERY = "SELECT JSON_QUERY(this, '$.userRecords[1 to 3]' WITH WRAPPER)  FROM  " +

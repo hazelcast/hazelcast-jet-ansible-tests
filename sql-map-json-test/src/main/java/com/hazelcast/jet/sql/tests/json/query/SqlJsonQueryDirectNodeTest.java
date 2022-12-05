@@ -14,24 +14,26 @@
  * limitations under the License.
  */
 
-package com.hazelcast.jet.sql.tests.json;
+package com.hazelcast.jet.sql.tests.json.query;
+
+import com.hazelcast.jet.sql.tests.json.AbstractJsonInputMapTest;
 
 import java.io.IOException;
 
-public class SqlJsonQueryExpressionTest extends AbstractJsonQueryMapTest {
+public class SqlJsonQueryDirectNodeTest extends AbstractJsonInputMapTest {
 
     private static final String JSON_MAP_NAME = "json_direct_node_sql_map";
-    private static final String SQL_QUERY = "SELECT JSON_QUERY(this, '$.userRecords[*]" +
-            "?(@.about like_regex \"^Cupidatat.*\")' WITH WRAPPER) FROM " + JSON_MAP_NAME;
-    private static final String RESULT_JSON_PATH = "$.userRecords[?(@.about =~ /^Cupidatat.*/)]";
+    private static final String SQL_QUERY = "SELECT JSON_QUERY(this, '$.userRecords[0]') FROM " + JSON_MAP_NAME;
+    private static final String RESULT_JSON_PATH = "$.userRecords[0]";
     private static final boolean RESULT_REQUIRED_SORT = true;
 
-    public SqlJsonQueryExpressionTest(String mapName, String sqlQuery, String resultJsonPath,
+    public SqlJsonQueryDirectNodeTest(String mapName, String sqlQuery, String resultJsonPath,
                                       Boolean resultRequiredSort) throws IOException {
         super(mapName, sqlQuery, resultJsonPath, resultRequiredSort);
     }
 
     public static void main(String... args) throws Exception {
-        new SqlJsonQueryExpressionTest(JSON_MAP_NAME, SQL_QUERY, RESULT_JSON_PATH, RESULT_REQUIRED_SORT).run(args);
+        new SqlJsonQueryDirectNodeTest(JSON_MAP_NAME, SQL_QUERY, RESULT_JSON_PATH, RESULT_REQUIRED_SORT).run(args);
     }
+
 }

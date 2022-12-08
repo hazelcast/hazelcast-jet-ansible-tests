@@ -16,6 +16,17 @@
 
 package com.hazelcast.jet.sql.tests.json;
 
+import com.hazelcast.jet.sql.tests.json.array.SqlJsonArrayAggTest;
+import com.hazelcast.jet.sql.tests.json.array.SqlJsonArrayTest;
+import com.hazelcast.jet.sql.tests.json.object.SqlJsonObjectAggTest;
+import com.hazelcast.jet.sql.tests.json.object.SqlJsonObjectTest;
+import com.hazelcast.jet.sql.tests.json.query.SqlJsonQueryDirectNodeTest;
+import com.hazelcast.jet.sql.tests.json.query.SqlJsonQueryNodeArrayTest;
+import com.hazelcast.jet.sql.tests.json.query.SqlJsonQueryRecursiveChildTest;
+import com.hazelcast.jet.sql.tests.json.query.SqlJsonQueryWildcardTest;
+import com.hazelcast.jet.sql.tests.json.query.SqlJsonQueryExpressionTest;
+import com.hazelcast.jet.sql.tests.json.value.SqlJsonValueStringTest;
+
 import static com.hazelcast.jet.tests.common.Util.parseArguments;
 
 public final class StartTest {
@@ -51,6 +62,22 @@ public final class StartTest {
 
             case "sqlJsonQueryExpression":
                 SqlJsonQueryExpressionTest.main(args);
+                break;
+
+            case "sqlJsonObject":
+                SqlJsonObjectTest.main(args);
+                break;
+
+            case "sqlJsonObjectAgg":
+                SqlJsonObjectAggTest.main(args);
+                break;
+
+            case "sqlJsonArray":
+                SqlJsonArrayTest.main(args);
+                break;
+
+            case "sqlJsonArrayAgg":
+                SqlJsonArrayAggTest.main(args);
                 break;
 
             case "sqlJsonValueString":

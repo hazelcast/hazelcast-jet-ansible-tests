@@ -14,11 +14,13 @@
  * limitations under the License.
  */
 
-package com.hazelcast.jet.sql.tests.json;
+package com.hazelcast.jet.sql.tests.json.query;
+
+import com.hazelcast.jet.sql.tests.json.AbstractJsonInputMapTest;
 
 import java.io.IOException;
 
-public class SqlJsonQueryWildcardTest extends AbstractJsonQueryMapTest {
+public class SqlJsonQueryWildcardTest extends AbstractJsonInputMapTest {
 
     private static final String JSON_MAP_NAME = "json_wildcard_sql_map";
     private static final String SQL_QUERY = "SELECT JSON_QUERY(this, '$.userRecords[*].friends[*].*' WITH WRAPPER)" +

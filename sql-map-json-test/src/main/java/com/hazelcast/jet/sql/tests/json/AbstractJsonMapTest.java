@@ -17,70 +17,48 @@
 package com.hazelcast.jet.sql.tests.json;
 
 import com.hazelcast.core.HazelcastInstance;
-import com.hazelcast.core.HazelcastJsonValue;
-import com.hazelcast.jet.sql.impl.connector.map.IMapSqlConnector;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
 import com.hazelcast.jet.tests.common.Util;
 import com.hazelcast.jet.tests.common.sql.SqlResultProcessor;
-import com.hazelcast.map.IMap;
 import com.hazelcast.sql.SqlResult;
 import com.hazelcast.sql.SqlRow;
-import com.hazelcast.sql.SqlService;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
-
-import static com.hazelcast.jet.sql.impl.connector.SqlConnector.OPTION_KEY_FORMAT;
-import static com.hazelcast.jet.sql.impl.connector.SqlConnector.OPTION_VALUE_FORMAT;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.not;
-import static org.hamcrest.Matchers.notNullValue;
 
 public abstract class AbstractJsonMapTest extends AbstractSoakTest {
 
     protected static final int DEFAULT_QUERY_TIMEOUT_MILLIS = 100;
     private static final int PROGRESS_PRINT_QUERIES_INTERVAL = 500;
-    private static final String JSON_DATA_PATH_DEFAULT = "/home/ec2-user/ansible/dataFile.json";
 
     protected final String mapName;
     protected final String sqlQuery;
     protected final Boolean resultRequiredSort;
-    protected final String expectedJsonResultString;
     protected HazelcastInstance client;
 
     protected int queryTimeout = propertyInt("queryTimeout", DEFAULT_QUERY_TIMEOUT_MILLIS);
-    protected String inputJsonFile = property("jsonDataFilePath", JSON_DATA_PATH_DEFAULT);
 
-    protected String jsonInputString;
     private long begin;
     private long currentQueryCount;
     private long lastProgressPrintCount;
 
     private ExecutorService threadPool;
 
-    public AbstractJsonMapTest(String mapName, String sqlQuery, String expectedJsonPath, Boolean resultRequiredSort)
-            throws IOException {
+    public AbstractJsonMapTest(String mapName, String sqlQuery, Boolean resultRequiredSort) {
         this.mapName = mapName;
         this.sqlQuery = sqlQuery;
-        this.jsonInputString = readJsonFromFile(inputJsonFile);
-        this.expectedJsonResultString = retrieveExpectedJsonStructure(jsonInputString, expectedJsonPath);
         this.resultRequiredSort = resultRequiredSort;
     }
 
     @Override
     protected void init(HazelcastInstance client) {
         this.client = client;
+        createTable();
         populateMap();
         threadPool = Executors.newSingleThreadExecutor();
     }
@@ -103,36 +81,21 @@ public abstract class AbstractJsonMapTest extends AbstractSoakTest {
         }
     }
 
-    protected abstract String retrieveExpectedJsonStructure(String jsonInputString, String jsonPath);
-
 
     protected void runTest() {
         begin = System.currentTimeMillis();
 
-        SqlService sqlService = client.getSql();
-
-        String sqlCreateMappingQueryString = "CREATE OR REPLACE MAPPING " + mapName +
-                " TYPE " + IMapSqlConnector.TYPE_NAME + "\n" +
-                "OPTIONS (\n" +
-                '\'' + OPTION_KEY_FORMAT + "'='bigint'\n" + "," +
-                '\'' + OPTION_VALUE_FORMAT + "'='json'\n" +
-                ")";
-
-        try (SqlResult result = sqlService.execute(sqlCreateMappingQueryString)) {
-            assertEquals(result.updateCount(), 0L);
-        }
-
-        SqlResultProcessor sqlResultProcessor = new SqlResultProcessor(sqlQuery, sqlService, threadPool);
+        SqlResultProcessor sqlResultProcessor =
+                new SqlResultProcessor(sqlQuery, client.getSql(), threadPool);
 
         while (System.currentTimeMillis() - begin < durationInMillis) {
 
             //Execute query
-            SqlResult sqlResult = null;
             Future<SqlResult> sqlResultFuture = sqlResultProcessor.runQueryAsync();
-            sqlResult = sqlResultProcessor.awaitQueryExecutionWithTimeout(sqlResultFuture, 10);
+            SqlResult sqlResult = sqlResultProcessor.awaitQueryExecutionWithTimeout(sqlResultFuture, 10);
 
             //Check that query returned results
-            assertQuerySuccessful(sqlResult, expectedJsonResultString);
+            assertQuerySuccessful(sqlResult, getExpectedJsonResult());
             currentQueryCount++;
 
             //Print progress
@@ -154,6 +117,9 @@ public abstract class AbstractJsonMapTest extends AbstractSoakTest {
         }
     }
 
+    protected abstract void createTable();
+    protected abstract ArrayList<String> getExpectedJsonResult();
+
     private String getTimeElapsed() {
         Duration timeElapsed = Duration.ofMillis(System.currentTimeMillis() - begin);
         long days = timeElapsed.toDays();
@@ -163,35 +129,34 @@ public abstract class AbstractJsonMapTest extends AbstractSoakTest {
         return String.format("%dd, %dh, %dm, %ds", days, hours, minutes, seconds);
     }
 
-    protected void populateMap() {
-        IMap<Long, HazelcastJsonValue> map = client.getMap(mapName);
-        map.put(1L, new HazelcastJsonValue(jsonInputString));
-        assertThat(map.get(1L), is(notNullValue()));
-    }
+    protected abstract void populateMap();
 
-    protected String readJsonFromFile(String fileName) throws IOException {
-        Path inputJsonDataFilePath = Paths.get(fileName);
-        assertTrue("Json data input file does not exist", Files.exists(inputJsonDataFilePath));
-        try (Stream<String> lines = Files.lines(inputJsonDataFilePath)) {
-            jsonInputString = lines.collect(Collectors.joining("\n"));
-        }
-        assertThat(jsonInputString.length(), is(not(0)));
-        return jsonInputString;
-    }
-
-    protected void assertQuerySuccessful(SqlResult sqlResult, String expectedJsonQueryResult) {
+    protected void assertQuerySuccessful(SqlResult sqlResult, ArrayList<String> expectedJsonResults) {
         assertNotEquals("The SQL results is null: ", sqlResult, null);
 
         Iterator<SqlRow> sqlRowIterator = sqlResult.iterator();
         assertTrue("The SQL result contains no rows: ", sqlRowIterator.hasNext());
 
-        String jsonQueryResult = sqlRowIterator.next().getObject(0).toString();
+        for (String expectedResult : expectedJsonResults) {
+            assertTrue("Too few results: ", sqlRowIterator.hasNext());
 
-        // when comparing node records sort is mandatory as JSONObject keys in records are unsorted
-        if (resultRequiredSort) {
-            jsonQueryResult = JsonSorter.sortJsonAsCharArray(jsonQueryResult);
-            expectedJsonQueryResult = JsonSorter.sortJsonAsCharArray(expectedJsonResultString);
+            String jsonQueryResult = sqlRowIterator.next().getObject(0).toString();
+            String failureMessage = "The following query result is different than expected: ";
+
+            // when comparing node records sort is mandatory as JSONObject keys in records are unsorted
+            if (resultRequiredSort) {
+                assertEqualsJsonSorted(failureMessage, jsonQueryResult, expectedResult);
+            } else {
+                assertEquals(failureMessage, expectedResult, jsonQueryResult);
+            }
         }
-        assertEquals("The following query result is different than expected: ", expectedJsonQueryResult, jsonQueryResult);
+    }
+
+    private void assertEqualsJsonSorted(String message, String expected, String actual) {
+        assertEquals(
+                message,
+                JsonSorter.sortJsonAsCharArray(expected),
+                JsonSorter.sortJsonAsCharArray(actual)
+        );
     }
 }

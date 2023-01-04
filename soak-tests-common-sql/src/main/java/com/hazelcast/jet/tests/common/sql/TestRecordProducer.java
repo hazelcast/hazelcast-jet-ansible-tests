@@ -21,15 +21,20 @@ public final class TestRecordProducer {
     private TestRecordProducer() {
     }
 
-    public static String produceTradeRecords(long itemsSubmitted, long itemsCountToSubmit, int timeInterval) {
-        StringBuilder sb = new StringBuilder();
-
-        for (long i = itemsSubmitted; i < itemsSubmitted + itemsCountToSubmit - 1; i = i + timeInterval) {
-            createSingleRecord(sb, i).append(",");
+    public static String produceTradeRecords(long startItem, long itemCount, int timeInterval) {
+        if (itemCount <= 0 || timeInterval <= 0) {
+            throw new IllegalArgumentException("itemCount and timeInterval must be greater than 0!");
         }
 
-        long j = itemsSubmitted + itemsCountToSubmit - 1;
-        createSingleRecord(sb, j);
+        StringBuilder sb = new StringBuilder();
+
+        long nextItem = startItem;
+        for (long i = startItem; i < startItem + itemCount - 1; i++) {
+            createSingleRecord(sb, nextItem).append(",");
+            nextItem += timeInterval;
+        }
+
+        createSingleRecord(sb, nextItem);
 
         return sb.toString();
     }

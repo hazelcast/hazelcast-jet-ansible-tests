@@ -16,17 +16,17 @@
 
 package com.hazelcast.jet.tests.kinesis;
 
-import com.hazelcast.com.amazonaws.SdkClientException;
-import com.hazelcast.com.amazonaws.services.kinesis.AmazonKinesisAsync;
-import com.hazelcast.com.amazonaws.services.kinesis.model.CreateStreamRequest;
-import com.hazelcast.com.amazonaws.services.kinesis.model.DescribeStreamSummaryRequest;
-import com.hazelcast.com.amazonaws.services.kinesis.model.ExpiredNextTokenException;
-import com.hazelcast.com.amazonaws.services.kinesis.model.InvalidArgumentException;
-import com.hazelcast.com.amazonaws.services.kinesis.model.LimitExceededException;
-import com.hazelcast.com.amazonaws.services.kinesis.model.ResourceInUseException;
-import com.hazelcast.com.amazonaws.services.kinesis.model.ResourceNotFoundException;
-import com.hazelcast.com.amazonaws.services.kinesis.model.StreamDescriptionSummary;
-import com.hazelcast.com.amazonaws.services.kinesis.model.StreamStatus;
+import com.hazelcast.shaded.com.amazonaws.SdkClientException;
+import com.hazelcast.shaded.com.amazonaws.services.kinesis.AmazonKinesisAsync;
+import com.hazelcast.shaded.com.amazonaws.services.kinesis.model.CreateStreamRequest;
+import com.hazelcast.shaded.com.amazonaws.services.kinesis.model.DescribeStreamSummaryRequest;
+import com.hazelcast.shaded.com.amazonaws.services.kinesis.model.ExpiredNextTokenException;
+import com.hazelcast.shaded.com.amazonaws.services.kinesis.model.InvalidArgumentException;
+import com.hazelcast.shaded.com.amazonaws.services.kinesis.model.LimitExceededException;
+import com.hazelcast.shaded.com.amazonaws.services.kinesis.model.ResourceInUseException;
+import com.hazelcast.shaded.com.amazonaws.services.kinesis.model.ResourceNotFoundException;
+import com.hazelcast.shaded.com.amazonaws.services.kinesis.model.StreamDescriptionSummary;
+import com.hazelcast.shaded.com.amazonaws.services.kinesis.model.StreamStatus;
 import com.hazelcast.jet.JetException;
 import com.hazelcast.jet.retry.IntervalFunction;
 import com.hazelcast.jet.retry.RetryStrategies;

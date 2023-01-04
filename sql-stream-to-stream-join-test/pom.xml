@@ -63,7 +63,7 @@
                                 <transformer
                                         implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                                     <manifestEntries>
-                                        <Main-Class>com.hazelcast.jet.tests.sql.SqlStreamToStreamJoinSoakTest</Main-Class>
+                                        <Main-Class>com.hazelcast.jet.tests.sql.s2sjoin.SqlStreamToStreamJoinSoakTest</Main-Class>
                                     </manifestEntries>
                                 </transformer>
                             </transformers>
@@ -81,7 +81,7 @@
                             <artifactSet>
                                 <includes>
                                     <include>com.hazelcast.jet.tests:*</include>
-                                    <include>com.hazelcast.jet.tests.stateful:*</include>
+                                    <include>com.hazelcast.jet.tests.sqlStreamToStreamJoin:*</include>
                                 </includes>
                             </artifactSet>
                         </configuration>

@@ -16,10 +16,6 @@
 
 package com.hazelcast.jet.tests.common.sql;
 
-import java.time.Instant;
-import java.time.OffsetDateTime;
-import java.time.ZoneId;
-
 public final class TestRecordProducer {
 
     private TestRecordProducer() {
@@ -28,12 +24,10 @@ public final class TestRecordProducer {
     public static String produceTradeRecords(long itemsSubmitted, long itemsCountToSubmit, int timeInterval) {
         StringBuilder sb = new StringBuilder();
 
-        // ingest regular monotonic events
         for (long i = itemsSubmitted; i < itemsSubmitted + itemsCountToSubmit - 1; i = i + timeInterval) {
             createSingleRecord(sb, i).append(",");
         }
 
-        // next append an advanced event
         long j = itemsSubmitted + itemsCountToSubmit - 1;
         createSingleRecord(sb, j);
 
@@ -46,9 +40,5 @@ public final class TestRecordProducer {
                 .append(idx)
                 .append(")");
         return sb;
-    }
-
-    public static OffsetDateTime timestampTz(long epochMillis) {
-        return OffsetDateTime.ofInstant(Instant.ofEpochMilli(epochMillis), ZoneId.systemDefault());
     }
 }

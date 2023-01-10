@@ -44,7 +44,7 @@ public class SqlStreamToStreamJoinSoakTest extends AbstractSoakTest {
     private static final String EVENTS_SOURCE_PREFIX = "events_topic_";
 
     private static final int DEFAULT_QUERY_TIMEOUT_MILLIS = 10;
-    private static final int PROGRESS_PRINT_QUERIES_INTERVAL = 500;
+    private static final int PROGRESS_PRINT_QUERIES_INTERVAL = 20_000;
 
     private static final int EVENTS_START_TIME = 0;
     private static final int EVENTS_COUNT_PER_BATCH = 100;

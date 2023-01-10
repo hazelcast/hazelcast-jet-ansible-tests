@@ -81,7 +81,6 @@
                             <artifactSet>
                                 <includes>
                                     <include>com.hazelcast.jet.tests:*</include>
-                                    <include>com.hazelcast.jet.tests.sqlStreamToStreamJoin:*</include>
                                 </includes>
                             </artifactSet>
                         </configuration>

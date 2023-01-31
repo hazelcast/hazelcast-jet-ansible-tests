@@ -43,7 +43,8 @@ public class MinTumbleWindowTest extends AbstractTumbleWindowTest {
                         .min()
                         .getAsInt()
         );
-        String assertionErr = "The min over aggregate window does not match.";
+        String assertionErr = String.format("The min over aggregate window does not match.\n " +
+                "Expected: %d Actual: %d -- Row: %s", expectedValue.longValue(), actualValue.longValue(), sqlRow);
         assertEquals(assertionErr, expectedValue.intValue(), actualValue.intValue());
     }
 

@@ -54,20 +54,20 @@ public abstract class AbstractTumbleWindowTest extends AbstractSoakTest {
 
     private final int queryTimeout = propertyInt("queryTimeout", DEFAULT_QUERY_TIMEOUT_MILLIS);
     private final String brokerUri = property("brokerUri", "localhost:9092");
+    private final int streamingResultsTimeout = propertyInt("streamingResultsTimeout", STREAM_RESULTS_TIMEOUT_SECONDS);
 
     private long begin;
     private long currentQueryCount;
-    private long lastProgressPrintCount;
+    private long nextPrintCount = PROGRESS_PRINT_QUERIES_INTERVAL;
     private SqlService sqlService;
     private ExecutorService ingestionExecutor;
     private ExecutorService aggregationResultsExecutor;
-    private final int streamingResultsTimeout = propertyInt("streamingResultsTimeout", STREAM_RESULTS_TIMEOUT_SECONDS);
 
     private final String sourceName;
     private final String aggregationType;
     private DataIngestionTask producerTask;
 
-    public AbstractTumbleWindowTest(String sourceName, String aggregationType) {
+    protected AbstractTumbleWindowTest(String sourceName, String aggregationType) {
         this.sourceName = sourceName;
         this.aggregationType = aggregationType;
     }
@@ -93,7 +93,7 @@ public abstract class AbstractTumbleWindowTest extends AbstractSoakTest {
         );
         assertEquals(0L, sourceMappingCreateResult.updateCount());
 
-        producerTask.produceTradeRecords(EVENT_START_TIME, EVENT_WINDOW_COUNT, false);
+        producerTask.produceTradeRecords(EVENT_START_TIME, false);
         Util.sleepMillis(queryTimeout);
     }
 
@@ -106,7 +106,6 @@ public abstract class AbstractTumbleWindowTest extends AbstractSoakTest {
         begin = System.currentTimeMillis();
         ingestionExecutor.execute(producerTask);
 
-        String sinkRowSqlQuery;
         int currentEventStartTime = EVENT_START_TIME;
 
         Util.sleepSeconds(30);
@@ -126,7 +125,6 @@ public abstract class AbstractTumbleWindowTest extends AbstractSoakTest {
                 final Future<SqlRow> sqlRowFuture = aggregationResultsExecutor.submit(iterator::next);
                 try {
                     SqlRow sqlRow = sqlRowFuture.get(streamingResultsTimeout, TimeUnit.SECONDS);
-//                    logger.info(sqlRow.toString());
                     assertQuerySuccessful(sqlRow, currentEventStartTime,
                             currentEventStartTime + EVENT_WINDOW_COUNT);
 
@@ -144,6 +142,60 @@ public abstract class AbstractTumbleWindowTest extends AbstractSoakTest {
         producerTask.stopProducingEvents();
         logger.info(String.format("Test completed successfully. Executed %d queries in %s.", currentQueryCount,
                 getTimeElapsed()));
+    }
+
+    @Override
+    protected void teardown(Throwable t) throws Exception {
+        aggregationResultsExecutor.shutdown();
+        try {
+            if (!aggregationResultsExecutor.awaitTermination(10, TimeUnit.SECONDS)) {
+                aggregationResultsExecutor.shutdownNow();
+            }
+        } catch (InterruptedException ex) {
+            aggregationResultsExecutor.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
+
+        ingestionExecutor.shutdown();
+        try {
+            if (!ingestionExecutor.awaitTermination(10, TimeUnit.SECONDS)) {
+                ingestionExecutor.shutdownNow();
+            }
+        } catch (InterruptedException ex) {
+            ingestionExecutor.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    protected abstract void assertQuerySuccessful(SqlRow sqlRow, int currentEventStartTime, int currentEventEndTime);
+
+    private void printProgress() {
+        if (currentQueryCount >= nextPrintCount) {
+            logger.info(String.format("Time elapsed: %s. Executed %d queries", getTimeElapsed(), currentQueryCount));
+            nextPrintCount = currentQueryCount + PROGRESS_PRINT_QUERIES_INTERVAL;
+        }
+    }
+
+    private static StringBuilder createSingleRecord(StringBuilder sb, Number a) {
+        sb.append("(")
+                .append(a + ",")
+                .append("'" + "value-" + a + "'" + ",")
+                .append(a)
+                .append(")");
+        return sb;
+    }
+
+    private String getTimeElapsed() {
+        Duration timeElapsed = Duration.ofMillis(System.currentTimeMillis() - begin);
+        long days = timeElapsed.toDays();
+        long hours = timeElapsed.minusDays(days).toHours();
+        long minutes = timeElapsed.minusDays(days).minusHours(hours).toMinutes();
+        long seconds = timeElapsed.minusDays(days).minusHours(hours).minusMinutes(minutes).toMillis() / 1000;
+        return String.format("%dd, %dh, %dm, %ds", days, hours, minutes, seconds);
+    }
+
+    public static String randomName() {
+        return "o_" + UuidUtil.newUnsecureUuidString().replace('-', '_');
     }
 
     static class DataIngestionTask implements Runnable {
@@ -176,8 +228,8 @@ public abstract class AbstractTumbleWindowTest extends AbstractSoakTest {
                 boolean includeLateEvent = currentEventStartTime.get() % (queryTimeout * 120) == 0;
 
                 // ingest data to Kafka using new timestamps
-                try (SqlResult res = produceTradeRecords(currentEventStartTime.getAndAdd(EVENT_WINDOW_COUNT),
-                        currentEventStartTime.get(), includeLateEvent)) {
+                try (SqlResult res = produceTradeRecords(
+                        currentEventStartTime.getAndAdd(EVENT_WINDOW_COUNT), includeLateEvent)) {
                     AbstractSoakTest.assertEquals(0L, res.updateCount());
                 } catch (HazelcastSqlException e) {
                     logger.warning("Failed to produce new records. Retrying in 10 seconds.", e);
@@ -193,7 +245,7 @@ public abstract class AbstractTumbleWindowTest extends AbstractSoakTest {
             continueProducing.set(false);
         }
 
-        private SqlResult produceTradeRecords(int currentEventStartTime, int currentEventEndTime, boolean includeLate) {
+        private SqlResult produceTradeRecords(int currentEventStartTime, boolean includeLate) {
 
             StringBuilder queryBuilder = new StringBuilder("INSERT INTO " + sourceName + " VALUES");
             queryBuilder.append(TestRecordProducer.produceTradeRecords(
@@ -204,7 +256,7 @@ public abstract class AbstractTumbleWindowTest extends AbstractSoakTest {
 
             if (includeLate) {
                 queryBuilder.append(", ").append(TestRecordProducer.produceTradeRecords(
-                        currentEventStartTime - LAG_TIME,
+                        Long.max(0, currentEventStartTime - LAG_TIME * 10_000L),
                         1, 1,
                         AbstractTumbleWindowTest::createSingleRecord
                 ));
@@ -212,61 +264,5 @@ public abstract class AbstractTumbleWindowTest extends AbstractSoakTest {
 
             return sqlService.execute(queryBuilder.toString());
         }
-    }
-
-    @Override
-    protected void teardown(Throwable t) throws Exception {
-        aggregationResultsExecutor.shutdown();
-        try {
-            if (!aggregationResultsExecutor.awaitTermination(10, TimeUnit.SECONDS)) {
-                aggregationResultsExecutor.shutdownNow();
-            }
-        } catch (InterruptedException ex) {
-            aggregationResultsExecutor.shutdownNow();
-            Thread.currentThread().interrupt();
-        }
-
-        ingestionExecutor.shutdown();
-        try {
-            if (!ingestionExecutor.awaitTermination(10, TimeUnit.SECONDS)) {
-                ingestionExecutor.shutdownNow();
-            }
-        } catch (InterruptedException ex) {
-            ingestionExecutor.shutdownNow();
-            Thread.currentThread().interrupt();
-        }
-    }
-
-    protected abstract void assertQuerySuccessful(SqlRow sqlRow, int currentEventStartTime, int currentEventEndTime);
-
-    private void printProgress() {
-        long nextPrintCount = lastProgressPrintCount + PROGRESS_PRINT_QUERIES_INTERVAL;
-        boolean toPrint = currentQueryCount >= nextPrintCount;
-        if (toPrint) {
-            logger.info(String.format("Time elapsed: %s. Executed %d queries", getTimeElapsed(), currentQueryCount));
-            lastProgressPrintCount = currentQueryCount;
-        }
-    }
-
-    private static StringBuilder createSingleRecord(StringBuilder sb, Number a) {
-        sb.append("(")
-                .append(a + ",")
-                .append("'" + "value-" + a + "'" + ",")
-                .append(a)
-                .append(")");
-        return sb;
-    }
-
-    private String getTimeElapsed() {
-        Duration timeElapsed = Duration.ofMillis(System.currentTimeMillis() - begin);
-        long days = timeElapsed.toDays();
-        long hours = timeElapsed.minusDays(days).toHours();
-        long minutes = timeElapsed.minusDays(days).minusHours(hours).toMinutes();
-        long seconds = timeElapsed.minusDays(days).minusHours(hours).minusMinutes(minutes).toMillis() / 1000;
-        return String.format("%dd, %dh, %dm, %ds", days, hours, minutes, seconds);
-    }
-
-    public static String randomName() {
-        return "o_" + UuidUtil.newUnsecureUuidString().replace('-', '_');
     }
 }

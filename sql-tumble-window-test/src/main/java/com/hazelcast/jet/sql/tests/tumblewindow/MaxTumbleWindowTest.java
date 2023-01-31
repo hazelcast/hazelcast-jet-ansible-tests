@@ -43,7 +43,8 @@ public class MaxTumbleWindowTest extends AbstractTumbleWindowTest {
                         .max()
                         .getAsInt()
         );
-        String assertionErr = "The max over aggregate window does not match.";
+        String assertionErr = String.format("The max over aggregate window does not match.\n " +
+                "Expected: %d Actual: %d -- Row: %s", expectedValue.longValue(), actualValue.longValue(), sqlRow);
         assertEquals(assertionErr, expectedValue.intValue(), actualValue.intValue());
     }
 

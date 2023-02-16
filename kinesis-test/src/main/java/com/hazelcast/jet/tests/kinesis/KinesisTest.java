@@ -65,6 +65,8 @@ public class KinesisTest extends AbstractSoakTest {
     private long snapshotIntervalMs;
     private String runIdSuffix;
 
+    private boolean testFailed;
+
     public static void main(String[] args) throws Exception {
         System.setProperty(SDKGlobalConfiguration.AWS_CBOR_DISABLE_SYSTEM_PROPERTY, "true");
         new KinesisTest().run(args);
@@ -90,18 +92,22 @@ public class KinesisTest extends AbstractSoakTest {
 
     @Override
     protected void teardown(Throwable t) {
-        boolean failedToDeleteStream = false;
-        for (String streamName : streamNames) {
-            try {
-                helper.deleteStream(streamName);
-            } catch (Exception e) {
-                logger.severe("Exception when deleting stream: " + streamName, e);
-                failedToDeleteStream = true;
+        if (!testFailed) {
+            boolean failedToDeleteStream = false;
+            for (String streamName : streamNames) {
+                try {
+                    helper.deleteStream(streamName);
+                } catch (Exception e) {
+                    logger.severe("Exception when deleting stream: " + streamName, e);
+                    failedToDeleteStream = true;
+                }
             }
-        }
-        if (t == null && failedToDeleteStream) {
-            logger.severe("Failed to delete some streams, see above for the stacktrace");
-            System.exit(1);
+            if (t == null && failedToDeleteStream) {
+                logger.severe("Failed to delete some streams, see above for the stacktrace");
+                System.exit(1);
+            }
+        } else {
+            logger.severe("KINESIS STREAMS WERE NOT DELETED BECAUSE TESTS FAILED. DELETE THEM AFTER INVESTIGATION");
         }
     }
 
@@ -130,10 +136,12 @@ public class KinesisTest extends AbstractSoakTest {
         long begin = System.currentTimeMillis();
         while (System.currentTimeMillis() - begin < durationInMillis) {
             if (getJobStatusWithRetry(readJob) == FAILED) {
+                testFailed = true;
                 writeJob.cancel();
                 readJob.join();
             }
             if (getJobStatusWithRetry(writeJob) == FAILED) {
+                testFailed = true;
                 readJob.cancel();
                 writeJob.join();
             }

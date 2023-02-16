@@ -31,8 +31,8 @@ public final class StartTest {
         if (testName == null || testName.equals("")) {
             throw new RuntimeException("runTest property has to be set");
         }
-        switch (testName) {
 
+        switch (testName) {
             case "avgTumbleWindowTest":
                 AvgTumbleWindowTest.main(args);
                 break;

@@ -36,7 +36,6 @@ public class MaxTumbleWindowTest extends AbstractTumbleWindowTest {
 
     @Override
     protected void assertQuerySuccessful(SqlRow sqlRow, int currentEventStartTime, int currentEventEndTime) {
-
         BigDecimal actualValue = sqlRow.getObject(2);
         BigDecimal expectedValue = new BigDecimal(
                 IntStream.range(currentEventStartTime, currentEventEndTime)

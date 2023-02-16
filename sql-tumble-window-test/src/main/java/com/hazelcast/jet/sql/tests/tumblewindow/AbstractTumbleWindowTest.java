@@ -117,11 +117,11 @@ public abstract class AbstractTumbleWindowTest extends AbstractSoakTest {
                 EVENT_WINDOW_COUNT +
                 " ))" +
                 " GROUP BY window_start, window_end";
+
         try (SqlResult sqlResult = sqlService.execute(streamingSql)) {
-
             Iterator<SqlRow> iterator = sqlResult.iterator();
-            while (System.currentTimeMillis() - begin < durationInMillis) {
 
+            while (System.currentTimeMillis() - begin < durationInMillis) {
                 final Future<SqlRow> sqlRowFuture = aggregationResultsExecutor.submit(iterator::next);
                 try {
                     SqlRow sqlRow = sqlRowFuture.get(streamingResultsTimeout, TimeUnit.SECONDS);
@@ -220,7 +220,6 @@ public abstract class AbstractTumbleWindowTest extends AbstractSoakTest {
 
         @Override
         public void run() {
-
             AtomicInteger currentEventStartTime = new AtomicInteger(EVENT_WINDOW_COUNT);
 
             while (continueProducing.get()) {
@@ -246,7 +245,6 @@ public abstract class AbstractTumbleWindowTest extends AbstractSoakTest {
         }
 
         private SqlResult produceTradeRecords(int currentEventStartTime, boolean includeLate) {
-
             StringBuilder queryBuilder = new StringBuilder("INSERT INTO " + sourceName + " VALUES");
             queryBuilder.append(TestRecordProducer.produceTradeRecords(
                     currentEventStartTime,

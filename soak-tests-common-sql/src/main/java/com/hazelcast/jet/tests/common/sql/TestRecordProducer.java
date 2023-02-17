@@ -16,12 +16,15 @@
 
 package com.hazelcast.jet.tests.common.sql;
 
+import java.util.function.BiFunction;
+
 public final class TestRecordProducer {
 
     private TestRecordProducer() {
     }
 
-    public static String produceTradeRecords(long startItem, long itemCount, int timeInterval) {
+    public static String produceTradeRecords(long startItem, long itemCount, int timeInterval,
+                                             BiFunction<StringBuilder, Number, StringBuilder> createSingleRecord) {
         if (itemCount <= 0 || timeInterval <= 0) {
             throw new IllegalArgumentException("itemCount and timeInterval must be greater than 0!");
         }
@@ -30,20 +33,12 @@ public final class TestRecordProducer {
 
         long nextItem = startItem;
         for (long i = startItem; i < startItem + itemCount - 1; i++) {
-            createSingleRecord(sb, nextItem).append(",");
+            createSingleRecord.apply(sb, nextItem).append(",");
             nextItem += timeInterval;
         }
 
-        createSingleRecord(sb, nextItem);
+        createSingleRecord.apply(sb, nextItem);
 
         return sb.toString();
-    }
-
-    private static StringBuilder createSingleRecord(StringBuilder sb, long idx) {
-        sb.append(" (TO_TIMESTAMP_TZ(")
-                .append(idx + "), ")
-                .append(idx)
-                .append(")");
-        return sb;
     }
 }

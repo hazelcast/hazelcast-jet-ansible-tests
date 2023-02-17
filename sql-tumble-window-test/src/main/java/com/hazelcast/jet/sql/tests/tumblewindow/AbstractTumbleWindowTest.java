@@ -48,7 +48,6 @@ public abstract class AbstractTumbleWindowTest extends AbstractSoakTest {
 
     private static final int EVENT_START_TIME = 0;
     private static final int EVENT_WINDOW_COUNT = 10;
-    private static final int EVENT_TIME_INTERVAL = 1;
     private static final int LAG_TIME = 2;
     private static final int STREAM_RESULTS_TIMEOUT_SECONDS = 600;
 
@@ -57,7 +56,7 @@ public abstract class AbstractTumbleWindowTest extends AbstractSoakTest {
     private final int streamingResultsTimeout = propertyInt("streamingResultsTimeout", STREAM_RESULTS_TIMEOUT_SECONDS);
 
     private long begin;
-    private long currentQueryCount;
+    private long currentRowCount;
     private long nextPrintCount = PROGRESS_PRINT_QUERIES_INTERVAL;
     private SqlService sqlService;
     private ExecutorService ingestionExecutor;
@@ -134,13 +133,13 @@ public abstract class AbstractTumbleWindowTest extends AbstractSoakTest {
                             + " secs waiting for new records", e);
                 }
 
-                currentQueryCount++;
+                currentRowCount++;
                 printProgress();
             }
         }
 
         producerTask.stopProducingEvents();
-        logger.info(String.format("Test completed successfully. Executed %d queries in %s.", currentQueryCount,
+        logger.info(String.format("Test completed successfully. Processed %d rows in %s.", currentRowCount,
                 getTimeElapsed()));
     }
 
@@ -148,7 +147,7 @@ public abstract class AbstractTumbleWindowTest extends AbstractSoakTest {
     protected void teardown(Throwable t) throws Exception {
         aggregationResultsExecutor.shutdown();
         try {
-            aggregationResultsExecutor.awaitTermination(10, TimeUnit.SECONDS)
+            aggregationResultsExecutor.awaitTermination(10, TimeUnit.SECONDS);
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
         } finally {
@@ -157,21 +156,20 @@ public abstract class AbstractTumbleWindowTest extends AbstractSoakTest {
 
         ingestionExecutor.shutdown();
         try {
-            if (!ingestionExecutor.awaitTermination(10, TimeUnit.SECONDS)) {
-                ingestionExecutor.shutdownNow();
-            }
+            ingestionExecutor.awaitTermination(10, TimeUnit.SECONDS);
         } catch (InterruptedException ex) {
-            ingestionExecutor.shutdownNow();
             Thread.currentThread().interrupt();
+        } finally {
+            ingestionExecutor.shutdownNow();
         }
     }
 
     protected abstract void assertQuerySuccessful(SqlRow sqlRow, int currentEventStartTime, int currentEventEndTime);
 
     private void printProgress() {
-        if (currentQueryCount >= nextPrintCount) {
-            logger.info(String.format("Time elapsed: %s. Executed %d queries", getTimeElapsed(), currentQueryCount));
-            nextPrintCount = currentQueryCount + PROGRESS_PRINT_QUERIES_INTERVAL;
+        if (currentRowCount >= nextPrintCount) {
+            logger.info(String.format("Time elapsed: %s. Processed %d rows", getTimeElapsed(), currentRowCount));
+            nextPrintCount = currentRowCount + PROGRESS_PRINT_QUERIES_INTERVAL;
         }
     }
 
@@ -202,7 +200,7 @@ public abstract class AbstractTumbleWindowTest extends AbstractSoakTest {
         private final SqlService sqlService;
         private final String sourceName;
         private final long queryTimeout;
-        private final AtomicBoolean continueProducing;
+        private boolean continueProducing;
         private final ILogger logger;
 
         DataIngestionTask(
@@ -213,7 +211,7 @@ public abstract class AbstractTumbleWindowTest extends AbstractSoakTest {
             this.sqlService = sqlService;
             this.sourceName = sourceName;
             this.queryTimeout = queryTimeout;
-            this.continueProducing = new AtomicBoolean(true);
+            this.continueProducing = true;
             this.logger = logger;
         }
 
@@ -221,7 +219,7 @@ public abstract class AbstractTumbleWindowTest extends AbstractSoakTest {
         public void run() {
             AtomicInteger currentEventStartTime = new AtomicInteger(EVENT_WINDOW_COUNT);
 
-            while (continueProducing.get()) {
+            while (continueProducing) {
                 // produce late events at rate inversely proportional to queryTimeout
                 boolean includeLateEvent = currentEventStartTime.get() % (queryTimeout * 120) == 0;
 
@@ -240,14 +238,14 @@ public abstract class AbstractTumbleWindowTest extends AbstractSoakTest {
         }
 
         public void stopProducingEvents() {
-            continueProducing.set(false);
+            this.continueProducing = false;
         }
 
         private SqlResult produceTradeRecords(int currentEventStartTime, boolean includeLate) {
             StringBuilder queryBuilder = new StringBuilder("INSERT INTO " + sourceName + " VALUES");
             queryBuilder.append(TestRecordProducer.produceTradeRecords(
                     currentEventStartTime,
-                    EVENT_WINDOW_COUNT, EVENT_TIME_INTERVAL,
+                    EVENT_WINDOW_COUNT, 1,
                     AbstractTumbleWindowTest::createSingleRecord
             ));
 

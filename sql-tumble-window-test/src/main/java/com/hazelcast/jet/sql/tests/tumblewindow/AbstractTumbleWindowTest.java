@@ -148,12 +148,11 @@ public abstract class AbstractTumbleWindowTest extends AbstractSoakTest {
     protected void teardown(Throwable t) throws Exception {
         aggregationResultsExecutor.shutdown();
         try {
-            if (!aggregationResultsExecutor.awaitTermination(10, TimeUnit.SECONDS)) {
-                aggregationResultsExecutor.shutdownNow();
-            }
+            aggregationResultsExecutor.awaitTermination(10, TimeUnit.SECONDS)
         } catch (InterruptedException ex) {
-            aggregationResultsExecutor.shutdownNow();
             Thread.currentThread().interrupt();
+        } finally {
+            aggregationResultsExecutor.shutdownNow();
         }
 
         ingestionExecutor.shutdown();

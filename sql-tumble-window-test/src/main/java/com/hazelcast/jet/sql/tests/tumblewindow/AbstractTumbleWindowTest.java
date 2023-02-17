@@ -178,7 +178,7 @@ public abstract class AbstractTumbleWindowTest extends AbstractSoakTest {
     private static StringBuilder createSingleRecord(StringBuilder sb, Number a) {
         sb.append("(")
                 .append(a + ",")
-                .append("'" + "value-" + a + "'" + ",")
+                .append("'value-" + a + "',")
                 .append(a)
                 .append(")");
         return sb;

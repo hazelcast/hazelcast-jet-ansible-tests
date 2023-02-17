@@ -35,7 +35,7 @@ public class CountTumbleWindowTest extends AbstractTumbleWindowTest {
     @Override
     protected void assertQuerySuccessful(SqlRow sqlRow, int currentEventStartTime, int currentEventEndTime) {
         long actualValue = sqlRow.getObject(2);
-        long expectedValue = IntStream.range(currentEventStartTime, currentEventEndTime).count();
+        long expectedValue = currentEventEndTime - currentEventStartTime;
         String assertionErr = String.format("The count over aggregate window does not match.\n " +
                 "Expected: %d Actual: %d -- Row: %s", expectedValue, actualValue, sqlRow);
         assertEquals(assertionErr, expectedValue, actualValue);

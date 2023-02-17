@@ -37,7 +37,8 @@ public class SumTumbleWindowTest extends AbstractTumbleWindowTest {
     @Override
     protected void assertQuerySuccessful(SqlRow sqlRow, int currentEventStartTime, int currentEventEndTime) {
         BigDecimal actualValue = sqlRow.getObject(2);
-        long expectedValue = IntStream.range(currentEventStartTime, currentEventEndTime).sum();
+        // arithmetic series sum formula: (first + last) * n / 2
+        long expectedValue = (currentEventStartTime + currentEventEndTime - 1) * (currentEventEndTime - currentEventStartTime) / 2;
         String assertionErr = String.format("The sum over aggregate window does not match.\n " +
                 "Expected: %d Actual: %d -- Row: %s", expectedValue, actualValue.longValue(), sqlRow);
         assertEquals(assertionErr, expectedValue, actualValue.longValue());

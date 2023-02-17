@@ -37,11 +37,8 @@ public class AvgTumbleWindowTest extends AbstractTumbleWindowTest {
     @Override
     protected void assertQuerySuccessful(SqlRow sqlRow, int currentEventStartTime, int currentEventEndTime) {
         BigDecimal actualAvgValue = sqlRow.getObject(2);
-        BigDecimal expectedValue = BigDecimal.valueOf(
-                IntStream.range(currentEventStartTime, currentEventEndTime)
-                        .average()
-                        .getAsDouble()
-        );
+        // average of arithmetic series formula: first + (last - first) / 2
+        BigDecimal expectedValue = BigDecimal.valueOf(currentEventStartTime + (currentEventEndTime - 1 - currentEventStartTime) / 2.0);
         String assertionErr = String.format("The avg over aggregate window does not match.\n " +
                 "Expected: %d Actual: %d -- Row: %s", expectedValue.longValue(), actualAvgValue.longValue(), sqlRow);
         assertEquals(assertionErr, expectedValue.intValue(), actualAvgValue.intValue());

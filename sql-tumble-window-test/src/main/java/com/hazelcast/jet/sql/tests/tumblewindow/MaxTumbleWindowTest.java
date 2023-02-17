@@ -37,11 +37,7 @@ public class MaxTumbleWindowTest extends AbstractTumbleWindowTest {
     @Override
     protected void assertQuerySuccessful(SqlRow sqlRow, int currentEventStartTime, int currentEventEndTime) {
         BigDecimal actualValue = sqlRow.getObject(2);
-        BigDecimal expectedValue = new BigDecimal(
-                IntStream.range(currentEventStartTime, currentEventEndTime)
-                        .max()
-                        .getAsInt()
-        );
+        BigDecimal expectedValue = new BigDecimal(currentEventEndTime - 1);
         String assertionErr = String.format("The max over aggregate window does not match.\n " +
                 "Expected: %d Actual: %d -- Row: %s", expectedValue.longValue(), actualValue.longValue(), sqlRow);
         assertEquals(assertionErr, expectedValue.intValue(), actualValue.intValue());

@@ -19,7 +19,6 @@ package com.hazelcast.jet.sql.tests.tumblewindow;
 import com.hazelcast.sql.SqlRow;
 
 import java.math.BigDecimal;
-import java.util.stream.IntStream;
 
 public class MaxTumbleWindowTest extends AbstractTumbleWindowTest {
 

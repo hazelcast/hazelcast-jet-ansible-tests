@@ -1,0 +1,8 @@
+Following steps needs to be done for updating jars for jar-submission-test in jet-test-env S3 bucket:
+
+1. update HZ version in this jar-submission-job project
+2. build jar-submission-job project by "mvn clean package"
+3. small jar is created in target dir - rename it to "jar-submission-job.jar" and upload it to jet-test-env S3 bucket
+4. copy "jar-submission-job.jar" to new file "jar-submission-job-large.jar"
+5. download file "15-minute-counts-sorted.csv" from jet-test-env S3 bucket and put it into the root of "jar-submission-job-large.jar"
+6. upload "jar-submission-job-large.jar" to jet-test-env S3 bucket

@@ -282,4 +282,14 @@ public abstract class AbstractSoakTest {
             throw new AssertionError(message);
         }
     }
+
+    protected static void assertNotNull(Object actual) {
+        assertNotNull("expected: not null, actual: " + actual, actual);
+    }
+
+    protected static void assertNotNull(String message, Object actual) {
+        if (actual == null) {
+            throw new AssertionError(message);
+        }
+    }
 }

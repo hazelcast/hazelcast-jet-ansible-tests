@@ -18,7 +18,6 @@ package com.hazelcast.jet.sql.tests.tumblewindow;
 
 import com.hazelcast.sql.SqlRow;
 
-import java.util.stream.IntStream;
 
 public class CountTumbleWindowTest extends AbstractTumbleWindowTest {
     private static final String SOURCE = "COUNT_TRADES_SOURCE";

@@ -19,7 +19,6 @@ package com.hazelcast.jet.sql.tests.tumblewindow;
 import com.hazelcast.sql.SqlRow;
 
 import java.math.BigDecimal;
-import java.util.stream.IntStream;
 
 public class AvgTumbleWindowTest extends AbstractTumbleWindowTest {
 
@@ -38,7 +37,8 @@ public class AvgTumbleWindowTest extends AbstractTumbleWindowTest {
     protected void assertQuerySuccessful(SqlRow sqlRow, int currentEventStartTime, int currentEventEndTime) {
         BigDecimal actualAvgValue = sqlRow.getObject(2);
         // average of arithmetic series formula: first + (last - first) / 2
-        BigDecimal expectedValue = BigDecimal.valueOf(currentEventStartTime + (currentEventEndTime - 1 - currentEventStartTime) / 2.0);
+        BigDecimal expectedValue =
+                BigDecimal.valueOf(currentEventStartTime + (currentEventEndTime - 1 - currentEventStartTime) / 2.0);
         String assertionErr = String.format("The avg over aggregate window does not match.\n " +
                 "Expected: %d Actual: %d -- Row: %s", expectedValue.longValue(), actualAvgValue.longValue(), sqlRow);
         assertEquals(assertionErr, expectedValue.intValue(), actualAvgValue.intValue());

@@ -19,7 +19,6 @@ package com.hazelcast.jet.sql.tests.tumblewindow;
 import com.hazelcast.sql.SqlRow;
 
 import java.math.BigDecimal;
-import java.util.stream.IntStream;
 
 public class SumTumbleWindowTest extends AbstractTumbleWindowTest {
 
@@ -38,7 +37,8 @@ public class SumTumbleWindowTest extends AbstractTumbleWindowTest {
     protected void assertQuerySuccessful(SqlRow sqlRow, int currentEventStartTime, int currentEventEndTime) {
         BigDecimal actualValue = sqlRow.getObject(2);
         // arithmetic series sum formula: (first + last) * n / 2
-        long expectedValue = (currentEventStartTime + currentEventEndTime - 1) * (currentEventEndTime - currentEventStartTime) / 2;
+        long expectedValue =
+                (currentEventStartTime + currentEventEndTime - 1) * (currentEventEndTime - currentEventStartTime) / 2;
         String assertionErr = String.format("The sum over aggregate window does not match.\n " +
                 "Expected: %d Actual: %d -- Row: %s", expectedValue, actualValue.longValue(), sqlRow);
         assertEquals(assertionErr, expectedValue, actualValue.longValue());

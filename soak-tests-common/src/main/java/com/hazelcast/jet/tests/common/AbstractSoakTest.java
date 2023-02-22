@@ -284,7 +284,7 @@ public abstract class AbstractSoakTest {
     }
 
     protected static void assertNotNull(Object actual) {
-        assertNotNull("expected: not null, actual: " + actual, actual);
+        assertNotNull("expected: not null, actual: null", actual);
     }
 
     protected static void assertNotNull(String message, Object actual) {

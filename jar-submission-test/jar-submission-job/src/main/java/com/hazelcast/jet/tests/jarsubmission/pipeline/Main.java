@@ -47,10 +47,10 @@ public class Main {
     private static Pipeline streamPipeline(long index, String prefix) {
         String item = prefix + index;
         Pipeline pipeline = Pipeline.create();
-        pipeline.readFrom(TestSources.itemStream(10, (t, u) -> item))
+        pipeline.readFrom(TestSources.itemStream(10))
                 .withoutTimestamps()
                 .rebalance()
-                .map(t -> new Person(t))
+                .map(t -> new Person(item))
                 .rebalance()
                 .map(t -> new AnotherPerson(t.getName()))
                 .rebalance()

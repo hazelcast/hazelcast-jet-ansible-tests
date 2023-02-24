@@ -17,18 +17,28 @@
 package com.hazelcast.jet.tests.jarsubmission;
 
 import com.hazelcast.core.HazelcastInstance;
+import com.hazelcast.jet.JetException;
 import com.hazelcast.jet.JetService;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.SubmitJobParameters;
 import com.hazelcast.jet.core.JobStatus;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
 import com.hazelcast.map.IMap;
+import java.io.BufferedWriter;
+import java.io.FileWriter;
 
 import java.io.IOException;
+import java.net.URI;
+import java.nio.file.FileSystem;
+import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -43,8 +53,9 @@ public class JarSubmissionTest extends AbstractSoakTest {
     private static final int ASSERTION_ATTEMPS = 1200;
     private static final int ASSERTION_SLEEP_MS = 100;
 
-    private static final String SMALL_JAR_PATH_DEFAULT = "/tmp/jar-submission-job.jar";
-    private static final String LARGE_JAR_PATH_DEFAULT = "/tmp/jar-submission-job-large.jar";
+    private static final String SMALL_JAR_PATH_DEFAULT = "../jar-submission-job/target/jar-submission-job.jar";
+    private static final String LARGE_JAR_PATH_DEFAULT = "../jar-submission-job/target/jar-submission-job-large.jar";
+    private static final String LARGE_FILE_PATH_DEFAULT = "/tmp/large-file.csv";
 
     private static final int PAUSE_BETWEEN_SMALL_JAR_JOBS = 1_000;
     private static final int PAUSE_BETWEEN_LARGE_JAR_JOBS = 3_000;
@@ -52,6 +63,7 @@ public class JarSubmissionTest extends AbstractSoakTest {
 
     private String smallJarPath;
     private String largeJarPath;
+    private String largeFilePath;
     private int pauseBetweenSmallJarJobs;
     private int pauseBetweenLargeJarJobs;
 
@@ -63,8 +75,11 @@ public class JarSubmissionTest extends AbstractSoakTest {
     protected void init(HazelcastInstance client) throws Exception {
         smallJarPath = property("smallJarPath", SMALL_JAR_PATH_DEFAULT);
         largeJarPath = property("largeJarPath", LARGE_JAR_PATH_DEFAULT);
+        largeFilePath = property("largeFilePath", LARGE_FILE_PATH_DEFAULT);
         pauseBetweenSmallJarJobs = propertyInt("pauseBetweenSmallJarJobs", PAUSE_BETWEEN_SMALL_JAR_JOBS);
         pauseBetweenLargeJarJobs = propertyInt("pauseBetweenLargeJarJobs", PAUSE_BETWEEN_LARGE_JAR_JOBS);
+
+        createLargeJar();
     }
 
     @Override
@@ -152,13 +167,13 @@ public class JarSubmissionTest extends AbstractSoakTest {
 
     protected void testBatchJar(HazelcastInstance client, String jarPath, String prefix, int sleep, int logThreshold) {
         Path jarFile = Paths.get(jarPath);
-        assertTrue("testing file for " + prefix + " does not exist", Files.exists(jarFile));
+        assertTrue("testing file " + jarPath + " for " + prefix + " does not exist", Files.exists(jarFile));
 
         JetService jet = client.getJet();
 
-        long begin = System.currentTimeMillis();
+        long end = System.currentTimeMillis() + durationInMillis;
         long jobCount = 0;
-        while (System.currentTimeMillis() - begin < durationInMillis) {
+        while (System.currentTimeMillis() < end) {
             ArrayList<String> params = new ArrayList<>();
             params.add(Long.toString(jobCount));
             params.add(prefix);
@@ -169,21 +184,22 @@ public class JarSubmissionTest extends AbstractSoakTest {
                     .setJobName(prefix + jobCount)
                     .setJarPath(jarFile);
             // set non-existing main class for 10% of jobs
-            if (jobCount % 10 == 5) {
+            boolean jobWithNonExistingClass = jobCount % 10 == 5;
+            if (jobWithNonExistingClass) {
                 jobParams.setMainClass("not.existing.Main");
             }
 
             try {
                 jet.submitJobFromJar(jobParams);
             } catch (Exception ex) {
-                if (jobCount % 10 == 5) {
+                if (jobWithNonExistingClass && ex instanceof JetException) {
                     // expected
                 } else {
                     throw ex;
                 }
             }
 
-            if (jobCount % 10 != 5) {
+            if (!jobWithNonExistingClass) {
                 Job job = getJobEventually(jet, prefix + jobCount);
                 Exception jobException = null;
                 try {
@@ -214,13 +230,13 @@ public class JarSubmissionTest extends AbstractSoakTest {
 
     protected void testStreamJar(HazelcastInstance client, String jarPath, String prefix, int sleep, int logThreshold) {
         Path jarFile = Paths.get(jarPath);
-        assertTrue("testing file for " + prefix + " does not exist", Files.exists(jarFile));
+        assertTrue("testing file " + jarPath + " for " + prefix + " does not exist", Files.exists(jarFile));
 
         JetService jet = client.getJet();
 
-        long begin = System.currentTimeMillis();
+        long end = System.currentTimeMillis() + durationInMillis;
         long jobCount = 0;
-        while (System.currentTimeMillis() - begin < durationInMillis) {
+        while (System.currentTimeMillis() < end) {
             ArrayList<String> params = new ArrayList<>();
             params.add(Long.toString(jobCount));
             params.add(prefix);
@@ -231,21 +247,22 @@ public class JarSubmissionTest extends AbstractSoakTest {
                     .setJobName(prefix + jobCount)
                     .setJarPath(jarFile);
             // set non-existing main class for 10% of jobs
-            if (jobCount % 10 == 5) {
+            boolean jobWithNonExistingClass = jobCount % 10 == 5;
+            if (jobWithNonExistingClass) {
                 jobParams.setMainClass("not.existing.Main");
             }
 
             try {
                 jet.submitJobFromJar(jobParams);
             } catch (Exception ex) {
-                if (jobCount % 10 == 5) {
+                if (jobWithNonExistingClass && ex instanceof JetException) {
                     // expected
                 } else {
                     throw ex;
                 }
             }
 
-            if (jobCount % 10 != 5) {
+            if (!jobWithNonExistingClass) {
                 Job job = getJobEventually(jet, prefix + jobCount);
 
                 // check result
@@ -305,6 +322,28 @@ public class JarSubmissionTest extends AbstractSoakTest {
         }
         throw new AssertionError("Job " + job.getName() + " does not have expected status: " + expectedStatus
                 + ". Job status: " + job.getStatus());
+    }
+
+    private void createLargeJar() throws IOException {
+        generateLargeFile();
+        Files.copy(Paths.get(smallJarPath), Paths.get(largeJarPath), StandardCopyOption.REPLACE_EXISTING);
+
+        Map<String, String> env = new HashMap<>();
+        env.put("create", "true");
+        URI uri = URI.create("jar:" + Paths.get(largeJarPath).toUri());
+        try (FileSystem fs = FileSystems.newFileSystem(uri, env)) {
+            Path nf = fs.getPath("large-file.csv");
+            Files.write(nf, Files.readAllBytes(Paths.get(largeFilePath)), StandardOpenOption.CREATE);
+        }
+    }
+
+    private void generateLargeFile() throws IOException {
+        Files.deleteIfExists(Paths.get(largeFilePath));
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(largeFilePath))) {
+            for (int i = 0; i < 313_000; i++) {
+                writer.write(i + "," + i + "," + i + "," + i + "," + i + "\n");
+            }
+        }
     }
 
 }

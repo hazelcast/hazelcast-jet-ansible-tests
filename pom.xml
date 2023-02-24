@@ -132,7 +132,7 @@
                 <module>elastic-test</module>
                 <module>event-journal-test</module>
                 <module>hdfs-test</module>
-                <module>jar-submission-test</module>
+                <module>jar-submission-module</module>
                 <module>jdbc-test</module>
                 <module>jms-test</module>
                 <module>job-level-serializers-test</module>
@@ -178,7 +178,7 @@
                 <module>elastic-test</module>
                 <module>event-journal-test</module>
                 <module>hdfs-test</module>
-                <module>jar-submission-test</module>
+                <module>jar-submission-module</module>
                 <module>jdbc-test</module>
                 <module>jms-test</module>
                 <module>job-level-serializers-test</module>

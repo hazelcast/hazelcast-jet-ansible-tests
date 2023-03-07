@@ -20,25 +20,17 @@ import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.jet.JetException;
 import com.hazelcast.jet.JetService;
 import com.hazelcast.jet.Job;
-import com.hazelcast.jet.SubmitJobParameters;
 import com.hazelcast.jet.core.JobStatus;
+import com.hazelcast.jet.impl.JetClientInstanceImpl;
+import com.hazelcast.jet.impl.SubmitJobParameters;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
 import com.hazelcast.map.IMap;
-import java.io.BufferedWriter;
-import java.io.FileWriter;
 
 import java.io.IOException;
-import java.net.URI;
-import java.nio.file.FileSystem;
-import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
-import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -53,17 +45,21 @@ public class JarSubmissionTest extends AbstractSoakTest {
     private static final int ASSERTION_ATTEMPS = 1200;
     private static final int ASSERTION_SLEEP_MS = 100;
 
-    private static final String SMALL_JAR_PATH_DEFAULT = "../jar-submission-job/target/jar-submission-job.jar";
-    private static final String LARGE_JAR_PATH_DEFAULT = "../jar-submission-job/target/jar-submission-job-large.jar";
-    private static final String LARGE_FILE_PATH_DEFAULT = "/tmp/large-file.csv";
+    private static final String SMALL_JAR_CLIENT_PATH_DEFAULT = "../jar-submission-job/target/jar-submission-job.jar";
+    private static final String LARGE_JAR_CLIENT_PATH_DEFAULT
+            = "../jar-submission-job/target/jar-submission-job-large.jar";
+    private static final String SMALL_JAR_SERVER_PATH_DEFAULT = "../jar-submission-job/target/jar-submission-job.jar";
+    private static final String LARGE_JAR_SERVER_PATH_DEFAULT
+            = "../jar-submission-job/target/jar-submission-job-large.jar";
 
     private static final int PAUSE_BETWEEN_SMALL_JAR_JOBS = 1_000;
-    private static final int PAUSE_BETWEEN_LARGE_JAR_JOBS = 3_000;
+    private static final int PAUSE_BETWEEN_LARGE_JAR_JOBS = 5_000;
     private static final int DELAY_AFTER_TEST_FINISHED = 120_000;
 
-    private String smallJarPath;
-    private String largeJarPath;
-    private String largeFilePath;
+    private String smallJarClientPath;
+    private String largeJarClientPath;
+    private String smallJarServerPath;
+    private String largeJarServerPath;
     private int pauseBetweenSmallJarJobs;
     private int pauseBetweenLargeJarJobs;
 
@@ -72,66 +68,114 @@ public class JarSubmissionTest extends AbstractSoakTest {
     }
 
     @Override
+    protected boolean runOnlyAsClient() {
+        return true;
+    }
+
+    @Override
     protected void init(HazelcastInstance client) throws Exception {
-        smallJarPath = property("smallJarPath", SMALL_JAR_PATH_DEFAULT);
-        largeJarPath = property("largeJarPath", LARGE_JAR_PATH_DEFAULT);
-        largeFilePath = property("largeFilePath", LARGE_FILE_PATH_DEFAULT);
+        smallJarClientPath = property("smallJarClientPath", SMALL_JAR_CLIENT_PATH_DEFAULT);
+        largeJarClientPath = property("largeJarClientPath", LARGE_JAR_CLIENT_PATH_DEFAULT);
+        smallJarServerPath = property("smallJarServerPath", SMALL_JAR_SERVER_PATH_DEFAULT);
+        largeJarServerPath = property("largeJarServerPath", LARGE_JAR_SERVER_PATH_DEFAULT);
         pauseBetweenSmallJarJobs = propertyInt("pauseBetweenSmallJarJobs", PAUSE_BETWEEN_SMALL_JAR_JOBS);
         pauseBetweenLargeJarJobs = propertyInt("pauseBetweenLargeJarJobs", PAUSE_BETWEEN_LARGE_JAR_JOBS);
-
-        createLargeJar();
     }
 
     @Override
     protected void test(HazelcastInstance client, String name) throws Throwable {
-        Throwable[] exceptions = new Throwable[4];
-        ExecutorService executorService = Executors.newFixedThreadPool(4);
+        Throwable[] exceptions = new Throwable[8];
+        ExecutorService executorService = Executors.newFixedThreadPool(8);
         executorService.execute(() -> {
             try {
-                testBatchSmallJar(client);
+                testBatchSmallJarFromClient(client);
             } catch (Throwable t) {
-                logger.severe("Exception in small batch jar.", t);
+                logger.severe("Exception in small batch jar submitted from client.", t);
                 exceptions[0] = t;
             }
         });
         executorService.execute(() -> {
             try {
-                testBatchLargeJar(client);
+                testBatchLargeJarFromClient(client);
             } catch (Throwable t) {
-                logger.severe("Exception in large batch jar.", t);
+                logger.severe("Exception in large batch jar submitted from client.", t);
                 exceptions[1] = t;
             }
         });
         executorService.execute(() -> {
             try {
-                testStreamSmallJar(client);
+                testStreamSmallJarFromClient(client);
             } catch (Throwable t) {
-                logger.severe("Exception in small stream jar.", t);
+                logger.severe("Exception in small stream jar submitted from client.", t);
                 exceptions[2] = t;
             }
         });
         executorService.execute(() -> {
             try {
-                testStreamLargeJar(client);
+                testStreamLargeJarFromClient(client);
             } catch (Throwable t) {
-                logger.severe("Exception in small stream jar.", t);
+                logger.severe("Exception in small stream jar submitted from client.", t);
                 exceptions[3] = t;
+            }
+        });
+        executorService.execute(() -> {
+            try {
+                testBatchSmallJarFromServer(client);
+            } catch (Throwable t) {
+                logger.severe("Exception in small batch jar submitted from server.", t);
+                exceptions[4] = t;
+            }
+        });
+        executorService.execute(() -> {
+            try {
+                testBatchLargeJarFromServer(client);
+            } catch (Throwable t) {
+                logger.severe("Exception in large batch jar submitted from server.", t);
+                exceptions[5] = t;
+            }
+        });
+        executorService.execute(() -> {
+            try {
+                testStreamSmallJarFromServer(client);
+            } catch (Throwable t) {
+                logger.severe("Exception in small stream jar submitted from server.", t);
+                exceptions[6] = t;
+            }
+        });
+        executorService.execute(() -> {
+            try {
+                testStreamLargeJarFromServer(client);
+            } catch (Throwable t) {
+                logger.severe("Exception in small stream jar submitted from server.", t);
+                exceptions[7] = t;
             }
         });
         executorService.shutdown();
         executorService.awaitTermination((long) (durationInMillis + DELAY_AFTER_TEST_FINISHED), MILLISECONDS);
 
         if (exceptions[0] != null) {
-            logger.severe("Exception in small batch jar.", exceptions[0]);
+            logger.severe("Exception in small batch jar submitted from client.", exceptions[0]);
         }
         if (exceptions[1] != null) {
-            logger.severe("Exception in large batch jar.", exceptions[1]);
+            logger.severe("Exception in large batch jar submitted from client.", exceptions[1]);
         }
         if (exceptions[2] != null) {
-            logger.severe("Exception in small stream jar.", exceptions[2]);
+            logger.severe("Exception in small stream jar submitted from client.", exceptions[2]);
         }
         if (exceptions[3] != null) {
-            logger.severe("Exception in large stream jar.", exceptions[3]);
+            logger.severe("Exception in large stream jar submitted from client.", exceptions[3]);
+        }
+        if (exceptions[4] != null) {
+            logger.severe("Exception in small batch jar submitted from server.", exceptions[4]);
+        }
+        if (exceptions[5] != null) {
+            logger.severe("Exception in large batch jar submitted from server.", exceptions[5]);
+        }
+        if (exceptions[6] != null) {
+            logger.severe("Exception in small stream jar submitted from server.", exceptions[6]);
+        }
+        if (exceptions[7] != null) {
+            logger.severe("Exception in large stream jar submitted from server.", exceptions[7]);
         }
 
         for (Throwable exception : exceptions) {
@@ -145,29 +189,52 @@ public class JarSubmissionTest extends AbstractSoakTest {
     protected void teardown(Throwable t) throws Exception {
     }
 
-    protected void testBatchSmallJar(HazelcastInstance client) throws IOException {
-        testBatchJar(client, smallJarPath, "JarSubmissionTestBatchSmall", pauseBetweenSmallJarJobs,
-                SMALL_JAR_LOG_JOB_COUNT_THRESHOLD);
+    private void testBatchSmallJarFromClient(HazelcastInstance client) throws IOException {
+        testBatchJar(client, true, smallJarClientPath, "JarSubmissionTestBatchSmallFromClient",
+                pauseBetweenSmallJarJobs, SMALL_JAR_LOG_JOB_COUNT_THRESHOLD);
     }
 
-    protected void testBatchLargeJar(HazelcastInstance client) throws IOException {
-        testBatchJar(client, largeJarPath, "JarSubmissionTestBatchLarge", pauseBetweenLargeJarJobs,
-                LARGE_JAR_LOG_JOB_COUNT_THRESHOLD);
+    private void testBatchLargeJarFromClient(HazelcastInstance client) throws IOException {
+        testBatchJar(client, true, largeJarClientPath, "JarSubmissionTestBatchLargeFromClient",
+                pauseBetweenLargeJarJobs, LARGE_JAR_LOG_JOB_COUNT_THRESHOLD);
     }
 
-    protected void testStreamSmallJar(HazelcastInstance client) throws IOException {
-        testStreamJar(client, smallJarPath, "JarSubmissionTestStreamSmall", pauseBetweenSmallJarJobs,
-                SMALL_JAR_LOG_JOB_COUNT_THRESHOLD);
+    private void testStreamSmallJarFromClient(HazelcastInstance client) throws IOException {
+        testStreamJar(client, true, smallJarClientPath, "JarSubmissionTestStreamSmallFromClient",
+                pauseBetweenSmallJarJobs, SMALL_JAR_LOG_JOB_COUNT_THRESHOLD);
     }
 
-    protected void testStreamLargeJar(HazelcastInstance client) throws IOException {
-        testStreamJar(client, largeJarPath, "JarSubmissionTestStreamLarge", pauseBetweenLargeJarJobs,
-                LARGE_JAR_LOG_JOB_COUNT_THRESHOLD);
+    private void testStreamLargeJarFromClient(HazelcastInstance client) throws IOException {
+        testStreamJar(client, true, largeJarClientPath, "JarSubmissionTestStreamLargeFromClient",
+                pauseBetweenLargeJarJobs, LARGE_JAR_LOG_JOB_COUNT_THRESHOLD);
     }
 
-    protected void testBatchJar(HazelcastInstance client, String jarPath, String prefix, int sleep, int logThreshold) {
+    private void testBatchSmallJarFromServer(HazelcastInstance client) throws IOException {
+        testBatchJar(client, false, smallJarServerPath, "JarSubmissionTestBatchSmallFromServer",
+                pauseBetweenSmallJarJobs, SMALL_JAR_LOG_JOB_COUNT_THRESHOLD);
+    }
+
+    private void testBatchLargeJarFromServer(HazelcastInstance client) throws IOException {
+        testBatchJar(client, false, largeJarServerPath, "JarSubmissionTestBatchLargeFromServer",
+                pauseBetweenLargeJarJobs, LARGE_JAR_LOG_JOB_COUNT_THRESHOLD);
+    }
+
+    private void testStreamSmallJarFromServer(HazelcastInstance client) throws IOException {
+        testStreamJar(client, false, smallJarServerPath, "JarSubmissionTestStreamSmallFromServer",
+                pauseBetweenSmallJarJobs, SMALL_JAR_LOG_JOB_COUNT_THRESHOLD);
+    }
+
+    private void testStreamLargeJarFromServer(HazelcastInstance client) throws IOException {
+        testStreamJar(client, false, largeJarServerPath, "JarSubmissionTestStreamLargeFromServer",
+                pauseBetweenLargeJarJobs, LARGE_JAR_LOG_JOB_COUNT_THRESHOLD);
+    }
+
+    private void testBatchJar(HazelcastInstance client, boolean fromClient, String jarPath, String prefix, int sleep,
+            int logThreshold) {
         Path jarFile = Paths.get(jarPath);
-        assertTrue("testing file " + jarPath + " for " + prefix + " does not exist", Files.exists(jarFile));
+        if (fromClient) {
+            assertTrue("testing file " + jarPath + " for " + prefix + " does not exist", Files.exists(jarFile));
+        }
 
         JetService jet = client.getJet();
 
@@ -179,8 +246,10 @@ public class JarSubmissionTest extends AbstractSoakTest {
             params.add(prefix);
             // true means batch job
             params.add("true");
-            SubmitJobParameters jobParams = new SubmitJobParameters()
-                    .setJobParameters(params)
+
+            SubmitJobParameters jobParams = fromClient ? SubmitJobParameters.withJarOnClient()
+                    : SubmitJobParameters.withJarOnMember();
+            jobParams.setJobParameters(params)
                     .setJobName(prefix + jobCount)
                     .setJarPath(jarFile);
             // set non-existing main class for 10% of jobs
@@ -190,7 +259,7 @@ public class JarSubmissionTest extends AbstractSoakTest {
             }
 
             try {
-                jet.submitJobFromJar(jobParams);
+                ((JetClientInstanceImpl) jet).submitJobFromJar(jobParams);
             } catch (Exception ex) {
                 if (jobWithNonExistingClass && ex instanceof JetException) {
                     // expected
@@ -225,12 +294,15 @@ public class JarSubmissionTest extends AbstractSoakTest {
             sleepMillis(sleep);
         }
         assertTrue(jobCount > 0);
-        logger.info("Job count for " + prefix + ": " + jobCount);
+        logger.info("Final job count for " + prefix + ": " + jobCount);
     }
 
-    protected void testStreamJar(HazelcastInstance client, String jarPath, String prefix, int sleep, int logThreshold) {
+    private void testStreamJar(HazelcastInstance client, boolean fromClient, String jarPath, String prefix, int sleep,
+            int logThreshold) {
         Path jarFile = Paths.get(jarPath);
-        assertTrue("testing file " + jarPath + " for " + prefix + " does not exist", Files.exists(jarFile));
+        if (fromClient) {
+            assertTrue("testing file " + jarPath + " for " + prefix + " does not exist", Files.exists(jarFile));
+        }
 
         JetService jet = client.getJet();
 
@@ -242,8 +314,9 @@ public class JarSubmissionTest extends AbstractSoakTest {
             params.add(prefix);
             // false means stream job
             params.add("false");
-            SubmitJobParameters jobParams = new SubmitJobParameters()
-                    .setJobParameters(params)
+            SubmitJobParameters jobParams = fromClient ? SubmitJobParameters.withJarOnClient()
+                    : SubmitJobParameters.withJarOnMember();
+            jobParams.setJobParameters(params)
                     .setJobName(prefix + jobCount)
                     .setJarPath(jarFile);
             // set non-existing main class for 10% of jobs
@@ -253,7 +326,7 @@ public class JarSubmissionTest extends AbstractSoakTest {
             }
 
             try {
-                jet.submitJobFromJar(jobParams);
+                ((JetClientInstanceImpl) jet).submitJobFromJar(jobParams);
             } catch (Exception ex) {
                 if (jobWithNonExistingClass && ex instanceof JetException) {
                     // expected
@@ -322,28 +395,6 @@ public class JarSubmissionTest extends AbstractSoakTest {
         }
         throw new AssertionError("Job " + job.getName() + " does not have expected status: " + expectedStatus
                 + ". Job status: " + job.getStatus());
-    }
-
-    private void createLargeJar() throws IOException {
-        generateLargeFile();
-        Files.copy(Paths.get(smallJarPath), Paths.get(largeJarPath), StandardCopyOption.REPLACE_EXISTING);
-
-        Map<String, String> env = new HashMap<>();
-        env.put("create", "true");
-        URI uri = URI.create("jar:" + Paths.get(largeJarPath).toUri());
-        try (FileSystem fs = FileSystems.newFileSystem(uri, env)) {
-            Path nf = fs.getPath("large-file.csv");
-            Files.write(nf, Files.readAllBytes(Paths.get(largeFilePath)), StandardOpenOption.CREATE);
-        }
-    }
-
-    private void generateLargeFile() throws IOException {
-        Files.deleteIfExists(Paths.get(largeFilePath));
-        try (BufferedWriter writer = new BufferedWriter(new FileWriter(largeFilePath))) {
-            for (int i = 0; i < 313_000; i++) {
-                writer.write(i + "," + i + "," + i + "," + i + "," + i + "\n");
-            }
-        }
     }
 
 }

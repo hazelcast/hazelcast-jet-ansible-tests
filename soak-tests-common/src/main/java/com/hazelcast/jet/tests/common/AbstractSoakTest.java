@@ -125,6 +125,10 @@ public abstract class AbstractSoakTest {
         return false;
     }
 
+    protected boolean runOnlyAsClient() {
+        return false;
+    }
+
     protected String property(String name, String defaultValue) {
         return System.getProperty(name, defaultValue);
     }
@@ -146,13 +150,18 @@ public abstract class AbstractSoakTest {
     }
 
     private void testInternal() throws Throwable {
-        if (!runOnBothClusters()) {
+        if (!runOnBothClusters() && !runOnlyAsClient()) {
             test(hz, getClass().getSimpleName());
             return;
         }
 
         stableClusterClientConfig = remoteClusterClientConfig();
         stableClusterClient = HazelcastClient.newHazelcastClient(stableClusterClientConfig);
+
+        if (runOnlyAsClient()) {
+            test(stableClusterClient, getClass().getSimpleName());
+            return;
+        }
 
         Throwable[] exceptions = new Throwable[2];
         String dynamicName = DYNAMIC_CLUSTER + "-" + getClass().getSimpleName();

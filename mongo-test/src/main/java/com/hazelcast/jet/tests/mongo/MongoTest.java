@@ -46,6 +46,7 @@ public class MongoTest extends AbstractSoakTest {
     private static final int DEFAULT_ITEM_COUNT = 10_000;
     private static final int LOG_JOB_COUNT_THRESHOLD = 50;
     private static final int SLEEP_BETWEEN_TABLE_READS_SECONDS = 5;
+
     private static final String MONGO_DATABASE = "SoakTests";
     private static final String COLLECTION_PREFIX = "mongo-test-collection-";
     private static final String DOC_INDEX_PREFIX = "-index-";
@@ -79,7 +80,6 @@ public class MongoTest extends AbstractSoakTest {
             assertResults(client, jobCounter);
 
             clearSinkList(client);
-
             deleteCollection(jobCounter);
 
             if (jobCounter % LOG_JOB_COUNT_THRESHOLD == 0) {

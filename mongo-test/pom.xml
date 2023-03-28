@@ -46,7 +46,7 @@
                                 <transformer
                                         implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                                     <manifestEntries>
-                                        <Main-Class>com.hazelcast.jet.tests.mongo.MongoTes</Main-Class>
+                                        <Main-Class>com.hazelcast.jet.tests.mongo.MongoTest</Main-Class>
                                     </manifestEntries>
                                 </transformer>
                             </transformers>

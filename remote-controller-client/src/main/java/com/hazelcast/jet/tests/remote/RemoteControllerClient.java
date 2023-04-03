@@ -88,15 +88,17 @@ public final class RemoteControllerClient {
         Iterables.cycle(members).forEach(member -> {
             try {
                 stop(member, jetHome);
-                sleepMinutes(sleepBetweenRestart);
+                sleepSeconds(25);
                 start(member);
-                sleepMinutes(sleepBetweenRestart);
+                sleepSeconds(25);
 
                 counter[0]++;
                 if (counter[0] % memberCount == 0) {
                     shutdownCluster(member, jetHome, members);
-                    sleepSeconds(SLEEP_BETWEEN_CLUSTER_RESTART_SECONDS);
+                    //                sleepSeconds(SLEEP_BETWEEN_CLUSTER_RESTART_SECONDS);
+                    sleepSeconds(25);
                     startCluster(members);
+                    sleepSeconds(25);
                     sleepMinutes(sleepBetweenRestart);
                 }
 

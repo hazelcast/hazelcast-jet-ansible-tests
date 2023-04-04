@@ -36,7 +36,9 @@ import java.util.Optional;
 import static com.hazelcast.jet.config.ProcessingGuarantee.EXACTLY_ONCE;
 import static com.hazelcast.jet.core.JobStatus.FAILED;
 import static com.hazelcast.jet.core.JobStatus.RUNNING;
-import static com.hazelcast.jet.tests.common.Util.*;
+import static com.hazelcast.jet.tests.common.Util.getJobStatusWithRetry;
+import static com.hazelcast.jet.tests.common.Util.sleepMillis;
+import static com.hazelcast.jet.tests.common.Util.sleepMinutes;
 import static com.hazelcast.jet.tests.mongo.stream.MongoLongStreamTest.MongoClientSupplier.getMongoClient;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
@@ -164,10 +166,10 @@ public class MongoLongStreamTest extends AbstractSoakTest {
     }
 
     @Override
-    protected void teardown(final Throwable t) throws Exception {
+    protected void teardown(final Throwable t) {
     }
 
-    final static class MongoClientSupplier {
+     static final class MongoClientSupplier {
 
         private MongoClientSupplier() {
         }

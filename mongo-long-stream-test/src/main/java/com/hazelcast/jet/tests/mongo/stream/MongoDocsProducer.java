@@ -16,6 +16,7 @@
 
 package com.hazelcast.jet.tests.mongo.stream;
 
+import com.hazelcast.logging.ILogger;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoClients;
 import org.bson.Document;
@@ -23,17 +24,21 @@ import org.bson.Document;
 import static com.hazelcast.jet.impl.util.Util.uncheckRun;
 
 public class MongoDocsProducer {
+    private static final int PRINT_LOG_INSERT_ITEMS = 10_000;
     private final String mongoUrl;
     private final String database;
     private final String collection;
+    private final ILogger logger;
     private final Thread producerThread;
     private volatile boolean running = true;
     private volatile long producedItems;
 
-    public MongoDocsProducer(final String mongoUrl, final String database, final String collection) {
+
+    public MongoDocsProducer(final String mongoUrl, final String database, final String collection, ILogger logger) {
         this.mongoUrl = mongoUrl;
         this.database = database;
         this.collection = collection;
+        this.logger = logger;
         this.producerThread = new Thread(() -> uncheckRun(this::run));
     }
 
@@ -45,6 +50,10 @@ public class MongoDocsProducer {
                         .getCollection(collection)
                         .insertOne(new Document("docId", id));
                 producedItems = id++;
+
+                if (id % PRINT_LOG_INSERT_ITEMS == 0) {
+                    logger.info(String.format("Inserted %d docs", id));
+                }
                 Thread.sleep(50);
             }
         }

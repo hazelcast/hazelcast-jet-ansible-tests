@@ -48,7 +48,6 @@ public class MongoLongStreamTest extends AbstractSoakTest {
     private static final int DEFAULT_SNAPSHOT_INTERVAL = 5000;
     private static final int ASSERTION_ATTEMPTS = 1200;
     private static final int ASSERTION_SLEEP_MS = 100;
-
     private String mongoConnectionString;
     private int snapshotIntervalMs;
 
@@ -74,14 +73,13 @@ public class MongoLongStreamTest extends AbstractSoakTest {
     }
 
     private static void assertCountEventually(final HazelcastInstance client, final long expectedTotalCount,
-                                              final ILogger logger, final String clusterName) throws Exception {
+                                              final String clusterName) throws Exception {
         final Map<String, Long> latestCounterMap = client.getMap(VerificationProcessor.CONSUMED_DOCS_MAP_NAME);
         for (int i = 0; i < ASSERTION_RETRY_COUNT; i++) {
             final long actualTotalCount = latestCounterMap.get(clusterName);
             if (expectedTotalCount == actualTotalCount) {
                 return;
             }
-            log(logger, "expected: " + expectedTotalCount + ", actual: " + actualTotalCount, clusterName);
             SECONDS.sleep(1);
         }
         final long actualTotalCount = latestCounterMap.get(clusterName);
@@ -134,7 +132,10 @@ public class MongoLongStreamTest extends AbstractSoakTest {
         final Job job = client.getJet().newJob(fromMongo, jobConfig);
         assertJobStatusEventually(job);
 
-        final MongoDocsProducer producer = new MongoDocsProducer(mongoConnectionString, MONGO_DATABASE, clusterName);
+        final MongoDocsProducer producer = new MongoDocsProducer(mongoConnectionString,
+                MONGO_DATABASE,
+                clusterName,
+                logger);
         producer.start();
 
         final long expectedTotalCount;
@@ -159,7 +160,7 @@ public class MongoLongStreamTest extends AbstractSoakTest {
         }
 
         log(logger, "Producer stopped, expectedTotalCount: " + expectedTotalCount, clusterName);
-        assertCountEventually(client, expectedTotalCount, logger, clusterName);
+        assertCountEventually(client, expectedTotalCount, clusterName);
         job.cancel();
         log(logger, "Job completed", clusterName);
 
@@ -169,7 +170,7 @@ public class MongoLongStreamTest extends AbstractSoakTest {
     protected void teardown(final Throwable t) {
     }
 
-     static final class MongoClientSupplier {
+    static final class MongoClientSupplier {
 
         private MongoClientSupplier() {
         }

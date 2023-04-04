@@ -213,7 +213,6 @@ public class MongoTest extends AbstractSoakTest {
             if (itemCount == actualTotalCount) {
                 return;
             }
-            logger.info("Stream sink list: expected: " + itemCount + ", actual: " + actualTotalCount);
             sleepMillis(STREAM_SINK_ASSERTION_SLEEP_MS);
         }
 

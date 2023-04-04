@@ -18,160 +18,241 @@ package com.hazelcast.jet.tests.mongo;
 
 import com.hazelcast.collection.IList;
 import com.hazelcast.core.HazelcastInstance;
+import com.hazelcast.jet.Job;
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.mongodb.MongoSinks;
 import com.hazelcast.jet.mongodb.MongoSources;
+import com.hazelcast.jet.mongodb.impl.MongoUtilities;
 import com.hazelcast.jet.pipeline.BatchSource;
 import com.hazelcast.jet.pipeline.Pipeline;
 import com.hazelcast.jet.pipeline.Sink;
 import com.hazelcast.jet.pipeline.Sinks;
+import com.hazelcast.jet.pipeline.StreamSource;
 import com.hazelcast.jet.pipeline.test.TestSources;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoClients;
+import org.bson.BsonTimestamp;
 import org.bson.Document;
 
 import java.sql.SQLException;
+import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.IntStream;
 
+import static com.hazelcast.jet.core.JobStatus.RUNNING;
+import static com.hazelcast.jet.tests.common.Util.sleepMillis;
 import static com.hazelcast.jet.tests.common.Util.sleepSeconds;
 import static java.util.stream.Collectors.toList;
 
 public class MongoTest extends AbstractSoakTest {
-
-    private static final String SINK_LIST_NAME = MongoTest.class.getSimpleName() + "_listSink";
     private static final int DEFAULT_ITEM_COUNT = 10_000;
     private static final int LOG_JOB_COUNT_THRESHOLD = 50;
-    private static final int SLEEP_BETWEEN_TABLE_READS_SECONDS = 5;
+    private static final int SLEEP_BETWEEN_READS_SECONDS = 2;
+    private static final int JOB_STATUS_ASSERTION_ATTEMPTS = 1200;
+    private static final int JOB_STATUS_ASSERTION_SLEEP_MS = 100;
+    private static final int STREAM_SINK_ASSERTION_ATTEMPTS = 120;
 
-    private static final String MONGO_DATABASE = "SoakTests";
-    private static final String COLLECTION_PREFIX = "mongo-test-collection-";
-    private static final String DOC_INDEX_PREFIX = "-index-";
+    private static final int STREAM_SINK_ASSERTION_SLEEP_MS = 1000;
+    private static final String MONGO_DATABASE = MongoTest.class.getSimpleName();
+    private static final String COLLECTION_PREFIX = "collection_";
+    private static final String DOC_PREFIX = "mongo-document-from-collection-";
+    private static final String DOC_COUNTER_PREFIX = "-counter-";
+    private static final String STREAM_READ_FROM_PREFIX = MongoTest.class.getSimpleName() + "_streamReadFrom_";
+    private static final String WRITE_PREFIX = MongoTest.class.getSimpleName() + "_write_";
+    private static final String BATCH_READ_FROM_PREFIX = MongoTest.class.getSimpleName() + "_batchReadFrom_";
+    private static final String BATCH_SINK_LIST_NAME = MongoTest.class.getSimpleName() + "_listSinkBatch";
+    private static final String STREAM_SINK_LIST_NAME = MongoTest.class.getSimpleName() + "_listSinkStream";
+
 
     private String mongoConnectionString;
     private int itemCount;
     private List<Integer> inputItems;
 
-    public static void main(String[] args) throws Exception {
+    public static void main(final String[] args) throws Exception {
+        setRunLocal();
         new MongoTest().run(args);
     }
 
+    private static String docId(final int collectionCounter, final int docCounter) {
+        return DOC_PREFIX + collectionCounter + DOC_COUNTER_PREFIX + docCounter;
+    }
+
+    private static void stopStreamRead(final HazelcastInstance client, final int collectionCounter) {
+        client.getJet().getJob(STREAM_READ_FROM_PREFIX + collectionCounter).cancel();
+    }
+
+    private static void clearSinks(final HazelcastInstance client) {
+        client.getList(BATCH_SINK_LIST_NAME).clear();
+        client.getList(STREAM_SINK_LIST_NAME).clear();
+    }
+
+    private static void assertJobStatusEventually(final Job job) {
+        for (int i = 0; i < JOB_STATUS_ASSERTION_ATTEMPTS; i++) {
+            if (job.getStatus().equals(RUNNING)) {
+                return;
+            } else {
+                sleepMillis(JOB_STATUS_ASSERTION_SLEEP_MS);
+            }
+        }
+        throw new AssertionError("Job " + job.getName() + " does not have expected status: " + RUNNING
+                + ". Job status: " + job.getStatus());
+    }
+
     @Override
-    public void init(HazelcastInstance client) throws SQLException {
+    public void init(final HazelcastInstance client) throws SQLException {
         mongoConnectionString = "mongodb://" + property("mongoIp", "127.0.0.1") + ":27017";
         itemCount = propertyInt("itemCount", DEFAULT_ITEM_COUNT);
         inputItems = IntStream.range(0, itemCount).boxed().collect(toList());
     }
 
     @Override
-    public void test(HazelcastInstance client, String name) throws Exception {
-        clearSinkList(client);
+    public void test(final HazelcastInstance client, final String name2) throws Exception {
+        clearSinks(client);
         int jobCounter = 0;
-        long begin = System.currentTimeMillis();
+        final long begin = System.currentTimeMillis();
         while (System.currentTimeMillis() - begin < durationInMillis) {
-            deleteCollection(jobCounter);
-            clearSinkList(client);
+            deleteCollectionAndCreateNewOne(jobCounter);
+            clearSinks(client);
 
+            startStreamReadFromMongoPipeline(client, jobCounter);
             executeWriteToMongoPipeline(client, jobCounter);
-            executeReadFromMongoPipeline(client, jobCounter);
-            assertResults(client, jobCounter);
+            executeBatchReadFromMongoPipeline(client, jobCounter);
 
-            clearSinkList(client);
-            deleteCollection(jobCounter);
+            assertBatchResults(client, jobCounter);
+            assertStreamResults(client, jobCounter);
+
+            stopStreamRead(client, jobCounter);
+            clearSinks(client);
+            deleteCollectionAndCreateNewOne(jobCounter);
 
             if (jobCounter % LOG_JOB_COUNT_THRESHOLD == 0) {
                 logger.info("Job count: " + jobCounter);
             }
 
             jobCounter++;
-            sleepSeconds(SLEEP_BETWEEN_TABLE_READS_SECONDS);
+            sleepSeconds(SLEEP_BETWEEN_READS_SECONDS);
         }
     }
 
     @Override
-    protected void teardown(Throwable t) throws Exception {
+    protected void teardown(final Throwable t) throws Exception {
     }
 
-
-    private String docId(int collectionCounter, int docIndex) {
-        return COLLECTION_PREFIX + collectionCounter + DOC_INDEX_PREFIX + docIndex;
-    }
-
-    private void executeWriteToMongoPipeline(HazelcastInstance client, int collectionCounter) {
+    private void executeWriteToMongoPipeline(final HazelcastInstance client, final int collectionCounter) {
         final String connectionString = mongoConnectionString;
 
-        Sink<Document> mongoSink = MongoSinks.builder("mongo-stream-sink", Document.class,
+        final Sink<Document> mongoSink = MongoSinks.builder("mongo-sink", Document.class,
                         () -> MongoClients.create(connectionString))
                 .into(MONGO_DATABASE, COLLECTION_PREFIX + collectionCounter)
                 .identifyDocumentBy("_id", doc -> doc.get("_id"))
                 .build();
 
-        Pipeline toMongo = Pipeline.create();
+        final Pipeline toMongo = Pipeline.create();
         toMongo.readFrom(TestSources.items(inputItems))
                 .map(docIndex -> new Document()
-                        .append("docId", "mongo-test-collection-" + collectionCounter + "-index-" + docIndex))
+                        .append("docId", DOC_PREFIX + collectionCounter + DOC_COUNTER_PREFIX + docIndex))
                 .rebalance()
                 .writeTo(mongoSink);
 
-        JobConfig jobConfig = new JobConfig();
-        jobConfig.setName("MongoTest_writeTo_" + collectionCounter);
+        final JobConfig jobConfig = new JobConfig();
+        jobConfig.setName(WRITE_PREFIX + collectionCounter);
         client.getJet().newJob(toMongo, jobConfig).join();
     }
 
-    private void executeReadFromMongoPipeline(HazelcastInstance client, int collectionCounter) {
+    private void executeBatchReadFromMongoPipeline(final HazelcastInstance client, final int collectionCounter) {
         final String connectionString = mongoConnectionString;
 
-        BatchSource<Document> mongoSource = MongoSources
-                .batch("mongo-stream-sink", () -> MongoClients.create(connectionString))
+        final BatchSource<Document> mongoSource = MongoSources
+                .batch("mongo-batch-" + collectionCounter, () -> MongoClients.create(connectionString))
                 .database(MONGO_DATABASE)
                 .collection(COLLECTION_PREFIX + collectionCounter)
                 .build();
 
-        Pipeline fromMongo = Pipeline.create();
+        final Pipeline fromMongo = Pipeline.create();
         fromMongo.readFrom(mongoSource)
-                .writeTo(Sinks.list(SINK_LIST_NAME));
+                .writeTo(Sinks.list(BATCH_SINK_LIST_NAME));
 
-        JobConfig jobConfig = new JobConfig();
-        jobConfig.setName("MongoTest_readFrom_" + collectionCounter);
+        final JobConfig jobConfig = new JobConfig();
+        jobConfig.setName(BATCH_READ_FROM_PREFIX + collectionCounter);
         client.getJet().newJob(fromMongo, jobConfig).join();
     }
 
-    private void assertResults(HazelcastInstance client, int collectionCounter) {
-        IList<Document> list = client.getList(SINK_LIST_NAME);
-        Set<String> set = new HashSet<>();
-        String expected = COLLECTION_PREFIX + collectionCounter + DOC_INDEX_PREFIX;
-        for (Document item : list) {
-            assertTrue("Does not contain expected part: " + item, item.getString("docId").contains(expected));
+    private void startStreamReadFromMongoPipeline(final HazelcastInstance client, final int collectionCounter) {
+        final BsonTimestamp startAt = MongoUtilities.localDateTimeToTimestamp(LocalDateTime.now());
+        final String connectionString = mongoConnectionString;
+
+        final StreamSource<Document> mongoSource = MongoSources
+                .stream("mongo-stream-" + collectionCounter, () -> MongoClients.create(connectionString))
+                .database(MONGO_DATABASE)
+                .collection(COLLECTION_PREFIX + collectionCounter)
+                .startAtOperationTime(startAt)
+                .build();
+
+        final Pipeline fromMongo = Pipeline.create();
+        fromMongo.readFrom(mongoSource)
+                .withNativeTimestamps(0)
+                .writeTo(Sinks.list(STREAM_SINK_LIST_NAME));
+
+        final JobConfig jobConfig = new JobConfig();
+
+        jobConfig.setName(STREAM_READ_FROM_PREFIX + collectionCounter);
+        final Job job = client.getJet().newJob(fromMongo, jobConfig);
+        assertJobStatusEventually(job);
+
+    }
+
+    private void assertBatchResults(final HazelcastInstance client, final int collectionCounter) {
+        assertResults(client.getList(BATCH_SINK_LIST_NAME), collectionCounter, "batch");
+    }
+
+    private void assertStreamResults(final HazelcastInstance client, final int collectionCounter) throws InterruptedException {
+        for (int i = 0; i < STREAM_SINK_ASSERTION_ATTEMPTS; i++) {
+            long actualTotalCount = client.getList(STREAM_SINK_LIST_NAME).size();
+            if (itemCount == actualTotalCount) {
+                return;
+            }
+            logger.info("Stream sink list: expected: " + itemCount + ", actual: " + actualTotalCount);
+            sleepMillis(STREAM_SINK_ASSERTION_SLEEP_MS);
+        }
+
+        assertResults(client.getList(STREAM_SINK_LIST_NAME), collectionCounter, "stream");
+    }
+
+    private void deleteCollectionAndCreateNewOne(final int collectionCounter) {
+        try (MongoClient mongoClients = MongoClients.create(mongoConnectionString)) {
+            mongoClients.getDatabase(MONGO_DATABASE)
+                    .getCollection(COLLECTION_PREFIX + collectionCounter)
+                    .drop();
+
+            mongoClients.getDatabase(MONGO_DATABASE)
+                    .createCollection(COLLECTION_PREFIX + collectionCounter);
+        }
+    }
+
+    private void assertResults(final IList<Document> list, final int collectionCounter, final String type) {
+        final Set<String> set = new HashSet<>();
+        final String expected = DOC_PREFIX + collectionCounter + DOC_COUNTER_PREFIX;
+        for (final Document item : list) {
+            assertTrue(type + " does not contain expected part: " + item, item.getString("docId").contains(expected));
             set.add(item.getString("docId"));
         }
 
-        int lastElementNumber = itemCount - 1;
+        final int lastElementNumber = itemCount - 1;
         try {
             assertEquals(itemCount, list.size());
             assertEquals(itemCount, set.size());
             assertTrue(set.contains(docId(collectionCounter, 0)));
             assertTrue(set.contains(docId(collectionCounter, lastElementNumber)));
-        } catch (Throwable ex) {
-            logger.info("Printing content of incorrect list:");
-            for (Document item : list) {
+        } catch (final Throwable ex) {
+            logger.info("Printing content of incorrect list for " + type + ":");
+            for (final Document item : list) {
                 logger.info(item.toString());
             }
             throw ex;
         }
-    }
-
-    private void deleteCollection(int collectionCounter) {
-        try (MongoClient mongoClients = MongoClients.create(mongoConnectionString)) {
-            mongoClients.getDatabase(MONGO_DATABASE)
-                    .getCollection(COLLECTION_PREFIX + collectionCounter).drop();
-        }
-    }
-
-    private void clearSinkList(HazelcastInstance client) {
-        client.getList(SINK_LIST_NAME).clear();
     }
 
 }

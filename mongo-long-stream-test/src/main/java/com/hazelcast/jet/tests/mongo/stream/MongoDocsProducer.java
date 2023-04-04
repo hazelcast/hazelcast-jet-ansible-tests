@@ -1,0 +1,63 @@
+/*
+ * Copyright (c) 2008-2018, Hazelcast, Inc. All Rights Reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package com.hazelcast.jet.tests.mongo.stream;
+
+import com.mongodb.client.MongoClient;
+import com.mongodb.client.MongoClients;
+import org.bson.Document;
+
+import static com.hazelcast.jet.impl.util.Util.uncheckRun;
+
+public class MongoDocsProducer {
+    private final String mongoUrl;
+    private final String database;
+    private final String collection;
+    private final Thread producerThread;
+    private volatile boolean running = true;
+    private volatile long producedItems;
+
+    public MongoDocsProducer(final String mongoUrl, final String database, final String collection) {
+        this.mongoUrl = mongoUrl;
+        this.database = database;
+        this.collection = collection;
+        this.producerThread = new Thread(() -> uncheckRun(this::run));
+    }
+
+    void run() throws Exception {
+        try (MongoClient client = MongoClients.create(mongoUrl)) {
+            long id = 0;
+            while (running) {
+                client.getDatabase(database)
+                        .getCollection(collection)
+                        .insertOne(new Document("docId", id));
+                producedItems = id++;
+                Thread.sleep(50);
+            }
+        }
+    }
+
+    public void start() {
+        producerThread.start();
+    }
+
+    public long stop() throws InterruptedException {
+        running = false;
+        producerThread.join();
+        return producedItems;
+    }
+
+}

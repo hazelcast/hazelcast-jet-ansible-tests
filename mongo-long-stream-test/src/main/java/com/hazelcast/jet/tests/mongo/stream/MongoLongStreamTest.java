@@ -124,7 +124,8 @@ public class MongoLongStreamTest extends AbstractSoakTest {
             jobConfig.setSnapshotIntervalMillis(snapshotIntervalMs);
             jobConfig.setProcessingGuarantee(EXACTLY_ONCE);
         } else {
-            jobConfig.addClass(VerificationProcessor.class, MongoClientSupplier.class);
+            jobConfig.addClass(MongoLongStreamTest.class, MongoDocsProducer.class,
+                    VerificationProcessor.class, MongoClientSupplier.class);
         }
 
         jobConfig.setName(clusterName + "_" + MONGO_DATABASE);

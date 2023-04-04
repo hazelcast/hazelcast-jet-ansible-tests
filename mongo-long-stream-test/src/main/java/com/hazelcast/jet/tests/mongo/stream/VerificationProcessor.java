@@ -34,7 +34,7 @@ import static java.lang.String.format;
 
 public class VerificationProcessor extends AbstractProcessor {
 
-    public static final String CONSUMED_DOCS_MAP_NAME = "_MongoLongStreamTest_latestCounter";
+    public static final String CONSUMED_DOCS_MAP_NAME = "MongoLongStreamTest_latestCounter";
     private static final int QUEUE_SIZE_LIMIT = 5_000;
     private static final int PRINT_LOG_ITEMS = 5_000;
 

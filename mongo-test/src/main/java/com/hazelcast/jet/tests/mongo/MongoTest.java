@@ -208,7 +208,7 @@ public class MongoTest extends AbstractSoakTest {
         assertResults(client.getList(BATCH_SINK_LIST_NAME), collectionCounter, "batch");
     }
 
-    private void assertStreamResults(final HazelcastInstance client, final int collectionCounter) throws InterruptedException {
+    private void assertStreamResults(final HazelcastInstance client, final int collectionCounter) {
         for (int i = 0; i < STREAM_SINK_ASSERTION_ATTEMPTS; i++) {
             long actualTotalCount = client.getList(STREAM_SINK_LIST_NAME).size();
             if (itemCount == actualTotalCount) {

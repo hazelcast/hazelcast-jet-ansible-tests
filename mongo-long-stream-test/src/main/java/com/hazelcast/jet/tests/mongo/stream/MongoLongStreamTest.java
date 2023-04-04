@@ -36,9 +36,7 @@ import java.util.Optional;
 import static com.hazelcast.jet.config.ProcessingGuarantee.EXACTLY_ONCE;
 import static com.hazelcast.jet.core.JobStatus.FAILED;
 import static com.hazelcast.jet.core.JobStatus.RUNNING;
-import static com.hazelcast.jet.tests.common.Util.getJobStatusWithRetry;
-import static com.hazelcast.jet.tests.common.Util.sleepMillis;
-import static com.hazelcast.jet.tests.common.Util.sleepMinutes;
+import static com.hazelcast.jet.tests.common.Util.*;
 import static com.hazelcast.jet.tests.mongo.stream.MongoLongStreamTest.MongoClientSupplier.getMongoClient;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
@@ -73,8 +71,8 @@ public class MongoLongStreamTest extends AbstractSoakTest {
         return Optional.ofNullable(latestCounterMap.get(clusterName)).orElse(0L);
     }
 
-    private static void assertCountEventually(final HazelcastInstance client, final long expectedTotalCount, final ILogger logger,
-                                              final String clusterName) throws Exception {
+    private static void assertCountEventually(final HazelcastInstance client, final long expectedTotalCount,
+                                              final ILogger logger, final String clusterName) throws Exception {
         final Map<String, Long> latestCounterMap = client.getMap(VerificationProcessor.CONSUMED_DOCS_MAP_NAME);
         for (int i = 0; i < ASSERTION_RETRY_COUNT; i++) {
             final long actualTotalCount = latestCounterMap.get(clusterName);
@@ -147,7 +145,8 @@ public class MongoLongStreamTest extends AbstractSoakTest {
                     final long currentlyProcessedDocs = getNumberOfCurrentlyProcessedDocs(client, clusterName);
 
                     if (currentlyProcessedDocs == lastlyProcessed) {
-                        log(logger, "Nothing was processed in last 1 minute, current counter:" + currentlyProcessedDocs, clusterName);
+                        log(logger, "Nothing was processed in last 1 minute, current counter:"
+                                + currentlyProcessedDocs, clusterName);
                     }
                     lastlyProcessed = currentlyProcessedDocs;
                 }
@@ -168,7 +167,7 @@ public class MongoLongStreamTest extends AbstractSoakTest {
     protected void teardown(final Throwable t) throws Exception {
     }
 
-    static class MongoClientSupplier {
+    final static class MongoClientSupplier {
 
         private MongoClientSupplier() {
         }

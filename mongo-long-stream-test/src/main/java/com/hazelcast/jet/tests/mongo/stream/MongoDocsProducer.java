@@ -48,8 +48,8 @@ public class MongoDocsProducer {
             while (running) {
                 client.getDatabase(database)
                         .getCollection(collection)
-                        .insertOne(new Document("docId", id));
-                producedItems = id++;
+                        .insertOne(new Document("docId", id++));
+                producedItems = id;
 
                 if (id % PRINT_LOG_INSERT_ITEMS == 0) {
                     logger.info(String.format("Inserted %d docs", id));

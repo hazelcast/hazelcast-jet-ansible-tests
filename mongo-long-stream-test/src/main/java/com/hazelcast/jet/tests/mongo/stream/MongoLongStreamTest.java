@@ -105,6 +105,8 @@ public class MongoLongStreamTest extends AbstractSoakTest {
     public void test(final HazelcastInstance client, final String clusterName) throws Exception {
         final long begin = System.currentTimeMillis();
 
+        deleteCollectionAndCreateNewOne(clusterName);
+
         final StreamSource<Document> mongoSource = MongoSources
                 .stream(clusterName + "_mongo-long-stream", getMongoClient(mongoConnectionString))
                 .database(MONGO_DATABASE)
@@ -165,6 +167,17 @@ public class MongoLongStreamTest extends AbstractSoakTest {
         job.cancel();
         log(logger, "Job completed", clusterName);
 
+    }
+
+    private void deleteCollectionAndCreateNewOne(final String collectionName) {
+        try (MongoClient mongoClients = MongoClients.create(mongoConnectionString)) {
+            mongoClients.getDatabase(MONGO_DATABASE)
+                    .getCollection(collectionName)
+                    .drop();
+
+            mongoClients.getDatabase(MONGO_DATABASE)
+                    .createCollection(collectionName);
+        }
     }
 
     @Override

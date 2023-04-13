@@ -143,7 +143,7 @@ public class MongoTest extends AbstractSoakTest {
     private void executeWriteToMongoPipeline(final HazelcastInstance client, final int collectionCounter) {
         final String connectionString = mongoConnectionString;
 
-        final Sink<Document> mongoSink = MongoSinks.builder("mongo-sink", Document.class,
+        final Sink<Document> mongoSink = MongoSinks.builder(Document.class,
                         () -> MongoClients.create(connectionString))
                 .into(MONGO_DATABASE, COLLECTION_PREFIX + collectionCounter)
                 .identifyDocumentBy("_id", doc -> doc.get("_id"))
@@ -165,7 +165,7 @@ public class MongoTest extends AbstractSoakTest {
         final String connectionString = mongoConnectionString;
 
         final BatchSource<Document> mongoSource = MongoSources
-                .batch("mongo-batch-" + collectionCounter, () -> MongoClients.create(connectionString))
+                .batch(() -> MongoClients.create(connectionString))
                 .database(MONGO_DATABASE)
                 .collection(COLLECTION_PREFIX + collectionCounter)
                 .build();

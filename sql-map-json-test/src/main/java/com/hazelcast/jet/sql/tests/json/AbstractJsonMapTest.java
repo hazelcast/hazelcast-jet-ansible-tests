@@ -23,13 +23,14 @@ import com.hazelcast.jet.tests.common.sql.SqlResultProcessor;
 import com.hazelcast.sql.SqlResult;
 import com.hazelcast.sql.SqlRow;
 
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+
+import static com.hazelcast.jet.tests.common.Util.getTimeElapsed;
 
 public abstract class AbstractJsonMapTest extends AbstractSoakTest {
 
@@ -105,29 +106,20 @@ public abstract class AbstractJsonMapTest extends AbstractSoakTest {
             Util.sleepMillis(queryTimeout);
         }
         logger.info(String.format("Test completed successfully. Executed %d queries in %s.", currentQueryCount,
-                getTimeElapsed()));
+                getTimeElapsed(begin)));
     }
 
     private void printProgress() {
         long nextPrintCount = lastProgressPrintCount + PROGRESS_PRINT_QUERIES_INTERVAL;
         boolean toPrint = currentQueryCount >= nextPrintCount;
         if (toPrint) {
-            logger.info(String.format("Time elapsed: %s. Executed %d queries", getTimeElapsed(), currentQueryCount));
+            logger.info(String.format("Time elapsed: %s. Executed %d queries", getTimeElapsed(begin), currentQueryCount));
             lastProgressPrintCount = currentQueryCount;
         }
     }
 
     protected abstract void createTable();
     protected abstract ArrayList<String> getExpectedJsonResult();
-
-    private String getTimeElapsed() {
-        Duration timeElapsed = Duration.ofMillis(System.currentTimeMillis() - begin);
-        long days = timeElapsed.toDays();
-        long hours = timeElapsed.minusDays(days).toHours();
-        long minutes = timeElapsed.minusDays(days).minusHours(hours).toMinutes();
-        long seconds = timeElapsed.minusDays(days).minusHours(hours).minusMinutes(minutes).toMillis() / 1000;
-        return String.format("%dd, %dh, %dm, %ds", days, hours, minutes, seconds);
-    }
 
     protected abstract void populateMap();
 

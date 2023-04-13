@@ -28,7 +28,6 @@ import com.hazelcast.sql.SqlResult;
 import com.hazelcast.sql.SqlRow;
 import com.hazelcast.sql.SqlService;
 
-import java.time.Duration;
 import java.util.Iterator;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -40,6 +39,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static com.hazelcast.jet.sql.impl.connector.SqlConnector.OPTION_KEY_FORMAT;
 import static com.hazelcast.jet.sql.impl.connector.SqlConnector.OPTION_VALUE_FORMAT;
+import static com.hazelcast.jet.tests.common.Util.getTimeElapsed;
 
 public abstract class AbstractTumbleWindowTest extends AbstractSoakTest {
     private static final int DEFAULT_QUERY_TIMEOUT_MILLIS = 100;
@@ -139,7 +139,7 @@ public abstract class AbstractTumbleWindowTest extends AbstractSoakTest {
 
         producerTask.stopProducingEvents();
         logger.info(String.format("Test completed successfully. Processed %d rows in %s.", currentRowCount,
-                getTimeElapsed()));
+                getTimeElapsed(begin)));
     }
 
     @Override
@@ -167,7 +167,7 @@ public abstract class AbstractTumbleWindowTest extends AbstractSoakTest {
 
     private void printProgress() {
         if (currentRowCount >= nextPrintCount) {
-            logger.info(String.format("Time elapsed: %s. Processed %d rows", getTimeElapsed(), currentRowCount));
+            logger.info(String.format("Time elapsed: %s. Processed %d rows", getTimeElapsed(begin), currentRowCount));
             nextPrintCount = currentRowCount + PROGRESS_PRINT_QUERIES_INTERVAL;
         }
     }
@@ -179,15 +179,6 @@ public abstract class AbstractTumbleWindowTest extends AbstractSoakTest {
                 .append(a)
                 .append(")");
         return sb;
-    }
-
-    private String getTimeElapsed() {
-        Duration timeElapsed = Duration.ofMillis(System.currentTimeMillis() - begin);
-        long days = timeElapsed.toDays();
-        long hours = timeElapsed.minusDays(days).toHours();
-        long minutes = timeElapsed.minusDays(days).minusHours(hours).toMinutes();
-        long seconds = timeElapsed.minusDays(days).minusHours(hours).minusMinutes(minutes).toMillis() / 1000;
-        return String.format("%dd, %dh, %dm, %ds", days, hours, minutes, seconds);
     }
 
     public static String randomName() {

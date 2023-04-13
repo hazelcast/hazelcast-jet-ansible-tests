@@ -32,7 +32,6 @@ import com.hazelcast.sql.SqlResult;
 import com.hazelcast.sql.SqlRow;
 import com.hazelcast.sql.SqlService;
 
-import java.time.Duration;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
@@ -43,6 +42,7 @@ import static com.hazelcast.jet.sql.impl.connector.SqlConnector.OPTION_VALUE_FOR
 import static com.hazelcast.jet.sql.impl.connector.SqlConnector.OPTION_VALUE_CLASS;
 import static com.hazelcast.jet.sql.impl.connector.SqlConnector.JAVA_FORMAT;
 
+import static com.hazelcast.jet.tests.common.Util.getTimeElapsed;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
 public abstract class AbstractSqlMapTest extends AbstractSoakTest {
@@ -106,27 +106,18 @@ public abstract class AbstractSqlMapTest extends AbstractSoakTest {
             Util.sleepMillis(queryTimeout);
         }
         logger.info(String.format("Test completed successfully. Executed %d queries in %s.",
-                currentQueryCount, getTimeElapsed()));
+                currentQueryCount, getTimeElapsed(begin)));
     }
 
     private void printProgress() {
         long nextPrintCount = lastProgressPrintCount + PROGRESS_PRINT_QUERIES_INTERVAL;
         boolean toPrint = currentQueryCount >= nextPrintCount;
         if (toPrint) {
-            logger.info(String.format("Time elapsed: %s. Executed %d queries", getTimeElapsed(), currentQueryCount));
+            logger.info(String.format("Time elapsed: %s. Executed %d queries", getTimeElapsed(begin), currentQueryCount));
             lastProgressPrintCount = currentQueryCount;
         }
         assertNotStuck();
         lastQueryCount = currentQueryCount;
-    }
-
-    private String getTimeElapsed() {
-        Duration timeElapsed = Duration.ofMillis(System.currentTimeMillis() - begin);
-        long days = timeElapsed.toDays();
-        long hours = timeElapsed.minusDays(days).toHours();
-        long minutes = timeElapsed.minusDays(days).minusHours(hours).toMinutes();
-        long seconds = timeElapsed.minusDays(days).minusHours(hours).minusMinutes(minutes).toMillis() / 1000;
-        return String.format("%dd, %dh, %dm, %ds", days, hours, minutes, seconds);
     }
 
     private void assertNotStuck() {

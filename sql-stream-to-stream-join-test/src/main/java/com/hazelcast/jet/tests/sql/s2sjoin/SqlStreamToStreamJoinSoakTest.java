@@ -17,7 +17,6 @@
 package com.hazelcast.jet.tests.sql.s2sjoin;
 
 import com.hazelcast.core.HazelcastInstance;
-import com.hazelcast.internal.util.UuidUtil;
 import com.hazelcast.jet.sql.impl.connector.SqlConnector;
 import com.hazelcast.jet.sql.impl.connector.kafka.KafkaSqlConnector;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
@@ -29,7 +28,6 @@ import com.hazelcast.sql.SqlResult;
 import com.hazelcast.sql.SqlRow;
 import com.hazelcast.sql.SqlService;
 
-import java.time.Duration;
 import java.util.Iterator;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -39,6 +37,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+
+import static com.hazelcast.jet.tests.common.Util.getTimeElapsed;
+import static com.hazelcast.jet.tests.common.Util.randomName;
 
 public class SqlStreamToStreamJoinSoakTest extends AbstractSoakTest {
     private static final String EVENTS_SOURCE_PREFIX = "events_topic_";
@@ -230,31 +231,19 @@ public class SqlStreamToStreamJoinSoakTest extends AbstractSoakTest {
             logger.info(
                     String.format(
                             "Time elapsed: %s. Executed %d queries.",
-                            getTimeElapsed(),
+                            getTimeElapsed(startTime),
                             currentQueryCount
                     ));
             lastProgressPrintCount = currentQueryCount;
         }
     }
 
-    private String getTimeElapsed() {
-        Duration timeElapsed = Duration.ofMillis(System.currentTimeMillis() - startTime);
-        long days = timeElapsed.toDays();
-        long hours = timeElapsed.minusDays(days).toHours();
-        long minutes = timeElapsed.minusDays(days).minusHours(hours).toMinutes();
-        long seconds = timeElapsed.minusDays(days).minusHours(hours).minusMinutes(minutes).toMillis() / 1000;
-        return String.format("%dd, %dh, %dm, %ds", days, hours, minutes, seconds);
-    }
 
     private static StringBuilder createSingleRecord(StringBuilder sb, Number idx) {
         sb.append(" (TO_TIMESTAMP_TZ(").append(idx).append("), ")
                 .append(idx)
                 .append(")");
         return sb;
-    }
-
-    public static String randomName() {
-        return "o_" + UuidUtil.newUnsecureUuidString().replace('-', '_');
     }
 
     public static void main(String[] args) throws Exception {

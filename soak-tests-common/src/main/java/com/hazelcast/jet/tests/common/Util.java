@@ -17,9 +17,11 @@
 package com.hazelcast.jet.tests.common;
 
 import com.hazelcast.core.HazelcastInstance;
+import com.hazelcast.internal.util.UuidUtil;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.core.JobStatus;
 
+import java.time.Duration;
 import java.util.AbstractMap;
 import java.util.Map;
 import java.util.concurrent.CancellationException;
@@ -101,5 +103,18 @@ public final class Util {
             }
             System.setProperty(split[0], split[1]);
         }
+    }
+
+    public static String randomName() {
+        return "o_" + UuidUtil.newUnsecureUuidString().replace('-', '_');
+    }
+
+    public static String getTimeElapsed(long startTime) {
+        Duration timeElapsed = Duration.ofMillis(System.currentTimeMillis() - startTime);
+        long days = timeElapsed.toDays();
+        long hours = timeElapsed.minusDays(days).toHours();
+        long minutes = timeElapsed.minusDays(days).minusHours(hours).toMinutes();
+        long seconds = timeElapsed.minusDays(days).minusHours(hours).minusMinutes(minutes).toMillis() / 1000;
+        return String.format("%dd, %dh, %dm, %ds", days, hours, minutes, seconds);
     }
 }

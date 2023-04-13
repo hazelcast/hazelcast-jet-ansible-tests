@@ -54,8 +54,8 @@ public class MongoTest extends AbstractSoakTest {
     private static final int JOB_STATUS_ASSERTION_ATTEMPTS = 1200;
     private static final int JOB_STATUS_ASSERTION_SLEEP_MS = 100;
     private static final int STREAM_SINK_ASSERTION_ATTEMPTS = 120;
-
     private static final int STREAM_SINK_ASSERTION_SLEEP_MS = 1000;
+
     private static final String MONGO_DATABASE = MongoTest.class.getSimpleName();
     private static final String COLLECTION_PREFIX = "collection_";
     private static final String DOC_PREFIX = "mongo-document-from-collection-";
@@ -73,31 +73,6 @@ public class MongoTest extends AbstractSoakTest {
 
     public static void main(final String[] args) throws Exception {
         new MongoTest().run(args);
-    }
-
-    private static String docId(final int collectionCounter, final int docCounter) {
-        return DOC_PREFIX + collectionCounter + DOC_COUNTER_PREFIX + docCounter;
-    }
-
-    private static void stopStreamRead(final HazelcastInstance client, final int collectionCounter) {
-        client.getJet().getJob(STREAM_READ_FROM_PREFIX + collectionCounter).cancel();
-    }
-
-    private static void clearSinks(final HazelcastInstance client) {
-        client.getList(BATCH_SINK_LIST_NAME).clear();
-        client.getList(STREAM_SINK_LIST_NAME).clear();
-    }
-
-    private static void assertJobStatusEventually(final Job job) {
-        for (int i = 0; i < JOB_STATUS_ASSERTION_ATTEMPTS; i++) {
-            if (job.getStatus().equals(RUNNING)) {
-                return;
-            } else {
-                sleepMillis(JOB_STATUS_ASSERTION_SLEEP_MS);
-            }
-        }
-        throw new AssertionError("Job " + job.getName() + " does not have expected status: " + RUNNING
-                + ". Job status: " + job.getStatus());
     }
 
     @Override
@@ -138,6 +113,31 @@ public class MongoTest extends AbstractSoakTest {
 
     @Override
     protected void teardown(final Throwable t) throws Exception {
+    }
+
+    private static String docId(final int collectionCounter, final int docCounter) {
+        return DOC_PREFIX + collectionCounter + DOC_COUNTER_PREFIX + docCounter;
+    }
+
+    private static void stopStreamRead(final HazelcastInstance client, final int collectionCounter) {
+        client.getJet().getJob(STREAM_READ_FROM_PREFIX + collectionCounter).cancel();
+    }
+
+    private static void clearSinks(final HazelcastInstance client) {
+        client.getList(BATCH_SINK_LIST_NAME).clear();
+        client.getList(STREAM_SINK_LIST_NAME).clear();
+    }
+
+    private static void assertJobStatusEventually(final Job job) {
+        for (int i = 0; i < JOB_STATUS_ASSERTION_ATTEMPTS; i++) {
+            if (job.getStatus().equals(RUNNING)) {
+                return;
+            } else {
+                sleepMillis(JOB_STATUS_ASSERTION_SLEEP_MS);
+            }
+        }
+        throw new AssertionError("Job " + job.getName() + " does not have expected status: " + RUNNING
+                + ". Job status: " + job.getStatus());
     }
 
     private void executeWriteToMongoPipeline(final HazelcastInstance client, final int collectionCounter) {

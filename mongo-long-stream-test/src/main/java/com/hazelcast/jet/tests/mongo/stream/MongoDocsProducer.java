@@ -22,6 +22,7 @@ import com.mongodb.client.MongoClients;
 import org.bson.Document;
 
 import static com.hazelcast.jet.impl.util.Util.uncheckRun;
+import static com.hazelcast.jet.tests.common.Util.sleepMillis;
 
 public class MongoDocsProducer {
     private static final int PRINT_LOG_INSERT_ITEMS = 10_000;
@@ -42,7 +43,7 @@ public class MongoDocsProducer {
         this.producerThread = new Thread(() -> uncheckRun(this::run));
     }
 
-    void run() throws Exception {
+    private void run() {
         try (MongoClient client = MongoClients.create(mongoUrl)) {
             long id = 0;
             while (running) {
@@ -52,10 +53,12 @@ public class MongoDocsProducer {
                 producedItems = id;
 
                 if (id % PRINT_LOG_INSERT_ITEMS == 0) {
-                    logger.info(String.format("Inserted %d docs", id));
+                    logger.info(String.format("Inserted %d docs into %s collection)", id, collection));
                 }
-                Thread.sleep(50);
+                sleepMillis(50);
             }
+        } finally {
+            logger.info(String.format("Inserted %d docs into %s collection eventually", producedItems, collection));
         }
     }
 

@@ -39,61 +39,29 @@ import static com.hazelcast.jet.core.JobStatus.RUNNING;
 import static com.hazelcast.jet.tests.common.Util.getJobStatusWithRetry;
 import static com.hazelcast.jet.tests.common.Util.sleepMillis;
 import static com.hazelcast.jet.tests.common.Util.sleepMinutes;
+import static com.hazelcast.jet.tests.common.Util.sleepSeconds;
 import static com.hazelcast.jet.tests.mongo.stream.MongoLongStreamTest.MongoClientSupplier.getMongoClient;
-import static java.util.concurrent.TimeUnit.SECONDS;
 
 public class MongoLongStreamTest extends AbstractSoakTest {
     private static final String MONGO_DATABASE = MongoLongStreamTest.class.getSimpleName();
     private static final int ASSERTION_RETRY_COUNT = 60;
     private static final int DEFAULT_SNAPSHOT_INTERVAL = 5000;
+    private static final int DEFAULT_TIMEOUT_FOR_NO_DATA_PROCESSED_MIN = 5;
     private static final int ASSERTION_ATTEMPTS = 1200;
     private static final int ASSERTION_SLEEP_MS = 100;
     private String mongoConnectionString;
     private int snapshotIntervalMs;
+    private int timeoutForNoDataProcessedMin;
 
     public static void main(final String[] args) throws Exception {
         new MongoLongStreamTest().run(args);
-    }
-
-    private static void assertJobStatusEventually(final Job job) {
-        for (int i = 0; i < ASSERTION_ATTEMPTS; i++) {
-            if (job.getStatus().equals(RUNNING)) {
-                return;
-            } else {
-                sleepMillis(ASSERTION_SLEEP_MS);
-            }
-        }
-        throw new AssertionError("Job " + job.getName() + " does not have expected status: " + RUNNING
-                + ". Job status: " + job.getStatus());
-    }
-
-    private static long getNumberOfCurrentlyProcessedDocs(final HazelcastInstance client, final String clusterName) {
-        final Map<String, Long> latestCounterMap = client.getMap(VerificationProcessor.CONSUMED_DOCS_MAP_NAME);
-        return Optional.ofNullable(latestCounterMap.get(clusterName)).orElse(0L);
-    }
-
-    private static void assertCountEventually(final HazelcastInstance client, final long expectedTotalCount,
-                                              final String clusterName) throws Exception {
-        final Map<String, Long> latestCounterMap = client.getMap(VerificationProcessor.CONSUMED_DOCS_MAP_NAME);
-        for (int i = 0; i < ASSERTION_RETRY_COUNT; i++) {
-            final long actualTotalCount = latestCounterMap.get(clusterName);
-            if (expectedTotalCount == actualTotalCount) {
-                return;
-            }
-            SECONDS.sleep(1);
-        }
-        final long actualTotalCount = latestCounterMap.get(clusterName);
-        assertEquals(expectedTotalCount, actualTotalCount);
-    }
-
-    private static void log(final ILogger logger, final String message, final String clusterName) {
-        logger.info("Cluster" + clusterName + "\t\t" + message);
     }
 
     @Override
     public void init(final HazelcastInstance client) {
         mongoConnectionString = "mongodb://" + property("mongoIp", "127.0.0.1") + ":27017";
         snapshotIntervalMs = propertyInt("snapshotIntervalMs", DEFAULT_SNAPSHOT_INTERVAL);
+        timeoutForNoDataProcessedMin = propertyInt("timeoutForNoProcessedDataMin", DEFAULT_TIMEOUT_FOR_NO_DATA_PROCESSED_MIN);
     }
 
     @Override
@@ -143,18 +111,25 @@ public class MongoLongStreamTest extends AbstractSoakTest {
 
         final long expectedTotalCount;
         long lastlyProcessed = -1;
+        int noNewDocsCounter = 0;
         try {
             while (System.currentTimeMillis() - begin < durationInMillis) {
                 if (getJobStatusWithRetry(job) == FAILED) {
                     job.join();
                 } else {
-                    final long currentlyProcessedDocs = getNumberOfCurrentlyProcessedDocs(client, clusterName);
+                    final long processedDocs = getNumberOfProcessedDocs(client, clusterName);
 
-                    if (currentlyProcessedDocs == lastlyProcessed) {
-                        log(logger, "Nothing was processed in last 1 minute, current counter:"
-                                + currentlyProcessedDocs, clusterName);
+                    if (processedDocs == lastlyProcessed) {
+                        noNewDocsCounter++;
+                        log(logger, "Nothing was processed in last minute, current counter:"
+                                + processedDocs, clusterName);
+                        if (noNewDocsCounter > timeoutForNoDataProcessedMin) {
+                            throw new AssertionError("Failed. Exceeded timeout for no data processed");
+                        }
+                    } else {
+                        noNewDocsCounter = 0;
+                        lastlyProcessed = processedDocs;
                     }
-                    lastlyProcessed = currentlyProcessedDocs;
                 }
                 sleepMinutes(1);
             }
@@ -167,6 +142,41 @@ public class MongoLongStreamTest extends AbstractSoakTest {
         job.cancel();
         log(logger, "Job completed", clusterName);
 
+    }
+
+    private static void assertJobStatusEventually(final Job job) {
+        for (int i = 0; i < ASSERTION_ATTEMPTS; i++) {
+            if (job.getStatus().equals(RUNNING)) {
+                return;
+            } else {
+                sleepMillis(ASSERTION_SLEEP_MS);
+            }
+        }
+        throw new AssertionError("Job " + job.getName() + " does not have expected status: " + RUNNING
+                + ". Job status: " + job.getStatus());
+    }
+
+    private static long getNumberOfProcessedDocs(final HazelcastInstance client, final String clusterName) {
+        final Map<String, Long> latestCounterMap = client.getMap(VerificationProcessor.CONSUMED_DOCS_MAP_NAME);
+        return Optional.ofNullable(latestCounterMap.get(clusterName)).orElse(0L);
+    }
+
+    private static void assertCountEventually(final HazelcastInstance client, final long expectedTotalCount,
+                                              final String clusterName) {
+        final Map<String, Long> latestCounterMap = client.getMap(VerificationProcessor.CONSUMED_DOCS_MAP_NAME);
+        for (int i = 0; i < ASSERTION_RETRY_COUNT; i++) {
+            final long actualTotalCount = latestCounterMap.get(clusterName);
+            if (expectedTotalCount == actualTotalCount) {
+                return;
+            }
+            sleepSeconds(1);
+        }
+        final long actualTotalCount = latestCounterMap.get(clusterName);
+        assertEquals(expectedTotalCount, actualTotalCount);
+    }
+
+    private static void log(final ILogger logger, final String message, final String clusterName) {
+        logger.info("Cluster" + clusterName + "\t\t" + message);
     }
 
     private void deleteCollectionAndCreateNewOne(final String collectionName) {

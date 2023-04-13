@@ -76,14 +76,14 @@ public class MongoTest extends AbstractSoakTest {
     }
 
     @Override
-    public void init(final HazelcastInstance client) throws SQLException {
+    public void init(final HazelcastInstance client) {
         mongoConnectionString = "mongodb://" + property("mongoIp", "127.0.0.1") + ":27017";
         itemCount = propertyInt("itemCount", DEFAULT_ITEM_COUNT);
         inputItems = IntStream.range(0, itemCount).boxed().collect(toList());
     }
 
     @Override
-    public void test(final HazelcastInstance client, final String name2) throws Exception {
+    public void test(final HazelcastInstance client, final String name2){
         clearSinks(client);
         int jobCounter = 0;
         final long begin = System.currentTimeMillis();
@@ -112,7 +112,7 @@ public class MongoTest extends AbstractSoakTest {
     }
 
     @Override
-    protected void teardown(final Throwable t) throws Exception {
+    protected void teardown(final Throwable t) {
     }
 
     private static String docId(final int collectionCounter, final int docCounter) {

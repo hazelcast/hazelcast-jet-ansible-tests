@@ -35,7 +35,6 @@ import com.mongodb.client.MongoClients;
 import org.bson.BsonTimestamp;
 import org.bson.Document;
 
-import java.sql.SQLException;
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.List;
@@ -83,7 +82,7 @@ public class MongoTest extends AbstractSoakTest {
     }
 
     @Override
-    public void test(final HazelcastInstance client, final String name2){
+    public void test(final HazelcastInstance client, final String name) {
         clearSinks(client);
         int jobCounter = 0;
         final long begin = System.currentTimeMillis();

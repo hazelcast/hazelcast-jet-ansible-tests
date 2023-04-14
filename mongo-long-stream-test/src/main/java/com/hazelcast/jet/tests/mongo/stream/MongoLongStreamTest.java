@@ -61,7 +61,8 @@ public class MongoLongStreamTest extends AbstractSoakTest {
     public void init(final HazelcastInstance client) {
         mongoConnectionString = "mongodb://" + property("mongoIp", "127.0.0.1") + ":27017";
         snapshotIntervalMs = propertyInt("snapshotIntervalMs", DEFAULT_SNAPSHOT_INTERVAL);
-        timeoutForNoDataProcessedMin = propertyInt("timeoutForNoProcessedDataMin", DEFAULT_TIMEOUT_FOR_NO_DATA_PROCESSED_MIN);
+        timeoutForNoDataProcessedMin = propertyInt("timeoutForNoProcessedDataMin",
+                DEFAULT_TIMEOUT_FOR_NO_DATA_PROCESSED_MIN);
     }
 
     @Override

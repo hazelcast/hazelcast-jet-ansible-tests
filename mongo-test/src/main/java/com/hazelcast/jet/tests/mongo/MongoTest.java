@@ -86,27 +86,31 @@ public class MongoTest extends AbstractSoakTest {
         clearSinks(client);
         int jobCounter = 0;
         final long begin = System.currentTimeMillis();
-        while (System.currentTimeMillis() - begin < durationInMillis) {
-            deleteCollectionAndCreateNewOne(jobCounter);
-            clearSinks(client);
+        try {
+            while (System.currentTimeMillis() - begin < durationInMillis) {
+                deleteCollectionAndCreateNewOne(jobCounter);
+                clearSinks(client);
 
-            startStreamReadFromMongoPipeline(client, jobCounter);
-            executeWriteToMongoPipeline(client, jobCounter);
-            executeBatchReadFromMongoPipeline(client, jobCounter);
+                startStreamReadFromMongoPipeline(client, jobCounter);
+                executeWriteToMongoPipeline(client, jobCounter);
+                executeBatchReadFromMongoPipeline(client, jobCounter);
 
-            assertBatchResults(client, jobCounter);
-            assertStreamResults(client, jobCounter);
+                assertBatchResults(client, jobCounter);
+                assertStreamResults(client, jobCounter);
 
-            stopStreamRead(client, jobCounter);
-            clearSinks(client);
-            deleteCollectionAndCreateNewOne(jobCounter);
+                stopStreamRead(client, jobCounter);
+                clearSinks(client);
+                deleteCollectionAndCreateNewOne(jobCounter);
 
-            if (jobCounter % LOG_JOB_COUNT_THRESHOLD == 0) {
-                logger.info("Job count: " + jobCounter);
+                if (jobCounter % LOG_JOB_COUNT_THRESHOLD == 0) {
+                    logger.info("Job count: " + jobCounter);
+                }
+
+                jobCounter++;
+                sleepSeconds(SLEEP_BETWEEN_READS_SECONDS);
             }
-
-            jobCounter++;
-            sleepSeconds(SLEEP_BETWEEN_READS_SECONDS);
+        } finally {
+            logger.info("Test finished with job count: " + jobCounter);
         }
     }
 

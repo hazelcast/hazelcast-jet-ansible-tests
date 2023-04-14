@@ -58,7 +58,9 @@ public class MongoDocsProducer {
                 sleepMillis(50);
             }
         } finally {
-            logger.info(String.format("Inserted %d docs into %s collection eventually", producedItems, collection));
+            logger.info(String.format("Total number of inserted docs into %s collection is %d",
+                    collection,
+                    producedItems));
         }
     }
 

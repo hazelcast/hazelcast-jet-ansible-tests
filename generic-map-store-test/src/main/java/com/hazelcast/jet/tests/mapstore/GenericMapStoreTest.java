@@ -113,7 +113,7 @@ public class GenericMapStoreTest extends AbstractSoakTest {
         map.delete(key);
 
         // MapStore.load()
-        AbstractSoakTest.assertTrue(map.put(key, person) == null);
+        AbstractSoakTest.assertNull(map.put(key, person));
 
         // Make sure data is loaded from MapStore each time
         map.evict(key);

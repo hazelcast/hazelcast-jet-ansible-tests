@@ -142,6 +142,8 @@
                 <module>large-snapshot-chunk-test</module>
                 <module>light-jobs-test</module>
                 <module>missing-permission-test</module>
+                <module>mongo-long-stream-test</module>
+                <module>mongo-test</module>
                 <module>python-test</module>
                 <module>return-result-to-caller-test</module>
                 <module>rolling-aggregate-test</module>
@@ -187,6 +189,8 @@
                 <module>kinesis-test</module>
                 <module>large-snapshot-chunk-test</module>
                 <module>light-jobs-test</module>
+                <module>mongo-long-stream-test</module>
+                <module>mongo-test</module>
                 <module>missing-permission-test</module>
                 <module>python-test</module>
                 <module>return-result-to-caller-test</module>

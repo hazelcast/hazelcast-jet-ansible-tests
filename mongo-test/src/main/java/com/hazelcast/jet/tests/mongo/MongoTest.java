@@ -187,7 +187,7 @@ public class MongoTest extends AbstractSoakTest {
         final String connectionString = mongoConnectionString;
 
         final StreamSource<Document> mongoSource = MongoSources
-                .stream("mongo-stream-" + collectionCounter, () -> MongoClients.create(connectionString))
+                .stream(() -> MongoClients.create(connectionString))
                 .database(MONGO_DATABASE)
                 .collection(COLLECTION_PREFIX + collectionCounter)
                 .startAtOperationTime(startAt)

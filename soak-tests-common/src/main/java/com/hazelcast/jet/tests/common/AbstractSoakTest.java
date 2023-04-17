@@ -25,6 +25,7 @@ import com.hazelcast.core.Hazelcast;
 import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.jet.config.JetConfig;
 import com.hazelcast.logging.ILogger;
+import org.junit.Test;
 
 import java.io.IOException;
 import java.util.concurrent.ExecutorService;
@@ -298,6 +299,16 @@ public abstract class AbstractSoakTest {
 
     protected static void assertNotNull(String message, Object actual) {
         if (actual == null) {
+            throw new AssertionError(message);
+        }
+    }
+
+    protected static void assertNull(Object actual) {
+        assertNull(String.format("expected: null, actual: %s", actual), actual);
+    }
+
+    protected static void assertNull(String message, Object actual) {
+        if (actual != null) {
             throw new AssertionError(message);
         }
     }

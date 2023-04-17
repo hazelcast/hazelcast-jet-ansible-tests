@@ -18,6 +18,7 @@
     <properties>
         <jdk.version>1.8</jdk.version>
         <hazelcast.version>5.3.0-SNAPSHOT</hazelcast.version>
+        <mysql.version>8.0.29</mysql.version>
         <main.basedir>${project.basedir}</main.basedir>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <hadoop.version>3.3.0</hadoop.version>
@@ -131,6 +132,7 @@
                 <module>early-results-test</module>
                 <module>elastic-test</module>
                 <module>event-journal-test</module>
+                <module>generic-map-store-test</module>
                 <module>hdfs-test</module>
                 <module>jar-submission-module</module>
                 <module>jdbc-test</module>
@@ -179,6 +181,7 @@
                 <module>early-results-test</module>
                 <module>elastic-test</module>
                 <module>event-journal-test</module>
+                <module>generic-map-store-test</module>
                 <module>hdfs-test</module>
                 <module>jar-submission-module</module>
                 <module>jdbc-test</module>

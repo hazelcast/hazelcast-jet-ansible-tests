@@ -77,7 +77,7 @@ public class MongoLongStreamTest extends AbstractSoakTest {
         deleteCollectionAndCreateNewOne(clusterName);
 
         final StreamSource<Document> mongoSource = MongoSources
-                .stream(clusterName + "_mongo-long-stream", getMongoClient(mongoConnectionString))
+                .stream(getMongoClient(mongoConnectionString))
                 .database(MONGO_DATABASE)
                 .collection(clusterName)
                 .startAtOperationTime(MongoUtilities.bsonTimestampFromTimeMillis(begin))

@@ -25,7 +25,6 @@ import com.hazelcast.core.Hazelcast;
 import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.jet.config.JetConfig;
 import com.hazelcast.logging.ILogger;
-import org.junit.Test;
 
 import java.io.IOException;
 import java.util.concurrent.ExecutorService;

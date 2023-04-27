@@ -201,12 +201,13 @@ public class ElasticTest extends AbstractSoakTest {
                 client.indices().delete(
                         new DeleteIndexRequest("elastictest-index" + indexCounter), RequestOptions.DEFAULT);
                 return;
-            } catch (IOException ex) {
+            } catch (Exception ex) {
                 logger.info("elastictest-index" + indexCounter + " cannot be deleted, counter " + counter, ex);
                 counter++;
                 sleepSeconds(5);
             }
         }
+        throw new AssertionError("elastictest-index" + indexCounter + " cannot be deleted");
     }
 
     private void clearSinkList(HazelcastInstance client) {

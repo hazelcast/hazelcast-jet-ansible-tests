@@ -199,8 +199,8 @@ public class MongoSqlTest extends AbstractSoakTest {
                 sleepMillis(ASSERTION_SLEEP_MS);
             }
         }
-        throw new AssertionError("Job " + job.getName() + " does not have expected status: " + RUNNING
-                + ". Job status: " + job.getStatus());
+        throw new AssertionError(format("Job %s does not have expected status: %s. Job status: %s",
+                job.getName(), RUNNING, job.getStatus()));
     }
 
     private void insertDataViaMongoClientAndVerify(final int jobCounter, final SqlService sqlService,
@@ -273,7 +273,6 @@ public class MongoSqlTest extends AbstractSoakTest {
     private void deleteViaMongoClientAndVerify(final String sinkCollectionName) {
         mongoClient.getDatabase(MONGO_DATABASE).getCollection(sinkCollectionName)
                 .deleteMany(new Document().append("source", "mongoClient"));
-
         assertSqlResultsCountEventually(itemCount, sqlService, SELECT_COUNT_FROM + sinkCollectionName);
     }
 
@@ -371,7 +370,6 @@ public class MongoSqlTest extends AbstractSoakTest {
     private static void assertSqlResultsCountEventually(final long expectedCount, final SqlService sqlService,
                                                         final String sql, final Object... sqlArguments) {
         Long count = null;
-
         for (int i = 0; i < ASSERTION_ATTEMPTS; i++) {
             try (SqlResult sqlResult = sqlService.execute(sql, sqlArguments)) {
                 count = sqlResult.iterator().next().getObject(0);
@@ -382,8 +380,8 @@ public class MongoSqlTest extends AbstractSoakTest {
                 }
             }
         }
-        throw new AssertionError("Sql \" " + sql + "\" does not have expected count: " + expectedCount
-                + ". Current count : " + count);
+        throw new AssertionError(format("Sql \" %s\" does not have expected count: %d. Current count : %d",
+                sql, expectedCount, count));
     }
 
     private void insertDataViaSqlService(final String sourceCollectionName, final int jobCounter) {

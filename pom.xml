@@ -145,6 +145,7 @@
                 <module>light-jobs-test</module>
                 <module>missing-permission-test</module>
                 <module>mongo-long-stream-test</module>
+                <module>mongo-sql-test</module>
                 <module>mongo-test</module>
                 <module>python-test</module>
                 <module>return-result-to-caller-test</module>
@@ -193,6 +194,7 @@
                 <module>large-snapshot-chunk-test</module>
                 <module>light-jobs-test</module>
                 <module>mongo-long-stream-test</module>
+                <module>mongo-sql-test</module>
                 <module>mongo-test</module>
                 <module>missing-permission-test</module>
                 <module>python-test</module>

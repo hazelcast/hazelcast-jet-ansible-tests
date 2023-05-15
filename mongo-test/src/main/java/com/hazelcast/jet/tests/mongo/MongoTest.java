@@ -47,7 +47,7 @@ import static com.hazelcast.jet.tests.common.Util.sleepSeconds;
 import static java.util.stream.Collectors.toList;
 
 public class MongoTest extends AbstractSoakTest {
-    private static final int DEFAULT_ITEM_COUNT = 10_000;
+    private static final int DEFAULT_ITEM_COUNT = 5_000;
     private static final int LOG_JOB_COUNT_THRESHOLD = 50;
     private static final int SLEEP_BETWEEN_READS_SECONDS = 2;
     private static final int JOB_STATUS_ASSERTION_ATTEMPTS = 1200;

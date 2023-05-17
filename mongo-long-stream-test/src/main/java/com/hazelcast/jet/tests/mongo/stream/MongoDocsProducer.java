@@ -57,7 +57,7 @@ public class MongoDocsProducer {
                 if (id % PRINT_LOG_INSERT_ITEMS == 0) {
                     logger.info(String.format("Inserted %d docs into %s collection)", id, collectionName));
                 }
-                sleepMillis(100);
+                sleepMillis(150);
             }
         } finally {
             logger.info(String.format("Total number of inserted docs into %s collection is %d",

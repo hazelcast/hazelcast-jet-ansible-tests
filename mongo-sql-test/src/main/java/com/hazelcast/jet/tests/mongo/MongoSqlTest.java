@@ -21,6 +21,8 @@ import com.hazelcast.jet.Job;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
 import com.hazelcast.sql.SqlResult;
 import com.hazelcast.sql.SqlService;
+import com.mongodb.ConnectionString;
+import com.mongodb.MongoClientSettings;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoClients;
 import com.mongodb.client.MongoCollection;
@@ -44,6 +46,7 @@ import static com.hazelcast.jet.core.JobStatus.RUNNING;
 import static com.hazelcast.jet.tests.common.Util.sleepMillis;
 import static com.hazelcast.jet.tests.common.Util.sleepSeconds;
 import static java.lang.String.format;
+import static java.util.concurrent.TimeUnit.MINUTES;
 
 public class MongoSqlTest extends AbstractSoakTest {
     public static final String SELECT_COUNT_FROM = "SELECT COUNT(*) FROM ";
@@ -74,7 +77,12 @@ public class MongoSqlTest extends AbstractSoakTest {
     public void init(final HazelcastInstance client) {
         mongoConnectionString = "mongodb://" + property("mongoIp", "127.0.0.1") + ":27017";
         itemCount = propertyInt("itemCount", DEFAULT_ITEM_COUNT);
-        mongoClient = MongoClients.create(mongoConnectionString);
+        MongoClientSettings mongoClientSettings = MongoClientSettings.builder()
+                .applyConnectionString(new ConnectionString(mongoConnectionString))
+                .applyToConnectionPoolSettings(builder -> builder
+                        .minSize(10)
+                        .maxConnectionIdleTime(1, MINUTES)).build();
+        mongoClient = MongoClients.create(mongoClientSettings);
         sqlService = client.getSql();
     }
 

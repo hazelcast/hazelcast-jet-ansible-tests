@@ -75,7 +75,6 @@ public class MongoTest extends AbstractSoakTest {
     private MongoClient mongoClient;
 
     public static void main(final String[] args) throws Exception {
-        setRunLocal();
         new MongoTest().run(args);
     }
 

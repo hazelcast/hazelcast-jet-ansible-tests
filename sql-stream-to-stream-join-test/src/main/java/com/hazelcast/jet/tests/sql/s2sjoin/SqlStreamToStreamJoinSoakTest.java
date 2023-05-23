@@ -21,9 +21,8 @@ import com.hazelcast.jet.sql.impl.connector.SqlConnector;
 import com.hazelcast.jet.sql.impl.connector.kafka.KafkaSqlConnector;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
 import com.hazelcast.jet.tests.common.Util;
+import com.hazelcast.jet.tests.common.sql.DataIngestionTask;
 import com.hazelcast.jet.tests.common.sql.TestRecordProducer;
-import com.hazelcast.logging.ILogger;
-import com.hazelcast.sql.HazelcastSqlException;
 import com.hazelcast.sql.SqlResult;
 import com.hazelcast.sql.SqlRow;
 import com.hazelcast.sql.SqlService;
@@ -35,8 +34,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import static com.hazelcast.jet.tests.common.Util.getTimeElapsed;
 import static com.hazelcast.jet.tests.common.Util.randomName;
@@ -44,16 +41,12 @@ import static com.hazelcast.jet.tests.common.Util.randomName;
 public class SqlStreamToStreamJoinSoakTest extends AbstractSoakTest {
     private static final String EVENTS_SOURCE_PREFIX = "events_topic_";
 
-    private static final int DEFAULT_QUERY_TIMEOUT_MILLIS = 10;
     private static final int PROGRESS_PRINT_QUERIES_INTERVAL = 20_000;
-
     private static final int EVENTS_START_TIME = 0;
     private static final int EVENTS_COUNT_PER_BATCH = 100;
     private static final int EVENT_TIME_INTERVAL = 1;
     private static final int STREAM_RESULTS_TIMEOUT_SECONDS = 600;
     private static final int PRODUCER_RETRY_DELAY_SECONDS = 10;
-
-    private int queryTimeout;
 
     private long startTime;
     private long currentQueryCount;
@@ -78,7 +71,6 @@ public class SqlStreamToStreamJoinSoakTest extends AbstractSoakTest {
         streamingResultsExecutor = Executors.newSingleThreadExecutor();
         streamingResultsTimeout = propertyInt("streamingResultsTimeout", STREAM_RESULTS_TIMEOUT_SECONDS);
         startTime = System.currentTimeMillis();
-        queryTimeout = propertyInt("queryTimeout", DEFAULT_QUERY_TIMEOUT_MILLIS);
         String brokerUri = property("brokerUri", "localhost:9092");
 
         logger.info("Creating mapping to Kafka with brokerUri: " + brokerUri);
@@ -120,7 +112,10 @@ public class SqlStreamToStreamJoinSoakTest extends AbstractSoakTest {
     @Override
     protected final void test(HazelcastInstance client, String name) throws ExecutionException, InterruptedException {
 
-        DataIngestionTask producerTask = new DataIngestionTask(sqlService, sourceName, queryTimeout, logger);
+        DataIngestionTask producerTask = new DataIngestionTask(
+                sqlService, sourceName, EVENTS_START_TIME + EVENTS_COUNT_PER_BATCH,
+                EVENTS_COUNT_PER_BATCH, EVENT_TIME_INTERVAL, PRODUCER_RETRY_DELAY_SECONDS,
+                SqlStreamToStreamJoinSoakTest::createSingleRecord);
         ingestionExecutorService.execute(producerTask);
 
         Util.sleepMillis(30_000L);
@@ -171,56 +166,6 @@ public class SqlStreamToStreamJoinSoakTest extends AbstractSoakTest {
             ingestionExecutorService.shutdownNow();
             streamingResultsExecutor.shutdownNow();
             Thread.currentThread().interrupt();
-        }
-    }
-
-    static class DataIngestionTask implements Runnable {
-        private final SqlService sqlService;
-        private final String sourceName;
-        private final long queryTimeout;
-        private final AtomicBoolean continueProducing;
-        private final ILogger logger;
-
-        DataIngestionTask(
-                SqlService sqlService,
-                String sourceName,
-                long queryTimeout,
-                ILogger logger) {
-            this.sqlService = sqlService;
-            this.sourceName = sourceName;
-            this.queryTimeout = queryTimeout;
-            this.continueProducing = new AtomicBoolean(true);
-            this.logger = logger;
-        }
-
-        @Override
-        public void run() {
-            AtomicInteger currentEventStartTime = new AtomicInteger(EVENTS_START_TIME);
-
-            while (continueProducing.get()) {
-                // ingest data to Kafka using new timestamps
-                String sql = "INSERT INTO " + sourceName + " VALUES" +
-                        TestRecordProducer.produceTradeRecords(
-                                currentEventStartTime.addAndGet(EVENTS_COUNT_PER_BATCH),
-                                EVENTS_COUNT_PER_BATCH,
-                                EVENT_TIME_INTERVAL,
-                                SqlStreamToStreamJoinSoakTest::createSingleRecord
-                        );
-
-                try (SqlResult res = sqlService.execute(sql)) {
-                    AbstractSoakTest.assertEquals(0L, res.updateCount());
-                } catch (HazelcastSqlException e) {
-                    logger.warning("Failed to produce new records. Retrying in 10 seconds.", e);
-                    Util.sleepSeconds(PRODUCER_RETRY_DELAY_SECONDS);
-                    continue;
-                }
-
-                Util.sleepMillis(queryTimeout);
-            }
-        }
-
-        public void stopProducingEvents() {
-            continueProducing.set(false);
         }
     }
 

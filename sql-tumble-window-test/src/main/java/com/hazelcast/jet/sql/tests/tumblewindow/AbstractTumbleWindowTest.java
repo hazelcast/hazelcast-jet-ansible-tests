@@ -21,9 +21,7 @@ import com.hazelcast.internal.util.UuidUtil;
 import com.hazelcast.jet.sql.impl.connector.kafka.KafkaSqlConnector;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
 import com.hazelcast.jet.tests.common.Util;
-import com.hazelcast.jet.tests.common.sql.TestRecordProducer;
-import com.hazelcast.logging.ILogger;
-import com.hazelcast.sql.HazelcastSqlException;
+import com.hazelcast.jet.tests.common.sql.DataIngestionTask;
 import com.hazelcast.sql.SqlResult;
 import com.hazelcast.sql.SqlRow;
 import com.hazelcast.sql.SqlService;
@@ -35,7 +33,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import static com.hazelcast.jet.sql.impl.connector.SqlConnector.OPTION_KEY_FORMAT;
 import static com.hazelcast.jet.sql.impl.connector.SqlConnector.OPTION_VALUE_FORMAT;
@@ -47,8 +44,10 @@ public abstract class AbstractTumbleWindowTest extends AbstractSoakTest {
 
     private static final int EVENT_START_TIME = 0;
     private static final int EVENT_WINDOW_COUNT = 10;
+    private static final int EVENT_TIME_INTERVAL = 1;
     private static final int LAG_TIME = 2;
     private static final int STREAM_RESULTS_TIMEOUT_SECONDS = 600;
+    private static final int PRODUCER_RETRY_DELAY_SECONDS = 10;
 
     private final int queryTimeout = propertyInt("queryTimeout", DEFAULT_QUERY_TIMEOUT_MILLIS);
     private final String brokerUri = property("brokerUri", "localhost:9092");
@@ -74,7 +73,9 @@ public abstract class AbstractTumbleWindowTest extends AbstractSoakTest {
     protected void init(HazelcastInstance client) {
         sqlService = client.getSql();
         ingestionExecutor = Executors.newSingleThreadExecutor();
-        producerTask = new DataIngestionTask(sqlService, sourceName, queryTimeout, logger);
+        producerTask = new DataIngestionTask(sqlService, sourceName, EVENT_WINDOW_COUNT,
+                EVENT_WINDOW_COUNT, EVENT_TIME_INTERVAL, PRODUCER_RETRY_DELAY_SECONDS,
+                AbstractTumbleWindowTest::createSingleRecord);
         aggregationResultsExecutor = Executors.newSingleThreadExecutor();
 
         SqlResult sourceMappingCreateResult = sqlService.execute("CREATE MAPPING " + sourceName + " ("
@@ -185,69 +186,4 @@ public abstract class AbstractTumbleWindowTest extends AbstractSoakTest {
         return "o_" + UuidUtil.newUnsecureUuidString().replace('-', '_');
     }
 
-    static class DataIngestionTask implements Runnable {
-        private static final int PRODUCER_RETRY_DELAY_SECONDS = 10;
-        private final SqlService sqlService;
-        private final String sourceName;
-        private final long queryTimeout;
-        private boolean continueProducing;
-        private final ILogger logger;
-
-        DataIngestionTask(
-                SqlService sqlService,
-                String sourceName,
-                long queryTimeout,
-                ILogger logger) {
-            this.sqlService = sqlService;
-            this.sourceName = sourceName;
-            this.queryTimeout = queryTimeout;
-            this.continueProducing = true;
-            this.logger = logger;
-        }
-
-        @Override
-        public void run() {
-            AtomicInteger currentEventStartTime = new AtomicInteger(EVENT_WINDOW_COUNT);
-
-            while (continueProducing) {
-                // produce late events at rate inversely proportional to queryTimeout
-                boolean includeLateEvent = currentEventStartTime.get() % (queryTimeout * 120) == 0;
-
-                // ingest data to Kafka using new timestamps
-                try (SqlResult res = produceTradeRecords(
-                        currentEventStartTime.getAndAdd(EVENT_WINDOW_COUNT), includeLateEvent)) {
-                    AbstractSoakTest.assertEquals(0L, res.updateCount());
-                } catch (HazelcastSqlException e) {
-                    logger.warning("Failed to produce new records. Retrying in 10 seconds.", e);
-                    Util.sleepSeconds(PRODUCER_RETRY_DELAY_SECONDS);
-                    continue;
-                }
-
-                Util.sleepMillis(queryTimeout);
-            }
-        }
-
-        public void stopProducingEvents() {
-            this.continueProducing = false;
-        }
-
-        private SqlResult produceTradeRecords(int currentEventStartTime, boolean includeLate) {
-            StringBuilder queryBuilder = new StringBuilder("INSERT INTO " + sourceName + " VALUES");
-            queryBuilder.append(TestRecordProducer.produceTradeRecords(
-                    currentEventStartTime,
-                    EVENT_WINDOW_COUNT, 1,
-                    AbstractTumbleWindowTest::createSingleRecord
-            ));
-
-            if (includeLate) {
-                queryBuilder.append(", ").append(TestRecordProducer.produceTradeRecords(
-                        Long.max(0, currentEventStartTime - LAG_TIME * 10_000L),
-                        1, 1,
-                        AbstractTumbleWindowTest::createSingleRecord
-                ));
-            }
-
-            return sqlService.execute(queryBuilder.toString());
-        }
-    }
 }

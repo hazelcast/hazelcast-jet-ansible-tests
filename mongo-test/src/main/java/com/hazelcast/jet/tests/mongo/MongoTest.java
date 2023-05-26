@@ -30,6 +30,8 @@ import com.hazelcast.jet.pipeline.Sinks;
 import com.hazelcast.jet.pipeline.StreamSource;
 import com.hazelcast.jet.pipeline.test.TestSources;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
+import com.mongodb.ConnectionString;
+import com.mongodb.MongoClientSettings;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoClients;
 import org.bson.BsonTimestamp;
@@ -44,10 +46,11 @@ import java.util.stream.IntStream;
 import static com.hazelcast.jet.core.JobStatus.RUNNING;
 import static com.hazelcast.jet.tests.common.Util.sleepMillis;
 import static com.hazelcast.jet.tests.common.Util.sleepSeconds;
+import static java.util.concurrent.TimeUnit.MINUTES;
 import static java.util.stream.Collectors.toList;
 
 public class MongoTest extends AbstractSoakTest {
-    private static final int DEFAULT_ITEM_COUNT = 10_000;
+    private static final int DEFAULT_ITEM_COUNT = 5_000;
     private static final int LOG_JOB_COUNT_THRESHOLD = 50;
     private static final int SLEEP_BETWEEN_READS_SECONDS = 2;
     private static final int JOB_STATUS_ASSERTION_ATTEMPTS = 1200;
@@ -69,6 +72,7 @@ public class MongoTest extends AbstractSoakTest {
     private String mongoConnectionString;
     private int itemCount;
     private List<Integer> inputItems;
+    private MongoClient mongoClient;
 
     public static void main(final String[] args) throws Exception {
         new MongoTest().run(args);
@@ -79,6 +83,12 @@ public class MongoTest extends AbstractSoakTest {
         mongoConnectionString = "mongodb://" + property("mongoIp", "127.0.0.1") + ":27017";
         itemCount = propertyInt("itemCount", DEFAULT_ITEM_COUNT);
         inputItems = IntStream.range(0, itemCount).boxed().collect(toList());
+        final MongoClientSettings mongoClientSettings = MongoClientSettings.builder()
+                .applyConnectionString(new ConnectionString(mongoConnectionString))
+                .applyToConnectionPoolSettings(builder -> builder
+                        .minSize(10)
+                        .maxConnectionIdleTime(1, MINUTES)).build();
+        mongoClient = MongoClients.create(mongoClientSettings);
     }
 
     @Override
@@ -111,6 +121,7 @@ public class MongoTest extends AbstractSoakTest {
             }
         } finally {
             logger.info("Test finished with job count: " + jobCounter);
+            mongoClient.close();
         }
     }
 
@@ -143,43 +154,13 @@ public class MongoTest extends AbstractSoakTest {
                 + ". Job status: " + job.getStatus());
     }
 
-    private void executeWriteToMongoPipeline(final HazelcastInstance client, final int collectionCounter) {
-        final String connectionString = mongoConnectionString;
+    private void deleteCollectionAndCreateNewOne(final int collectionCounter) {
+        mongoClient.getDatabase(MONGO_DATABASE)
+                    .getCollection(COLLECTION_PREFIX + collectionCounter)
+                    .drop();
 
-        final Sink<Document> mongoSink = MongoSinks.builder(Document.class,
-                        () -> MongoClients.create(connectionString))
-                .into(MONGO_DATABASE, COLLECTION_PREFIX + collectionCounter)
-                .identifyDocumentBy("_id", doc -> doc.get("_id"))
-                .build();
-
-        final Pipeline toMongo = Pipeline.create();
-        toMongo.readFrom(TestSources.items(inputItems))
-                .map(docIndex -> new Document()
-                        .append("docId", DOC_PREFIX + collectionCounter + DOC_COUNTER_PREFIX + docIndex))
-                .rebalance()
-                .writeTo(mongoSink);
-
-        final JobConfig jobConfig = new JobConfig();
-        jobConfig.setName(WRITE_PREFIX + collectionCounter);
-        client.getJet().newJob(toMongo, jobConfig).join();
-    }
-
-    private void executeBatchReadFromMongoPipeline(final HazelcastInstance client, final int collectionCounter) {
-        final String connectionString = mongoConnectionString;
-
-        final BatchSource<Document> mongoSource = MongoSources
-                .batch(() -> MongoClients.create(connectionString))
-                .database(MONGO_DATABASE)
-                .collection(COLLECTION_PREFIX + collectionCounter)
-                .build();
-
-        final Pipeline fromMongo = Pipeline.create();
-        fromMongo.readFrom(mongoSource)
-                .writeTo(Sinks.list(BATCH_SINK_LIST_NAME));
-
-        final JobConfig jobConfig = new JobConfig();
-        jobConfig.setName(BATCH_READ_FROM_PREFIX + collectionCounter);
-        client.getJet().newJob(fromMongo, jobConfig).join();
+        mongoClient.getDatabase(MONGO_DATABASE)
+                    .createCollection(COLLECTION_PREFIX + collectionCounter);
     }
 
     private void startStreamReadFromMongoPipeline(final HazelcastInstance client, final int collectionCounter) {
@@ -191,6 +172,7 @@ public class MongoTest extends AbstractSoakTest {
                 .database(MONGO_DATABASE)
                 .collection(COLLECTION_PREFIX + collectionCounter)
                 .startAtOperationTime(startAt)
+                .throwOnNonExisting(false)
                 .build();
 
         final Pipeline fromMongo = Pipeline.create();
@@ -204,6 +186,28 @@ public class MongoTest extends AbstractSoakTest {
         final Job job = client.getJet().newJob(fromMongo, jobConfig);
         assertJobStatusEventually(job);
 
+    }
+
+    private void executeWriteToMongoPipeline(final HazelcastInstance client, final int collectionCounter) {
+        final String connectionString = mongoConnectionString;
+
+        final Sink<Document> mongoSink = MongoSinks.builder(Document.class,
+                        () -> MongoClients.create(connectionString))
+                .into(MONGO_DATABASE, COLLECTION_PREFIX + collectionCounter)
+                .identifyDocumentBy("_id", doc -> doc.get("_id"))
+                .throwOnNonExisting(false)
+                .build();
+
+        final Pipeline toMongo = Pipeline.create();
+        toMongo.readFrom(TestSources.items(inputItems))
+                .map(docIndex -> new Document()
+                        .append("docId", DOC_PREFIX + collectionCounter + DOC_COUNTER_PREFIX + docIndex))
+                .rebalance()
+                .writeTo(mongoSink);
+
+        final JobConfig jobConfig = new JobConfig();
+        jobConfig.setName(WRITE_PREFIX + collectionCounter);
+        client.getJet().newJob(toMongo, jobConfig).join();
     }
 
     private void assertBatchResults(final HazelcastInstance client, final int collectionCounter) {
@@ -222,15 +226,23 @@ public class MongoTest extends AbstractSoakTest {
         assertResults(client.getList(STREAM_SINK_LIST_NAME), collectionCounter, "stream");
     }
 
-    private void deleteCollectionAndCreateNewOne(final int collectionCounter) {
-        try (MongoClient mongoClients = MongoClients.create(mongoConnectionString)) {
-            mongoClients.getDatabase(MONGO_DATABASE)
-                    .getCollection(COLLECTION_PREFIX + collectionCounter)
-                    .drop();
+    private void executeBatchReadFromMongoPipeline(final HazelcastInstance client, final int collectionCounter) {
+        final String connectionString = mongoConnectionString;
 
-            mongoClients.getDatabase(MONGO_DATABASE)
-                    .createCollection(COLLECTION_PREFIX + collectionCounter);
-        }
+        final BatchSource<Document> mongoSource = MongoSources
+                .batch(() -> MongoClients.create(connectionString))
+                .database(MONGO_DATABASE)
+                .collection(COLLECTION_PREFIX + collectionCounter)
+                .throwOnNonExisting(false)
+                .build();
+
+        final Pipeline fromMongo = Pipeline.create();
+        fromMongo.readFrom(mongoSource)
+                .writeTo(Sinks.list(BATCH_SINK_LIST_NAME));
+
+        final JobConfig jobConfig = new JobConfig();
+        jobConfig.setName(BATCH_READ_FROM_PREFIX + collectionCounter);
+        client.getJet().newJob(fromMongo, jobConfig).join();
     }
 
     private void assertResults(final IList<Document> list, final int collectionCounter, final String type) {

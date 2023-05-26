@@ -19,47 +19,49 @@ package com.hazelcast.jet.tests.mongo.stream;
 import com.hazelcast.logging.ILogger;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoClients;
+import com.mongodb.client.MongoCollection;
 import org.bson.Document;
 
 import static com.hazelcast.jet.impl.util.Util.uncheckRun;
 import static com.hazelcast.jet.tests.common.Util.sleepMillis;
 
 public class MongoDocsProducer {
-    private static final int PRINT_LOG_INSERT_ITEMS = 10_000;
+    private static final int PRINT_LOG_INSERT_ITEMS = 5_000;
     private final String mongoUrl;
     private final String database;
-    private final String collection;
+    private final String collectionName;
     private final ILogger logger;
     private final Thread producerThread;
     private volatile boolean running = true;
     private volatile long producedItems;
 
 
-    public MongoDocsProducer(final String mongoUrl, final String database, final String collection, ILogger logger) {
+    public MongoDocsProducer(final String mongoUrl, final String database, final String collectionName, ILogger logger) {
         this.mongoUrl = mongoUrl;
         this.database = database;
-        this.collection = collection;
+        this.collectionName = collectionName;
         this.logger = logger;
         this.producerThread = new Thread(() -> uncheckRun(this::run));
     }
 
     private void run() {
         try (MongoClient client = MongoClients.create(mongoUrl)) {
+            MongoCollection<Document> collection = client.getDatabase(database)
+                    .getCollection(collectionName);
             long id = 0;
             while (running) {
-                client.getDatabase(database)
-                        .getCollection(collection)
+                collection
                         .insertOne(new Document("docId", id++));
                 producedItems = id;
 
                 if (id % PRINT_LOG_INSERT_ITEMS == 0) {
-                    logger.info(String.format("Inserted %d docs into %s collection)", id, collection));
+                    logger.info(String.format("Inserted %d docs into %s collection)", id, collectionName));
                 }
-                sleepMillis(50);
+                sleepMillis(150);
             }
         } finally {
             logger.info(String.format("Total number of inserted docs into %s collection is %d",
-                    collection,
+                    collectionName,
                     producedItems));
         }
     }

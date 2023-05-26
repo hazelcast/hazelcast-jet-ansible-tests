@@ -19,6 +19,7 @@
         <jdk.version>1.8</jdk.version>
         <hazelcast.version>5.3.0-SNAPSHOT</hazelcast.version>
         <mysql.version>8.0.29</mysql.version>
+        <mongodb.version>4.8.1</mongodb.version>
         <main.basedir>${project.basedir}</main.basedir>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <hadoop.version>3.3.0</hadoop.version>
@@ -145,6 +146,7 @@
                 <module>light-jobs-test</module>
                 <module>missing-permission-test</module>
                 <module>mongo-long-stream-test</module>
+                <module>mongo-sql-test</module>
                 <module>mongo-test</module>
                 <module>python-test</module>
                 <module>return-result-to-caller-test</module>
@@ -193,6 +195,7 @@
                 <module>large-snapshot-chunk-test</module>
                 <module>light-jobs-test</module>
                 <module>mongo-long-stream-test</module>
+                <module>mongo-sql-test</module>
                 <module>mongo-test</module>
                 <module>missing-permission-test</module>
                 <module>python-test</module>

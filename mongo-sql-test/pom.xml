@@ -4,7 +4,7 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <artifactId>mongo-long-stream-test</artifactId>
+    <artifactId>mongo-sql-test</artifactId>
 
     <parent>
         <artifactId>hazelcast-jet-ansible-tests</artifactId>
@@ -23,7 +23,7 @@
                 <configuration>
                     <archive>
                         <manifest>
-                            <mainClass>com.hazelcast.jet.tests.mongo.stream.MongoLongStreamTest</mainClass>
+                            <mainClass>com.hazelcast.jet.tests.mongo.MongoSqlTest</mainClass>
                         </manifest>
                     </archive>
                 </configuration>
@@ -45,7 +45,7 @@
                                 <transformer
                                         implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                                     <manifestEntries>
-                                        <Main-Class>com.hazelcast.jet.tests.mongo.stream.MongoLongStreamTest</Main-Class>
+                                        <Main-Class>com.hazelcast.jet.tests.mongo.MongoSqlTest</Main-Class>
                                     </manifestEntries>
                                 </transformer>
                             </transformers>
@@ -63,7 +63,7 @@
                             <artifactSet>
                                 <includes>
                                     <include>com.hazelcast.jet.tests:*</include>
-                                    <include>com.hazelcast.jet.tests.mongo.stream:*</include>
+                                    <include>com.hazelcast.jet.tests.mongo:*</include>
                                 </includes>
                             </artifactSet>
                         </configuration>
@@ -77,6 +77,11 @@
         <dependency>
             <groupId>com.hazelcast.jet</groupId>
             <artifactId>hazelcast-jet-mongodb</artifactId>
+            <version>${hazelcast.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.hazelcast</groupId>
+            <artifactId>hazelcast-sql</artifactId>
             <version>${hazelcast.version}</version>
         </dependency>
         <dependency>

@@ -26,6 +26,8 @@ import com.hazelcast.jet.pipeline.Pipeline;
 import com.hazelcast.jet.pipeline.StreamSource;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
 import com.hazelcast.logging.ILogger;
+import com.mongodb.ConnectionString;
+import com.mongodb.MongoClientSettings;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoClients;
 import org.bson.Document;
@@ -41,6 +43,7 @@ import static com.hazelcast.jet.tests.common.Util.sleepMillis;
 import static com.hazelcast.jet.tests.common.Util.sleepMinutes;
 import static com.hazelcast.jet.tests.common.Util.sleepSeconds;
 import static com.hazelcast.jet.tests.mongo.stream.MongoLongStreamTest.MongoClientSupplier.getMongoClient;
+import static java.util.concurrent.TimeUnit.MINUTES;
 
 public class MongoLongStreamTest extends AbstractSoakTest {
     private static final String MONGO_DATABASE = MongoLongStreamTest.class.getSimpleName();
@@ -52,6 +55,7 @@ public class MongoLongStreamTest extends AbstractSoakTest {
     private String mongoConnectionString;
     private int snapshotIntervalMs;
     private int timeoutForNoDataProcessedMin;
+    private MongoClient mongoClient;
 
     public static void main(final String[] args) throws Exception {
         new MongoLongStreamTest().run(args);
@@ -63,6 +67,12 @@ public class MongoLongStreamTest extends AbstractSoakTest {
         snapshotIntervalMs = propertyInt("snapshotIntervalMs", DEFAULT_SNAPSHOT_INTERVAL);
         timeoutForNoDataProcessedMin = propertyInt("timeoutForNoProcessedDataMin",
                 DEFAULT_TIMEOUT_FOR_NO_DATA_PROCESSED_MIN);
+        MongoClientSettings mongoClientSettings = MongoClientSettings.builder()
+                .applyConnectionString(new ConnectionString(mongoConnectionString))
+                .applyToConnectionPoolSettings(builder -> builder
+                        .minSize(10)
+                        .maxConnectionIdleTime(1, MINUTES)).build();
+        mongoClient = MongoClients.create(mongoClientSettings);
     }
 
     @Override
@@ -81,6 +91,7 @@ public class MongoLongStreamTest extends AbstractSoakTest {
                 .database(MONGO_DATABASE)
                 .collection(clusterName)
                 .startAtOperationTime(MongoUtilities.bsonTimestampFromTimeMillis(begin))
+                .throwOnNonExisting(false)
                 .build();
 
         final Pipeline fromMongo = Pipeline.create();
@@ -181,14 +192,12 @@ public class MongoLongStreamTest extends AbstractSoakTest {
     }
 
     private void deleteCollectionAndCreateNewOne(final String collectionName) {
-        try (MongoClient mongoClients = MongoClients.create(mongoConnectionString)) {
-            mongoClients.getDatabase(MONGO_DATABASE)
+        mongoClient.getDatabase(MONGO_DATABASE)
                     .getCollection(collectionName)
                     .drop();
 
-            mongoClients.getDatabase(MONGO_DATABASE)
+        mongoClient.getDatabase(MONGO_DATABASE)
                     .createCollection(collectionName);
-        }
     }
 
     @Override

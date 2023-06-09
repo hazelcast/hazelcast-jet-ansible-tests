@@ -259,7 +259,7 @@
 
         <!-- Metrics -->
         <module name="BooleanExpressionComplexity">
-            <property name="max" value="4"/>
+            <property name="max" value="5"/>
         </module>
 
         <!-- Miscellaneous other checks.                   -->

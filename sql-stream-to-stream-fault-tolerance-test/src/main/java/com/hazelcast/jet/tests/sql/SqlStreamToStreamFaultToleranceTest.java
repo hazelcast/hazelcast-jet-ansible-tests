@@ -105,6 +105,7 @@ public class SqlStreamToStreamFaultToleranceTest extends AbstractSoakTest {
 
         try {
             createSQLJob(client, sqlName, sinkTopic);
+            Util.sleepSeconds(15);
             verifySQLJob(client, sqlName, verifier);
         } finally {
             try (SqlResult dropJobResult = client.getSql().execute("DROP JOB IF EXISTS \"" + sqlName + "\"")) {

@@ -18,12 +18,9 @@ package com.hazelcast.jet.tests.common.sql;
 
 import com.hazelcast.jet.tests.common.Util;
 import com.hazelcast.logging.ILogger;
-import com.hazelcast.sql.HazelcastSqlException;
-import com.hazelcast.sql.SqlResult;
-import com.hazelcast.sql.SqlService;
 
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.BiFunction;
+import java.util.function.Function;
 
 import static com.hazelcast.logging.Logger.getLogger;
 
@@ -34,9 +31,8 @@ public class DataIngestionTask implements Runnable {
     private static final int DEFAULT_START_TIME = DEFAULT_COUNT_PER_BATCH;
     private static final int DEFAULT_TIME_INTERVAL = 1;
     private static final int DEFAULT_RETRY_DELAY_SECONDS = 10;
-
-    BiFunction<StringBuilder, Number, StringBuilder> createSingleRecord;
-    private final SqlService sqlService;
+    private final Function<Number, String> createValue;
+    private final String brokerUrl;
     private final String sourceName;
     private final long queryTimeout;
     private boolean continueProducing;
@@ -46,16 +42,15 @@ public class DataIngestionTask implements Runnable {
     private final int timeInterval;
     private final int retryDelaySeconds;
 
-    public DataIngestionTask(SqlService sqlService, String sourceName, int startTime,
-             int countPerBatch, int timeInterval, int retryDelaySeconds,
-             BiFunction<StringBuilder, Number, StringBuilder> createSingleRecord) {
-        this.sqlService = sqlService;
+    public DataIngestionTask(String brokerUrl, String sourceName, int startTime, int countPerBatch, int timeInterval,
+             int retryDelaySeconds, Function<Number, String> createValue) {
+        this.brokerUrl = brokerUrl;
         this.sourceName = sourceName;
         this.startTime = startTime;
         this.countPerBatch = countPerBatch;
         this.timeInterval = timeInterval;
         this.retryDelaySeconds = retryDelaySeconds;
-        this.createSingleRecord = createSingleRecord;
+        this.createValue = createValue;
 
         this.continueProducing = true;
         this.queryTimeout = Long.parseLong(
@@ -63,34 +58,34 @@ public class DataIngestionTask implements Runnable {
         this.logger = getLogger(getClass());
     }
 
-    public DataIngestionTask(SqlService sqlService, String sourceName,
-             BiFunction<StringBuilder, Number, StringBuilder> createSingleRecord) {
-        this(sqlService, sourceName, DEFAULT_START_TIME, DEFAULT_COUNT_PER_BATCH,
-            DEFAULT_TIME_INTERVAL, DEFAULT_RETRY_DELAY_SECONDS, createSingleRecord);
+    public DataIngestionTask(String brokerUrl, String sourceName,
+             Function<Number, String> createValue) {
+        this(brokerUrl, sourceName, DEFAULT_START_TIME, DEFAULT_COUNT_PER_BATCH,
+            DEFAULT_TIME_INTERVAL, DEFAULT_RETRY_DELAY_SECONDS, createValue);
     }
 
     @Override
     public void run() {
         AtomicInteger currentEventStartTime = new AtomicInteger(startTime);
 
-        while (continueProducing) {
-            // produce late events at rate inversely proportional to queryTimeout
-            boolean includeLateEvent = currentEventStartTime.get() % (queryTimeout * 120) == 0;
+        try (ItemProducer producer = new ItemProducer(brokerUrl)) {
+            while (continueProducing) {
+                // produce late events at rate inversely proportional to queryTimeout
+                boolean includeLateEvent = currentEventStartTime.get() % (queryTimeout * 120) == 0;
 
-            // ingest data to Kafka using new timestamps
-            try (SqlResult res = produceTradeRecords(
-                    currentEventStartTime.getAndAdd(countPerBatch), includeLateEvent)
-            ) {
-                // empty try-with-resources
-            } catch (HazelcastSqlException e) {
-                String warnMessage = String.format(
-                        "Failed to produce new records. Retrying in %d seconds.", retryDelaySeconds);
-                logger.warning(warnMessage, e);
-                Util.sleepSeconds(retryDelaySeconds);
-                continue;
+                // ingest data to Kafka using new timestamps
+                try {
+                    produceTradeRecords(producer, currentEventStartTime.getAndAdd(countPerBatch), includeLateEvent);
+                } catch (Exception e) {
+                    String warnMessage = String.format(
+                            "Failed to produce new records. Retrying in %d seconds.", retryDelaySeconds);
+                    logger.warning(warnMessage, e);
+                    Util.sleepSeconds(retryDelaySeconds);
+                    continue;
+                }
+
+                Util.sleepMillis(queryTimeout);
             }
-
-            Util.sleepMillis(queryTimeout);
         }
     }
 
@@ -98,25 +93,18 @@ public class DataIngestionTask implements Runnable {
         this.continueProducing = false;
     }
 
-    public SqlResult produceTradeRecords(int currentEventStartTime, boolean includeLate) {
-        StringBuilder queryBuilder = new StringBuilder("INSERT INTO " + sourceName + " VALUES");
-        queryBuilder.append(TestRecordProducer.produceTradeRecords(
-                currentEventStartTime,
-                countPerBatch,
-                timeInterval,
-                createSingleRecord
-        ));
+    private void produceTradeRecords(ItemProducer producer, int currentEventStartTime, boolean includeLate) {
+        producer.produceItems(sourceName, currentEventStartTime, countPerBatch, timeInterval, createValue);
 
         if (includeLate) {
             int lagTime = timeInterval * 2;
-            queryBuilder.append(", ").append(TestRecordProducer.produceTradeRecords(
+            producer.produceItems(
+                    sourceName,
                     Long.max(0, currentEventStartTime - lagTime * 10_000L),
                     1,
                     timeInterval,
-                    createSingleRecord
-            ));
+                    createValue
+            );
         }
-
-        return sqlService.execute(queryBuilder.toString());
     }
 }

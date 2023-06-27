@@ -24,10 +24,15 @@ import com.hazelcast.jet.sql.impl.connector.kafka.KafkaSqlConnector;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
 import com.hazelcast.jet.tests.common.Util;
 import com.hazelcast.jet.tests.common.sql.DataIngestionTask;
+import com.hazelcast.jet.tests.common.sql.ItemProducer;
+import com.hazelcast.shaded.org.json.JSONObject;
 import com.hazelcast.sql.SqlResult;
 import com.hazelcast.sql.SqlRow;
 import com.hazelcast.sql.SqlService;
 
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.Properties;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -50,6 +55,7 @@ public class SqlStreamToStreamFaultToleranceTest extends AbstractSoakTest {
     private final String viewName2 = "view2_" + randomName();
     private final String sinkName;
     private ExecutorService producerExecutorService;
+    private String brokerUri;
     private int snapshotIntervalMs;
     private Properties kafkaProps;
 
@@ -67,10 +73,10 @@ public class SqlStreamToStreamFaultToleranceTest extends AbstractSoakTest {
 
     @Override
     protected void init(HazelcastInstance client) {
+        brokerUri = property("brokerUri", "localhost:9092");
         snapshotIntervalMs = propertyInt("snapshotIntervalMs", DEFAULT_SNAPSHOT_INTERVAL);
         producerExecutorService = Executors.newFixedThreadPool(
                 propertyInt("producerThreadCount", DEFAULT_PRODUCER_THREAD_COUNT));
-        String brokerUri = property("brokerUri", "localhost:9092");
 
         kafkaProps = new Properties();
         kafkaProps.setProperty("key.serializer", "org.apache.kafka.common.serialization.IntegerSerializer");
@@ -87,14 +93,15 @@ public class SqlStreamToStreamFaultToleranceTest extends AbstractSoakTest {
         createKafkaDataConnection(client, sqlName);
         createMappingAndViews(client.getSql(), sqlName);
 
-        DataIngestionTask producerTask = new DataIngestionTask(
-                client.getSql(),
-                sqlName + "_" + sourceName,
-                SqlStreamToStreamFaultToleranceTest::createSingleRecord
-        );
-        producerTask.produceTradeRecords(0, false);
+        try (ItemProducer producer = new ItemProducer(brokerUri)) {
+            producer.produceItems(sqlName + "_" + sourceName, 0, 10, 1,
+                    SqlStreamToStreamFaultToleranceTest::createValue);
+        }
         Util.sleepMillis(queryTimeout);
 
+        DataIngestionTask producerTask = new DataIngestionTask(
+                brokerUri, sqlName + "_" + sourceName,
+                SqlStreamToStreamFaultToleranceTest::createValue);
         producerExecutorService.execute(producerTask);
 
         String sinkTopic = sqlName + "_" + sinkName;
@@ -135,11 +142,12 @@ public class SqlStreamToStreamFaultToleranceTest extends AbstractSoakTest {
         return true;
     }
 
-    private static StringBuilder createSingleRecord(StringBuilder sb, Number idx) {
-        sb.append(" (TO_TIMESTAMP_TZ(").append(idx).append("), ")
-                .append(idx)
-                .append(")");
-        return sb;
+    private static String createValue(Number idx) {
+        JSONObject value = new JSONObject();
+        LocalDateTime dateTime = LocalDateTime.ofEpochSecond((Long) idx, 0, ZoneOffset.UTC);
+        value.put("event_time", OffsetDateTime.of(dateTime, ZoneOffset.UTC));
+        value.put("event_tick", idx);
+        return value.toString();
     }
 
     private static String propertiesToOptions(Properties properties) {

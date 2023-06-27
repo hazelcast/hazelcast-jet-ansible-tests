@@ -22,11 +22,15 @@ import com.hazelcast.jet.sql.impl.connector.kafka.KafkaSqlConnector;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
 import com.hazelcast.jet.tests.common.Util;
 import com.hazelcast.jet.tests.common.sql.DataIngestionTask;
-import com.hazelcast.jet.tests.common.sql.TestRecordProducer;
+import com.hazelcast.jet.tests.common.sql.ItemProducer;
+import com.hazelcast.shaded.org.json.JSONObject;
 import com.hazelcast.sql.SqlResult;
 import com.hazelcast.sql.SqlRow;
 import com.hazelcast.sql.SqlService;
 
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.Iterator;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -55,6 +59,7 @@ public class SqlStreamToStreamJoinSoakTest extends AbstractSoakTest {
     private ExecutorService ingestionExecutorService;
     private ExecutorService streamingResultsExecutor;
     private int streamingResultsTimeout;
+    private String brokerUri;
 
     private final String sourceName;
     private final String viewName1 = "view1_" + randomName();
@@ -71,7 +76,7 @@ public class SqlStreamToStreamJoinSoakTest extends AbstractSoakTest {
         streamingResultsExecutor = Executors.newSingleThreadExecutor();
         streamingResultsTimeout = propertyInt("streamingResultsTimeout", STREAM_RESULTS_TIMEOUT_SECONDS);
         startTime = System.currentTimeMillis();
-        String brokerUri = property("brokerUri", "localhost:9092");
+        brokerUri = property("brokerUri", "localhost:9092");
 
         logger.info("Creating mapping to Kafka with brokerUri: " + brokerUri);
         SqlResult sourceMappingCreateResult = sqlService.execute("CREATE MAPPING " + sourceName + " ("
@@ -87,16 +92,15 @@ public class SqlStreamToStreamJoinSoakTest extends AbstractSoakTest {
         );
         AbstractSoakTest.assertEquals(0L, sourceMappingCreateResult.updateCount());
 
-        String initialIngestionQuery = "INSERT INTO " + sourceName + " VALUES" +
-                TestRecordProducer.produceTradeRecords(
-                        EVENTS_START_TIME,
-                        EVENTS_COUNT_PER_BATCH,
-                        EVENT_TIME_INTERVAL,
-                        SqlStreamToStreamJoinSoakTest::createSingleRecord
-                );
-        logger.info("Initial ingestion query: " + initialIngestionQuery);
-        SqlResult initialDataIngestionResult = sqlService.execute(initialIngestionQuery);
-        AbstractSoakTest.assertEquals(0L, initialDataIngestionResult.updateCount());
+        try (ItemProducer producer = new ItemProducer(brokerUri)) {
+            producer.produceItems(
+                sourceName,
+                EVENTS_START_TIME,
+                EVENTS_COUNT_PER_BATCH,
+                EVENT_TIME_INTERVAL,
+                SqlStreamToStreamJoinSoakTest::createValue
+            );
+        }
 
         sqlService.execute("CREATE VIEW " + viewName1 + " AS "
                 + "SELECT * FROM TABLE(IMPOSE_ORDER(TABLE "
@@ -113,9 +117,9 @@ public class SqlStreamToStreamJoinSoakTest extends AbstractSoakTest {
     protected final void test(HazelcastInstance client, String name) throws ExecutionException, InterruptedException {
 
         DataIngestionTask producerTask = new DataIngestionTask(
-                sqlService, sourceName, EVENTS_START_TIME + EVENTS_COUNT_PER_BATCH,
+                brokerUri, sourceName, EVENTS_START_TIME + EVENTS_COUNT_PER_BATCH,
                 EVENTS_COUNT_PER_BATCH, EVENT_TIME_INTERVAL, PRODUCER_RETRY_DELAY_SECONDS,
-                SqlStreamToStreamJoinSoakTest::createSingleRecord);
+                SqlStreamToStreamJoinSoakTest::createValue);
         ingestionExecutorService.execute(producerTask);
 
         Util.sleepMillis(30_000L);
@@ -184,11 +188,12 @@ public class SqlStreamToStreamJoinSoakTest extends AbstractSoakTest {
     }
 
 
-    private static StringBuilder createSingleRecord(StringBuilder sb, Number idx) {
-        sb.append(" (TO_TIMESTAMP_TZ(").append(idx).append("), ")
-                .append(idx)
-                .append(")");
-        return sb;
+    private static String createValue(Number idx) {
+        JSONObject value = new JSONObject();
+        LocalDateTime dateTime = LocalDateTime.ofEpochSecond((Long) idx, 0, ZoneOffset.UTC);
+        value.put("event_time", OffsetDateTime.of(dateTime, ZoneOffset.UTC));
+        value.put("event_tick", idx);
+        return value.toString();
     }
 
     public static void main(String[] args) throws Exception {

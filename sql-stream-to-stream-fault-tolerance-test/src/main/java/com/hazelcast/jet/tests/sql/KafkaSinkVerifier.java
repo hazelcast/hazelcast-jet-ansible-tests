@@ -43,6 +43,7 @@ public class KafkaSinkVerifier {
     private static final int PRINT_LOG_ITEMS = 10_000;
     private static final int QUEUE_SIZE_LIMIT = 20_000;
     private final Thread consumerThread;
+    private final String name;
     private final ILogger logger;
     private final KafkaConsumer<Integer, HazelcastJsonValue> consumer;
     private volatile boolean finished;
@@ -50,8 +51,9 @@ public class KafkaSinkVerifier {
     private final AtomicReference<Throwable> error;
     private long counter;
 
-    public KafkaSinkVerifier(Properties kafkaProps, String sinkTopic) {
+    public KafkaSinkVerifier(String name, Properties kafkaProps, String sinkTopic) {
         this.consumerThread = new Thread(() -> uncheckRun(this::run));
+        this.name = name;
         this.logger = getLogger(getClass());
 
         verificationQueue = new PriorityQueue<>(Comparator.comparing(ConsumerRecord::key));
@@ -93,7 +95,7 @@ public class KafkaSinkVerifier {
                 break;
             } else if (peeked.key() == counter) {
                 if (counter % PRINT_LOG_ITEMS == 0) {
-                    logger.info("Processed correctly item " + counter);
+                    logger.info(String.format("[%s] Processed correctly item %d", name, counter));
                 }
 
                 verifyRow(peeked);  // Verify the item was joined correctly
@@ -106,9 +108,9 @@ public class KafkaSinkVerifier {
             }
         }
         if (verificationQueue.size() >= QUEUE_SIZE_LIMIT) {
-            throw new AssertionError(String.format("Queue size exceeded while waiting for the next "
+            throw new AssertionError(String.format("[%s] Queue size exceeded while waiting for the next "
                             + "item. Limit=%d, expected next=%d, next in queue: %s, %s, %s, %s, ...",
-                    QUEUE_SIZE_LIMIT, counter, verificationQueue.poll(), verificationQueue.poll(),
+                    name, QUEUE_SIZE_LIMIT, counter, verificationQueue.poll(), verificationQueue.poll(),
                     verificationQueue.poll(), verificationQueue.poll()));
 
         }

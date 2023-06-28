@@ -105,7 +105,7 @@ public class SqlStreamToStreamFaultToleranceTest extends AbstractSoakTest {
         producerExecutorService.execute(producerTask);
 
         String sinkTopic = sqlName + "_" + sinkName;
-        KafkaSinkVerifier verifier = new KafkaSinkVerifier(kafkaProps, sinkTopic);
+        KafkaSinkVerifier verifier = new KafkaSinkVerifier(name, kafkaProps, sinkTopic);
         verifier.start();
 
         Util.sleepSeconds(30);

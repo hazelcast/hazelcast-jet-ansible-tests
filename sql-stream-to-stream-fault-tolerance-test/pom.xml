@@ -41,7 +41,7 @@
                 <configuration>
                     <archive>
                         <manifest>
-                            <mainClass>com.hazelcast.jet.tests.sql.SqlStreamToStreamFaultToleranceTest</mainClass>
+                            <mainClass>com.hazelcast.jet.tests.sql.s2sjoin.ft.SqlStreamToStreamFaultToleranceTest</mainClass>
                         </manifest>
                     </archive>
                 </configuration>
@@ -63,7 +63,7 @@
                                 <transformer
                                         implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                                     <manifestEntries>
-                                        <Main-Class>com.hazelcast.jet.tests.sql.SqlStreamToStreamFaultToleranceTest</Main-Class>
+                                        <Main-Class>com.hazelcast.jet.tests.sql.s2sjoin.ft.SqlStreamToStreamFaultToleranceTest</Main-Class>
                                     </manifestEntries>
                                 </transformer>
                             </transformers>

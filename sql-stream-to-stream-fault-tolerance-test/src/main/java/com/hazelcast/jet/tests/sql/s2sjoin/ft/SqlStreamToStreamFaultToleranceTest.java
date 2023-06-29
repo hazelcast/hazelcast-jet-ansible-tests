@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.hazelcast.jet.tests.sql;
+package com.hazelcast.jet.tests.sql.s2sjoin.ft;
 
 import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.jet.kafka.impl.HazelcastJsonValueDeserializer;

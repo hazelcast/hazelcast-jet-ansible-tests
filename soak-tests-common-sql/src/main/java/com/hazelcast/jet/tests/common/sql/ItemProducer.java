@@ -43,14 +43,11 @@ public class ItemProducer implements AutoCloseable {
         }
 
         long nextItem = startItem;
-        for (long i = startItem; i < startItem + itemCount - 1; i++) {
+        for (long i = startItem; i < startItem + itemCount; i++) {
             producer.send(new ProducerRecord<>(topic, null,
                     new HazelcastJsonValue(createValue.apply(nextItem))));
             nextItem += timeInterval;
         }
-
-        producer.send(new ProducerRecord<>(topic, null,
-                new HazelcastJsonValue(createValue.apply(nextItem))));
     }
 
     @Override

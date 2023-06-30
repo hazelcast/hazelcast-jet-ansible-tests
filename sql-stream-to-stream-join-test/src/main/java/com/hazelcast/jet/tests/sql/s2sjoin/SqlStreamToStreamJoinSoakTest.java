@@ -21,13 +21,16 @@ import com.hazelcast.jet.sql.impl.connector.SqlConnector;
 import com.hazelcast.jet.sql.impl.connector.kafka.KafkaSqlConnector;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
 import com.hazelcast.jet.tests.common.Util;
-import com.hazelcast.jet.tests.common.sql.TestRecordProducer;
-import com.hazelcast.logging.ILogger;
-import com.hazelcast.sql.HazelcastSqlException;
+import com.hazelcast.jet.tests.common.sql.DataIngestionTask;
+import com.hazelcast.jet.tests.common.sql.ItemProducer;
+import com.hazelcast.shaded.org.json.JSONObject;
 import com.hazelcast.sql.SqlResult;
 import com.hazelcast.sql.SqlRow;
 import com.hazelcast.sql.SqlService;
 
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.Iterator;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -35,8 +38,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import static com.hazelcast.jet.tests.common.Util.getTimeElapsed;
 import static com.hazelcast.jet.tests.common.Util.randomName;
@@ -44,16 +45,12 @@ import static com.hazelcast.jet.tests.common.Util.randomName;
 public class SqlStreamToStreamJoinSoakTest extends AbstractSoakTest {
     private static final String EVENTS_SOURCE_PREFIX = "events_topic_";
 
-    private static final int DEFAULT_QUERY_TIMEOUT_MILLIS = 10;
     private static final int PROGRESS_PRINT_QUERIES_INTERVAL = 20_000;
-
     private static final int EVENTS_START_TIME = 0;
     private static final int EVENTS_COUNT_PER_BATCH = 100;
     private static final int EVENT_TIME_INTERVAL = 1;
     private static final int STREAM_RESULTS_TIMEOUT_SECONDS = 600;
     private static final int PRODUCER_RETRY_DELAY_SECONDS = 10;
-
-    private int queryTimeout;
 
     private long startTime;
     private long currentQueryCount;
@@ -62,6 +59,7 @@ public class SqlStreamToStreamJoinSoakTest extends AbstractSoakTest {
     private ExecutorService ingestionExecutorService;
     private ExecutorService streamingResultsExecutor;
     private int streamingResultsTimeout;
+    private String brokerUri;
 
     private final String sourceName;
     private final String viewName1 = "view1_" + randomName();
@@ -78,8 +76,7 @@ public class SqlStreamToStreamJoinSoakTest extends AbstractSoakTest {
         streamingResultsExecutor = Executors.newSingleThreadExecutor();
         streamingResultsTimeout = propertyInt("streamingResultsTimeout", STREAM_RESULTS_TIMEOUT_SECONDS);
         startTime = System.currentTimeMillis();
-        queryTimeout = propertyInt("queryTimeout", DEFAULT_QUERY_TIMEOUT_MILLIS);
-        String brokerUri = property("brokerUri", "localhost:9092");
+        brokerUri = property("brokerUri", "localhost:9092");
 
         logger.info("Creating mapping to Kafka with brokerUri: " + brokerUri);
         SqlResult sourceMappingCreateResult = sqlService.execute("CREATE MAPPING " + sourceName + " ("
@@ -95,16 +92,15 @@ public class SqlStreamToStreamJoinSoakTest extends AbstractSoakTest {
         );
         AbstractSoakTest.assertEquals(0L, sourceMappingCreateResult.updateCount());
 
-        String initialIngestionQuery = "INSERT INTO " + sourceName + " VALUES" +
-                TestRecordProducer.produceTradeRecords(
-                        EVENTS_START_TIME,
-                        EVENTS_COUNT_PER_BATCH,
-                        EVENT_TIME_INTERVAL,
-                        SqlStreamToStreamJoinSoakTest::createSingleRecord
-                );
-        logger.info("Initial ingestion query: " + initialIngestionQuery);
-        SqlResult initialDataIngestionResult = sqlService.execute(initialIngestionQuery);
-        AbstractSoakTest.assertEquals(0L, initialDataIngestionResult.updateCount());
+        try (ItemProducer producer = new ItemProducer(brokerUri)) {
+            producer.produceItems(
+                sourceName,
+                EVENTS_START_TIME,
+                EVENTS_COUNT_PER_BATCH,
+                EVENT_TIME_INTERVAL,
+                SqlStreamToStreamJoinSoakTest::createValue
+            );
+        }
 
         sqlService.execute("CREATE VIEW " + viewName1 + " AS "
                 + "SELECT * FROM TABLE(IMPOSE_ORDER(TABLE "
@@ -120,7 +116,10 @@ public class SqlStreamToStreamJoinSoakTest extends AbstractSoakTest {
     @Override
     protected final void test(HazelcastInstance client, String name) throws ExecutionException, InterruptedException {
 
-        DataIngestionTask producerTask = new DataIngestionTask(sqlService, sourceName, queryTimeout, logger);
+        DataIngestionTask producerTask = new DataIngestionTask(
+                brokerUri, sourceName, EVENTS_START_TIME + EVENTS_COUNT_PER_BATCH,
+                EVENTS_COUNT_PER_BATCH, EVENT_TIME_INTERVAL, PRODUCER_RETRY_DELAY_SECONDS,
+                SqlStreamToStreamJoinSoakTest::createValue);
         ingestionExecutorService.execute(producerTask);
 
         Util.sleepMillis(30_000L);
@@ -174,56 +173,6 @@ public class SqlStreamToStreamJoinSoakTest extends AbstractSoakTest {
         }
     }
 
-    static class DataIngestionTask implements Runnable {
-        private final SqlService sqlService;
-        private final String sourceName;
-        private final long queryTimeout;
-        private final AtomicBoolean continueProducing;
-        private final ILogger logger;
-
-        DataIngestionTask(
-                SqlService sqlService,
-                String sourceName,
-                long queryTimeout,
-                ILogger logger) {
-            this.sqlService = sqlService;
-            this.sourceName = sourceName;
-            this.queryTimeout = queryTimeout;
-            this.continueProducing = new AtomicBoolean(true);
-            this.logger = logger;
-        }
-
-        @Override
-        public void run() {
-            AtomicInteger currentEventStartTime = new AtomicInteger(EVENTS_START_TIME);
-
-            while (continueProducing.get()) {
-                // ingest data to Kafka using new timestamps
-                String sql = "INSERT INTO " + sourceName + " VALUES" +
-                        TestRecordProducer.produceTradeRecords(
-                                currentEventStartTime.addAndGet(EVENTS_COUNT_PER_BATCH),
-                                EVENTS_COUNT_PER_BATCH,
-                                EVENT_TIME_INTERVAL,
-                                SqlStreamToStreamJoinSoakTest::createSingleRecord
-                        );
-
-                try (SqlResult res = sqlService.execute(sql)) {
-                    AbstractSoakTest.assertEquals(0L, res.updateCount());
-                } catch (HazelcastSqlException e) {
-                    logger.warning("Failed to produce new records. Retrying in 10 seconds.", e);
-                    Util.sleepSeconds(PRODUCER_RETRY_DELAY_SECONDS);
-                    continue;
-                }
-
-                Util.sleepMillis(queryTimeout);
-            }
-        }
-
-        public void stopProducingEvents() {
-            continueProducing.set(false);
-        }
-    }
-
     private void printProgress() {
         long nextPrintCount = lastProgressPrintCount + PROGRESS_PRINT_QUERIES_INTERVAL;
         boolean toPrint = currentQueryCount >= nextPrintCount;
@@ -239,11 +188,12 @@ public class SqlStreamToStreamJoinSoakTest extends AbstractSoakTest {
     }
 
 
-    private static StringBuilder createSingleRecord(StringBuilder sb, Number idx) {
-        sb.append(" (TO_TIMESTAMP_TZ(").append(idx).append("), ")
-                .append(idx)
-                .append(")");
-        return sb;
+    private static String createValue(Number idx) {
+        JSONObject value = new JSONObject();
+        LocalDateTime dateTime = LocalDateTime.ofEpochSecond((Long) idx, 0, ZoneOffset.UTC);
+        value.put("event_time", OffsetDateTime.of(dateTime, ZoneOffset.UTC));
+        value.put("event_tick", idx);
+        return value.toString();
     }
 
     public static void main(String[] args) throws Exception {

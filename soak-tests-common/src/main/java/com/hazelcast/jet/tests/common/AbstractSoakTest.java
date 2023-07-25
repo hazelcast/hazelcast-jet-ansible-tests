@@ -62,7 +62,9 @@ public abstract class AbstractSoakTest {
                     .setName("CooperativeMapCacheSourceTest_SourceCache");
             cacheConfig.getEvictionConfig().setSize(CACHE_EVICTION_SIZE);
             config.addCacheConfig(cacheConfig);
-            config.setJetConfig(new JetConfig().setEnabled(true));
+            config.setJetConfig(new JetConfig()
+                    .setEnabled(true)
+                    .setResourceUploadEnabled(true));
 
             instances = new HazelcastInstance[]{
                 Hazelcast.newHazelcastInstance(config), Hazelcast.newHazelcastInstance(config)};

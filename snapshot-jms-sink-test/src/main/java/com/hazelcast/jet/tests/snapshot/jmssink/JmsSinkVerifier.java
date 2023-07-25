@@ -18,11 +18,12 @@ package com.hazelcast.jet.tests.snapshot.jmssink;
 
 import com.hazelcast.logging.ILogger;
 import java.util.PriorityQueue;
-import javax.jms.Connection;
-import javax.jms.Message;
-import javax.jms.MessageConsumer;
-import javax.jms.Session;
-import javax.jms.TextMessage;
+
+import jakarta.jms.Connection;
+import jakarta.jms.Message;
+import jakarta.jms.MessageConsumer;
+import jakarta.jms.Session;
+import jakarta.jms.TextMessage;
 import org.apache.activemq.ActiveMQConnectionFactory;
 
 import static com.hazelcast.jet.impl.util.Util.uncheckRun;

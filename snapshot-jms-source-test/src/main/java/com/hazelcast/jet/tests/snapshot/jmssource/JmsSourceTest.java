@@ -28,11 +28,10 @@ import com.hazelcast.jet.pipeline.StreamSource;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
 import com.hazelcast.jet.tests.jms.JmsMessageProducer;
 import com.hazelcast.logging.ILogger;
+import jakarta.jms.ConnectionFactory;
+import jakarta.jms.TextMessage;
 import org.apache.activemq.ActiveMQConnectionFactory;
 
-import javax.jms.ConnectionFactory;
-import javax.jms.TextMessage;
-import java.io.IOException;
 import java.util.Map;
 
 import static com.hazelcast.jet.core.JobStatus.FAILED;
@@ -59,7 +58,7 @@ public class JmsSourceTest extends AbstractSoakTest {
     }
 
     @Override
-    public void init(HazelcastInstance client) throws IOException {
+    public void init(HazelcastInstance client) {
         snapshotIntervalMs = propertyInt("snapshotIntervalMs", SNAPSHOT_INTERVAL);
         brokerURL = property("brokerURL", "tcp://localhost:61616");
     }

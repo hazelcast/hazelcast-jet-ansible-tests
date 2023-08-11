@@ -7,7 +7,7 @@
     <groupId>com.hazelcast.jet.tests</groupId>
     <artifactId>hazelcast-jet-ansible-tests</artifactId>
     <packaging>pom</packaging>
-    <version>5.3.1-SNAPSHOT</version>
+    <version>5.3.2-SNAPSHOT</version>
     <description>Soak Tests for Hazelcast Jet</description>
     <modules>
         <module>remote-controller-client</module>
@@ -17,7 +17,7 @@
 
     <properties>
         <jdk.version>1.8</jdk.version>
-        <hazelcast.version>5.3.1-SNAPSHOT</hazelcast.version>
+        <hazelcast.version>5.3.2-SNAPSHOT</hazelcast.version>
         <mysql.version>8.0.29</mysql.version>
         <main.basedir>${project.basedir}</main.basedir>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>

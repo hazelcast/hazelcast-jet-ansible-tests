@@ -43,6 +43,7 @@ import java.util.Iterator;
 import java.util.StringTokenizer;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.LockSupport;
+import javax.net.ssl.SSLException;
 
 import static com.hazelcast.function.Functions.wholeItem;
 import static com.hazelcast.jet.aggregate.AggregateOperations.counting;
@@ -262,8 +263,10 @@ public class S3WordCountTest extends AbstractSoakTest {
             String originClassName = ((UndefinedErrorCodeException) e).getOriginClassName();
             return originClassName.equals(SocketTimeoutException.class.getName())
                     || originClassName.equals(SocketException.class.getName())
+                    || originClassName.equals(SSLException.class.getName())
                     || e.getMessage().contains(SocketTimeoutException.class.getName())
-                    || e.getMessage().contains(SocketException.class.getName());
+                    || e.getMessage().contains(SocketException.class.getName())
+                    || e.getMessage().contains(SSLException.class.getName());
         }
         Throwable cause = e.getCause();
         if (cause != null) {

@@ -36,6 +36,7 @@ import org.bson.Document;
 import org.bson.types.ObjectId;
 
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoField;
@@ -46,11 +47,13 @@ import static com.hazelcast.jet.core.JobStatus.RUNNING;
 import static com.hazelcast.jet.tests.common.Util.sleepMillis;
 import static com.hazelcast.jet.tests.common.Util.sleepSeconds;
 import static java.lang.String.format;
+import static java.time.format.DateTimeFormatter.ISO_DATE_TIME;
 import static java.util.concurrent.TimeUnit.MINUTES;
 
 public class MongoSqlTest extends AbstractSoakTest {
     public static final String SELECT_COUNT_FROM = "SELECT COUNT(*) FROM ";
     public static final String WHERE_UPDATED_AND_SOURCE_LIKE = " WHERE updated = ? AND source LIKE ?";
+    public static final String WHERE_SOURCE_LIKE = " WHERE source LIKE ?";
     public static final String DROP_MAPPING = "DROP MAPPING ";
     public static final String DROP_JOB = "DROP JOB ";
     private static final int DEFAULT_ITEM_COUNT = 1_000;
@@ -64,12 +67,14 @@ public class MongoSqlTest extends AbstractSoakTest {
     private static final String SINK_COLLECTION_PREFIX = "sink_collection_";
     private static final String DOC_PREFIX = "mongo-document-from-collection-";
     private static final String DOC_COUNTER_PREFIX = "-counter-";
+    private static final String LONG_LIVED_COLLECTION = "long_lived_collection";
     private String mongoConnectionString;
     private int itemCount;
     private MongoClient mongoClient;
     private SqlService sqlService;
 
     public static void main(final String[] args) throws Exception {
+        setRunLocal();
         new MongoSqlTest().run(args);
     }
 
@@ -92,24 +97,43 @@ public class MongoSqlTest extends AbstractSoakTest {
         final long begin = System.currentTimeMillis();
         dropMongoDatabase();
         try {
+            final String createDataConnection = "CREATE DATA CONNECTION"
+                    + " Mongo"
+                    + " TYPE Mongo SHARED"
+                    + " OPTIONS ( "
+                    + "  'connectionString' = '" + mongoConnectionString + "',"
+                    + "  'database' = '" + MONGO_DATABASE + "'"
+                    + "  )";
+            executeQueryWithNoErrorAssert(createDataConnection);
+
+            //Long-lived mapping
+            createLongLivedCollection(LONG_LIVED_COLLECTION);
+
+            final String createLongLivedCollectionMapping = "CREATE MAPPING "
+                    + LONG_LIVED_COLLECTION
+                    + " EXTERNAL NAME " + MONGO_DATABASE + "." + LONG_LIVED_COLLECTION + " ("
+                    + " id OBJECT external name _id,"
+                    + " jobCounter INTEGER,"
+                    + " jobFinishedAt VARCHAR,"
+                    + " source VARCHAR"
+                    + " ) "
+                    + " DATA CONNECTION Mongo"
+                    + " OBJECT TYPE Collection "
+                    + " OPTIONS ( "
+                    + " )";
+            executeQueryWithNoErrorAssert(createLongLivedCollectionMapping);
+
+            //Iterations part
             while (System.currentTimeMillis() - begin < durationInMillis) {
                 final String sourceCollectionName = SOURCE_COLLECTION_PREFIX + jobCounter;
                 final String sinkCollectionName = SINK_COLLECTION_PREFIX + jobCounter;
                 final String startAt = Instant.now().atZone(ZoneOffset.UTC)
                         .with(ChronoField.MILLI_OF_SECOND, 0).format(DateTimeFormatter.ISO_INSTANT);
 
-                final String createDataConnection = "CREATE OR REPLACE DATA CONNECTION"
-                        + " Mongo"
-                        + " TYPE Mongo SHARED"
-                        + " OPTIONS ( "
-                        + "  'connectionString' = '" + mongoConnectionString + "',"
-                        + "  'database' = '" + MONGO_DATABASE + "'"
-                        + "  )";
-                executeQueryWithNoErrorAssert(createDataConnection);
 
                 createCollections(sourceCollectionName, sinkCollectionName);
 
-                final String sourceMappingSql = "CREATE OR REPLACE MAPPING "
+                final String sourceMappingSql = "CREATE MAPPING "
                         + sourceCollectionName
                         + " EXTERNAL NAME " + MONGO_DATABASE + "." + sourceCollectionName + " ("
                         + " id OBJECT external name _id,"
@@ -126,7 +150,7 @@ public class MongoSqlTest extends AbstractSoakTest {
                         + "   )";
                 executeQueryWithNoErrorAssert(sourceMappingSql);
 
-                final String sinkMappingSql = "CREATE OR REPLACE MAPPING "
+                final String sinkMappingSql = "CREATE MAPPING "
                         + sinkCollectionName
                         + " EXTERNAL NAME " + MONGO_DATABASE + "." + sinkCollectionName + " ("
                         + " id OBJECT external name _id,"
@@ -155,9 +179,9 @@ public class MongoSqlTest extends AbstractSoakTest {
                 assertJobStatusEventually(client.getJet().getJob(jobName));
 
                 //Insert
-                insertDataViaMongoClientAndVerify(jobCounter, sqlService, sourceCollectionName, sinkCollectionName);
+                insertDataViaMongoClientAndVerify(jobCounter, sourceCollectionName, sinkCollectionName);
                 assertCollectionsAreEqual(sourceCollectionName, sinkCollectionName);
-                insertDataViaSqlAndVerify(jobCounter, sqlService, sourceCollectionName, sinkCollectionName);
+                insertDataViaSqlAndVerify(jobCounter, sourceCollectionName, sinkCollectionName);
 
                 //Update
                 updateDataViaMongoClientAndVerify(sinkCollectionName);
@@ -173,6 +197,10 @@ public class MongoSqlTest extends AbstractSoakTest {
                 deleteCollection(sinkCollectionName);
 
                 jobCounter++;
+
+                //Long-lived mapping verify
+                insertDataIntoLongLivedCollectionAndVerify(jobCounter);
+
                 if (jobCounter % LOG_JOB_COUNT_THRESHOLD == 0) {
                     logger.info("Job count: " + jobCounter);
                 }
@@ -194,9 +222,40 @@ public class MongoSqlTest extends AbstractSoakTest {
         }
     }
 
-    private void createCollections(final String sourceCollectionName, final String sinkCollectionName) {
-        createNewCollectionWithSchema(sourceCollectionName);
-        createNewCollectionWithSchema(sinkCollectionName);
+    private void createLongLivedCollection(final String collection) {
+        final String schema = "{"
+                + "  $jsonSchema: {"
+                + "    bsonType: 'object',"
+                + "    required: ["
+                + "      '_id','jobCounter','jobFinishedAt'"
+                + "    ],"
+                + "    properties: {"
+                + "      _id: {"
+                + "        bsonType: 'objectId',"
+                + "        description: 'must be a ObjectId and is required'"
+                + "      },"
+                + "      jobCounter: {"
+                + "        bsonType: 'int',"
+                + "        description: 'must be a int and is required'"
+                + "      },"
+                + "      jobFinishedAt: {"
+                + "        bsonType: 'string',"
+                + "        description: 'must be a string and is required'"
+                + "      }, "
+                + "      source: {"
+                + "        bsonType: 'string',"
+                + "        description: 'must be a string and is required'"
+                + "      }"
+                + "    }"
+                + "  }"
+                + "}";
+        createNewCollectionWithSchema(collection, schema);
+    }
+
+    private void createCollections(final String... collectionNames) {
+        for (String collectionName : collectionNames) {
+            createCollectionWithDefaultSchema(collectionName);
+        }
     }
 
     private static void assertJobStatusEventually(final Job job) {
@@ -211,11 +270,10 @@ public class MongoSqlTest extends AbstractSoakTest {
                 job.getName(), RUNNING, job.getStatus()));
     }
 
-    private void insertDataViaMongoClientAndVerify(final int jobCounter, final SqlService sqlService,
-                                                   final String sourceCollectionName,
+    private void insertDataViaMongoClientAndVerify(final int jobCounter, final String sourceCollectionName,
                                                    final String sinkCollectionName) {
         insertDataViaMongoClient(sourceCollectionName, jobCounter);
-        assertSqlResultsCountEventually(itemCount, sqlService, SELECT_COUNT_FROM + sinkCollectionName);
+        assertSqlResultsCountEventually(itemCount, SELECT_COUNT_FROM + sinkCollectionName);
     }
 
     private void assertCollectionsAreEqual(final String sourceCollectionName, final String sinkCollectionName) {
@@ -246,8 +304,8 @@ public class MongoSqlTest extends AbstractSoakTest {
 
     }
 
-    private void insertDataViaSqlAndVerify(final int jobCounter, final SqlService sqlService,
-                                           final String sourceCollectionName, final String sinkCollectionName) {
+    private void insertDataViaSqlAndVerify(final int jobCounter, final String sourceCollectionName,
+                                           final String sinkCollectionName) {
         insertDataViaSqlService(sinkCollectionName, jobCounter);
 
         final long sinkCountDocs = mongoClient.getDatabase(MONGO_DATABASE).getCollection(sinkCollectionName)
@@ -258,7 +316,7 @@ public class MongoSqlTest extends AbstractSoakTest {
         assertEquals(itemCount, sourceCountDocs);
         assertEquals(itemCount * 2L, sinkCountDocs);
 
-        assertSqlResultsCountEventually(itemCount, sqlService, SELECT_COUNT_FROM + sinkCollectionName
+        assertSqlResultsCountEventually(itemCount, SELECT_COUNT_FROM + sinkCollectionName
                 + WHERE_UPDATED_AND_SOURCE_LIKE, false, "sql");
     }
 
@@ -266,7 +324,7 @@ public class MongoSqlTest extends AbstractSoakTest {
         mongoClient.getDatabase(MONGO_DATABASE).getCollection(sinkCollectionName)
                 .updateMany(new Document().append("source", "mongoClient"), Updates.set("updated", true));
 
-        assertSqlResultsCountEventually(itemCount, sqlService, SELECT_COUNT_FROM + sinkCollectionName
+        assertSqlResultsCountEventually(itemCount, SELECT_COUNT_FROM + sinkCollectionName
                 + WHERE_UPDATED_AND_SOURCE_LIKE, true, "mongoClient");
     }
 
@@ -274,14 +332,14 @@ public class MongoSqlTest extends AbstractSoakTest {
         executeQueryWithNoErrorAssert(format("UPDATE %s SET updated = ? WHERE source LIKE ?", sinkCollectionName),
                 true, "sql");
 
-        assertSqlResultsCountEventually(itemCount, sqlService, SELECT_COUNT_FROM + sinkCollectionName
+        assertSqlResultsCountEventually(itemCount, SELECT_COUNT_FROM + sinkCollectionName
                 + WHERE_UPDATED_AND_SOURCE_LIKE, true, "sql");
     }
 
     private void deleteViaMongoClientAndVerify(final String sinkCollectionName) {
         mongoClient.getDatabase(MONGO_DATABASE).getCollection(sinkCollectionName)
                 .deleteMany(new Document().append("source", "mongoClient"));
-        assertSqlResultsCountEventually(itemCount, sqlService, SELECT_COUNT_FROM + sinkCollectionName);
+        assertSqlResultsCountEventually(itemCount, SELECT_COUNT_FROM + sinkCollectionName);
     }
 
     private void deleteOneViaSqlAndVerify(final String sinkCollectionName) {
@@ -310,7 +368,23 @@ public class MongoSqlTest extends AbstractSoakTest {
                 .drop();
     }
 
-    private void createNewCollectionWithSchema(final String collection) {
+    private void insertDataIntoLongLivedCollectionAndVerify(int jobCounter) {
+        String jobFinishedAt = LocalDateTime.now().format(ISO_DATE_TIME);
+        insertJobSummaryIntoLongLivedCollectionViaSql(jobCounter, jobFinishedAt);
+        insertJobSummaryIntoLongLivedCollectionViaMongo(mongoClient, jobCounter, jobFinishedAt);
+        assertSqlResultsCountEventually(jobCounter, SELECT_COUNT_FROM + LONG_LIVED_COLLECTION
+                + WHERE_SOURCE_LIKE, "mongo");
+        assertSqlResultsCountEventually(jobCounter, SELECT_COUNT_FROM + LONG_LIVED_COLLECTION
+                + WHERE_SOURCE_LIKE, "sql");
+    }
+
+    private void createNewCollectionWithSchema(final String collection, String schema) {
+        mongoClient.getDatabase(MONGO_DATABASE)
+                .createCollection(collection, new CreateCollectionOptions()
+                        .validationOptions(new ValidationOptions().validator(Document.parse(schema))));
+    }
+
+    private void createCollectionWithDefaultSchema(final String collection) {
         final String schema = "{"
                 + "  $jsonSchema: {"
                 + "    bsonType: 'object',"
@@ -324,11 +398,11 @@ public class MongoSqlTest extends AbstractSoakTest {
                 + "      },"
                 + "      collectionIndex: {"
                 + "        bsonType: 'int',"
-                + "        description: 'must be a long and is required'"
+                + "        description: 'must be a int and is required'"
                 + "      },"
                 + "      docIndex: {"
                 + "        bsonType: 'int',"
-                + "        description: 'must be a long and is required'"
+                + "        description: 'must be a int and is required'"
                 + "      },"
                 + "      docId: {"
                 + "        bsonType: 'string',"
@@ -336,7 +410,7 @@ public class MongoSqlTest extends AbstractSoakTest {
                 + "      }, "
                 + "      updated: {"
                 + "        bsonType: 'bool',"
-                + "        description: 'must be a int and is required'"
+                + "        description: 'must be a bool and is required'"
                 + "      }, "
                 + "      source: {"
                 + "        bsonType: 'string',"
@@ -345,10 +419,7 @@ public class MongoSqlTest extends AbstractSoakTest {
                 + "    }"
                 + "  }"
                 + "}";
-
-        mongoClient.getDatabase(MONGO_DATABASE)
-                .createCollection(collection, new CreateCollectionOptions()
-                        .validationOptions(new ValidationOptions().validator(Document.parse(schema))));
+        createNewCollectionWithSchema(collection, schema);
     }
 
     private void insertDataViaMongoClient(final String collectionName, final int collectionCounter) {
@@ -375,8 +446,8 @@ public class MongoSqlTest extends AbstractSoakTest {
         }
     }
 
-    private static void assertSqlResultsCountEventually(final long expectedCount, final SqlService sqlService,
-                                                        final String sql, final Object... sqlArguments) {
+    private void assertSqlResultsCountEventually(final long expectedCount, final String sql,
+                                                 final Object... sqlArguments) {
         Long count = null;
         for (int i = 0; i < ASSERTION_ATTEMPTS; i++) {
             try (SqlResult sqlResult = sqlService.execute(sql, sqlArguments)) {
@@ -412,6 +483,21 @@ public class MongoSqlTest extends AbstractSoakTest {
         if (query.length() != 0) {
             executeQueryWithNoErrorAssert(query.toString());
         }
+    }
+
+    private void insertJobSummaryIntoLongLivedCollectionViaSql(int jobCounter, String jobFinishedAt) {
+        executeQueryWithNoErrorAssert("INSERT INTO " + LONG_LIVED_COLLECTION +
+                        " (jobCounter, jobFinishedAt, source) VALUES (?, ?, ?)",
+                jobCounter, jobFinishedAt, "sql");
+    }
+
+    private void insertJobSummaryIntoLongLivedCollectionViaMongo(MongoClient mongoClient, int jobCounter,
+                                                                 String jobFinishedAt) {
+        mongoClient.getDatabase(MONGO_DATABASE).getCollection(LONG_LIVED_COLLECTION)
+                .insertOne(new Document()
+                        .append("jobCounter", jobCounter)
+                        .append("source", "mongo")
+                        .append("jobFinishedAt", jobFinishedAt));
     }
 
     @Override

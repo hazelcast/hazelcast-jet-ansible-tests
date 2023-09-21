@@ -74,7 +74,6 @@ public class MongoSqlTest extends AbstractSoakTest {
     private SqlService sqlService;
 
     public static void main(final String[] args) throws Exception {
-        setRunLocal();
         new MongoSqlTest().run(args);
     }
 

@@ -26,10 +26,10 @@ import com.hazelcast.jet.pipeline.Sinks;
 import com.hazelcast.jet.pipeline.Sources;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
 import com.hazelcast.logging.ILogger;
+import jakarta.jms.ConnectionFactory;
 import org.apache.activemq.ActiveMQConnectionFactory;
 import org.apache.activemq.ActiveMQXAConnectionFactory;
 
-import javax.jms.ConnectionFactory;
 import java.io.IOException;
 
 import static com.hazelcast.jet.core.JobStatus.FAILED;
@@ -68,12 +68,12 @@ public class JmsTest extends AbstractSoakTest {
         ILogger logger = getLogger(client, JmsTest.class);
 
         Pipeline p1 = Pipeline.create();
-        p1.readFrom(Sources.jmsQueue(connectionFactory(), SOURCE_QUEUE + clusterName))
+        p1.readFrom(Sources.jmsQueue(SOURCE_QUEUE + clusterName, connectionFactory()))
           .withoutTimestamps()
           .writeTo(Sinks.jmsQueue(MIDDLE_QUEUE + clusterName, xaConnectionFactory()));
 
         Pipeline p2 = Pipeline.create();
-        p2.readFrom(Sources.jmsQueue(connectionFactory(), MIDDLE_QUEUE + clusterName))
+        p2.readFrom(Sources.jmsQueue(MIDDLE_QUEUE + clusterName, connectionFactory()))
           .withoutTimestamps()
           .writeTo(Sinks.jmsQueue(SINK_QUEUE + clusterName, xaConnectionFactory()));
 

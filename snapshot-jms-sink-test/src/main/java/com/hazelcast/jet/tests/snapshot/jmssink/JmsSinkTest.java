@@ -27,7 +27,7 @@ import com.hazelcast.jet.pipeline.Sinks;
 import com.hazelcast.jet.pipeline.SourceBuilder;
 import com.hazelcast.jet.pipeline.StreamSource;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
-import javax.jms.ConnectionFactory;
+import jakarta.jms.ConnectionFactory;
 import org.apache.activemq.ActiveMQXAConnectionFactory;
 
 import static com.hazelcast.jet.core.JobStatus.FAILED;
@@ -52,7 +52,7 @@ public class JmsSinkTest extends AbstractSoakTest {
     }
 
     @Override
-    public void init(HazelcastInstance client) throws Exception {
+    public void init(HazelcastInstance client) {
         sleepMsBetweenItem = propertyInt("sleepMsBetweenItem", DEFAULT_SLEEP_MS_BETWEEN_ITEM);
         snapshotIntervalMs = propertyInt("snapshotIntervalMs", DEFAULT_SNAPSHOT_INTERVAL);
         brokerURL = property("brokerURL", "tcp://localhost:61616");
@@ -96,7 +96,7 @@ public class JmsSinkTest extends AbstractSoakTest {
     }
 
     @Override
-    protected void teardown(Throwable t) throws Exception {
+    protected void teardown(Throwable t) {
     }
 
     private Pipeline pipeline(String clusterName) {

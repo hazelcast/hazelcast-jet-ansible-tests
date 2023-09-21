@@ -44,6 +44,7 @@ import java.util.Set;
 import java.util.stream.IntStream;
 
 import static com.hazelcast.jet.core.JobStatus.RUNNING;
+import static com.hazelcast.jet.mongodb.ResourceChecks.NEVER;
 import static com.hazelcast.jet.tests.common.Util.sleepMillis;
 import static com.hazelcast.jet.tests.common.Util.sleepSeconds;
 import static java.util.concurrent.TimeUnit.MINUTES;
@@ -172,7 +173,7 @@ public class MongoTest extends AbstractSoakTest {
                 .database(MONGO_DATABASE)
                 .collection(COLLECTION_PREFIX + collectionCounter)
                 .startAtOperationTime(startAt)
-                .throwOnNonExisting(false)
+                .checkResourceExistence(NEVER)
                 .build();
 
         final Pipeline fromMongo = Pipeline.create();
@@ -195,7 +196,7 @@ public class MongoTest extends AbstractSoakTest {
                         () -> MongoClients.create(connectionString))
                 .into(MONGO_DATABASE, COLLECTION_PREFIX + collectionCounter)
                 .identifyDocumentBy("_id", doc -> doc.get("_id"))
-                .throwOnNonExisting(false)
+                .checkResourceExistence(NEVER)
                 .build();
 
         final Pipeline toMongo = Pipeline.create();
@@ -233,7 +234,7 @@ public class MongoTest extends AbstractSoakTest {
                 .batch(() -> MongoClients.create(connectionString))
                 .database(MONGO_DATABASE)
                 .collection(COLLECTION_PREFIX + collectionCounter)
-                .throwOnNonExisting(false)
+                .checkResourceExistence(NEVER)
                 .build();
 
         final Pipeline fromMongo = Pipeline.create();

@@ -38,6 +38,7 @@ import java.util.Optional;
 import static com.hazelcast.jet.config.ProcessingGuarantee.EXACTLY_ONCE;
 import static com.hazelcast.jet.core.JobStatus.FAILED;
 import static com.hazelcast.jet.core.JobStatus.RUNNING;
+import static com.hazelcast.jet.mongodb.ResourceChecks.NEVER;
 import static com.hazelcast.jet.tests.common.Util.getJobStatusWithRetry;
 import static com.hazelcast.jet.tests.common.Util.sleepMillis;
 import static com.hazelcast.jet.tests.common.Util.sleepMinutes;
@@ -91,7 +92,7 @@ public class MongoLongStreamTest extends AbstractSoakTest {
                 .database(MONGO_DATABASE)
                 .collection(clusterName)
                 .startAtOperationTime(MongoUtilities.bsonTimestampFromTimeMillis(begin))
-                .throwOnNonExisting(false)
+                .checkResourceExistence(NEVER)
                 .build();
 
         final Pipeline fromMongo = Pipeline.create();

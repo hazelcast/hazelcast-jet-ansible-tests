@@ -27,6 +27,7 @@ import com.hazelcast.jet.config.JetConfig;
 import com.hazelcast.logging.ILogger;
 
 import java.io.IOException;
+import java.util.Collection;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -218,7 +219,7 @@ public abstract class AbstractSoakTest {
         return defaultValue;
     }
 
-    protected ILogger getLogger(Class clazz) {
+    protected ILogger getLogger(Class<?> clazz) {
         return hz.getLoggingService().getLogger(clazz);
     }
 
@@ -230,7 +231,7 @@ public abstract class AbstractSoakTest {
         System.setProperty("runLocal", "true");
     }
 
-    protected static ILogger getLogger(HazelcastInstance instance, Class clazz) {
+    protected static ILogger getLogger(HazelcastInstance instance, Class<?> clazz) {
         return instance.getLoggingService().getLogger(clazz);
     }
 
@@ -312,5 +313,18 @@ public abstract class AbstractSoakTest {
         if (actual != null) {
             throw new AssertionError(message);
         }
+    }
+
+    protected static <T> void assertNotEmpty(Collection<T> collection, String message) {
+        if (collection == null || collection.isEmpty()) {
+            throw new AssertionError(message);
+        }
+    }
+
+    public static void fail(String message) {
+        if (message == null) {
+            throw new AssertionError();
+        }
+        throw new AssertionError(message);
     }
 }

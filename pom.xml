@@ -18,7 +18,7 @@
     <properties>
         <jdk.version>11</jdk.version>
         <hazelcast.version>5.4.0-SNAPSHOT</hazelcast.version>
-        <mysql.version>8.0.29</mysql.version>
+        <mysql.version>8.2.0</mysql.version>
         <mongodb.version>4.8.1</mongodb.version>
         <main.basedir>${project.basedir}</main.basedir>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -166,6 +166,7 @@
                 <module>sql-stream-to-stream-join-test</module>
                 <module>sql-stream-to-stream-fault-tolerance-test</module>
                 <module>sql-tumble-window-test</module>
+                <module>kafka-connect-source</module>
             </modules>
         </profile>
         <profile>
@@ -212,6 +213,7 @@
                 <module>grpc-test</module>
                 <module>sort-test</module>
                 <module>file-ingestion-test</module>
+                <module>kafka-connect-source</module>
             </modules>
         </profile>
         <profile>

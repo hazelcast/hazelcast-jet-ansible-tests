@@ -23,7 +23,7 @@
                 <configuration>
                     <archive>
                         <manifest>
-                            <mainClass>com.hazelcast.jet.tests.mapstore.GenericMapStoreTest</mainClass>
+                            <mainClass>com.hazelcast.jet.tests.kafkaconnectsource.KafkaConnectSourceTest</mainClass>
                         </manifest>
                     </archive>
                 </configuration>

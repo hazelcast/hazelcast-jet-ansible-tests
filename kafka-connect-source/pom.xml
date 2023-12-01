@@ -63,7 +63,7 @@
                             <artifactSet>
                                 <includes>
                                     <include>com.hazelcast.jet.tests:*</include>
-                                    <include>com.hazelcast.jet.tests.mapstore:*</include>
+                                    <include>com.hazelcast.jet.tests.kafkaconnectsource:*</include>
                                     <include>org.slf4j:slf4j-reload4j</include>
                                 </includes>
                             </artifactSet>

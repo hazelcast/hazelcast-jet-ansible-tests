@@ -27,7 +27,6 @@ import com.hazelcast.jet.pipeline.StreamStage;
 import com.hazelcast.jet.pipeline.test.AssertionCompletedException;
 import com.hazelcast.jet.pipeline.test.AssertionSinks;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
-import org.apache.kafka.connect.source.SourceRecord;
 
 import java.net.MalformedURLException;
 import java.net.URL;
@@ -49,23 +48,26 @@ public class KafkaConnectSourceTest extends AbstractSoakTest {
 
     @Override
     protected void test(HazelcastInstance client, String name) throws MalformedURLException {
+
+        final int ITEM_COUNT = 10;
+
         Properties connectorProperties = new Properties();
         connectorProperties.setProperty("name", "datagen-connector");
         connectorProperties.setProperty("connector.class", "io.confluent.kafka.connect.datagen.DatagenConnector");
         connectorProperties.setProperty("tasks.max", "1");
-        connectorProperties.setProperty("max.interval", "1");
+        connectorProperties.setProperty("iterations", String.valueOf(ITEM_COUNT));
         connectorProperties.setProperty("kafka.topic", "orders");
         connectorProperties.setProperty("quickstart", "orders");
 
 
-        StreamSource<SourceRecord> source = KafkaConnectSources.connect(connectorProperties);
+        StreamSource<Order> source = KafkaConnectSources.connect(connectorProperties,Order::new);
 
         // Throws AssertionCompletedException
-        Sink<SourceRecord> sink = AssertionSinks.assertCollectedEventually(60,
-                list -> assertNotEmpty(list, "List should not be empty"));
+        Sink<Order> sink = AssertionSinks.assertCollectedEventually(60,
+                list -> assertEquals(ITEM_COUNT, list.size()));
 
         Pipeline pipeline = Pipeline.create();
-        StreamStage<SourceRecord> streamStage = pipeline.readFrom(source)
+        StreamStage<Order> streamStage = pipeline.readFrom(source)
                 .withoutTimestamps()
                 .setLocalParallelism(1);
 

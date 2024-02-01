@@ -33,10 +33,14 @@ import java.net.URL;
 import java.util.Properties;
 import java.util.concurrent.CompletionException;
 
+import static com.hazelcast.jet.tests.common.Util.sleepSeconds;
+
 public class KafkaConnectSourceTest extends AbstractSoakTest {
 
     private static final String CONNECTOR_URL = "https://repository.hazelcast.com/download"
                                                 + "/tests/confluentinc-kafka-connect-datagen-0.6.0.zip";
+
+    private static final int SLEEP_BETWEEN_TESTS_SECONDS = 2;
 
     public static void main(String[] args) throws Exception {
         new KafkaConnectSourceTest().run(args);
@@ -47,24 +51,40 @@ public class KafkaConnectSourceTest extends AbstractSoakTest {
     }
 
     @Override
+    protected boolean runOnBothClusters() {
+        return true;
+    }
+
+    @Override
     protected void test(HazelcastInstance client, String name) throws MalformedURLException {
+        int jobCounter = 0;
+        final long begin = System.currentTimeMillis();
+        try {
+            while (System.currentTimeMillis() - begin < durationInMillis) {
 
-        final int ITEM_COUNT = 10;
+                logger.info("Starting Job count: " + jobCounter);
 
-        Properties connectorProperties = new Properties();
-        connectorProperties.setProperty("name", "datagen-connector");
-        connectorProperties.setProperty("connector.class", "io.confluent.kafka.connect.datagen.DatagenConnector");
-        connectorProperties.setProperty("tasks.max", "1");
-        connectorProperties.setProperty("iterations", String.valueOf(ITEM_COUNT));
-        connectorProperties.setProperty("kafka.topic", "orders");
-        connectorProperties.setProperty("quickstart", "orders");
+                runJob(client);
 
+                jobCounter++;
+                logger.info("Sleeping between tests ");
+                sleepSeconds(SLEEP_BETWEEN_TESTS_SECONDS);
+            }
+        } finally {
+            logger.info("Test finished with job count: " + jobCounter);
+        }
+    }
 
-        StreamSource<Order> source = KafkaConnectSources.connect(connectorProperties,Order::new);
+    private void runJob(HazelcastInstance client) throws MalformedURLException {
+        final int itemCount = 10;
+
+        Properties connectorProperties = getConnectorProperties(itemCount);
+
+        StreamSource<Order> source = KafkaConnectSources.connect(connectorProperties, Order::new);
 
         // Throws AssertionCompletedException
         Sink<Order> sink = AssertionSinks.assertCollectedEventually(60,
-                list -> assertEquals(ITEM_COUNT, list.size()));
+                list -> assertEquals(itemCount, list.size()));
 
         Pipeline pipeline = Pipeline.create();
         StreamStage<Order> streamStage = pipeline.readFrom(source)
@@ -83,14 +103,26 @@ public class KafkaConnectSourceTest extends AbstractSoakTest {
             fail("Job should have completed with an AssertionCompletedException, but completed normally");
         } catch (CompletionException e) {
             String errorMsg = e.getCause().getMessage();
-            assertTrue("Job was expected to complete with AssertionCompletedException, but completed with: " + e.getCause(),
+            assertTrue("Job was expected to complete with AssertionCompletedException, but completed with: " +
+                       e.getCause(),
                     errorMsg.contains(AssertionCompletedException.class.getName()));
 
         }
     }
 
-    @Override
-    protected void teardown(Throwable t) {
+    private static Properties getConnectorProperties(int itemCount) {
+        Properties connectorProperties = new Properties();
+        connectorProperties.setProperty("name", "datagen-connector");
+        connectorProperties.setProperty("connector.class", "io.confluent.kafka.connect.datagen.DatagenConnector");
+        connectorProperties.setProperty("tasks.max", "2");
+        connectorProperties.setProperty("iterations", String.valueOf(itemCount));
+        connectorProperties.setProperty("kafka.topic", "orders");
+        connectorProperties.setProperty("quickstart", "orders");
+        return connectorProperties;
     }
 
+    @Override
+    protected void teardown(Throwable t) {
+        logger.info("Tearing down with Throwable : " + t);
+    }
 }

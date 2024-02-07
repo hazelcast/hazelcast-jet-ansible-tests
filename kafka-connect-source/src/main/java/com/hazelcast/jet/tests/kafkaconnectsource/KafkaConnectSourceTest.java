@@ -16,19 +16,17 @@
 
 package com.hazelcast.jet.tests.kafkaconnectsource;
 
+import com.hazelcast.collection.IList;
 import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.kafka.connect.KafkaConnectSources;
 import com.hazelcast.jet.pipeline.Pipeline;
-import com.hazelcast.jet.pipeline.Sink;
+import com.hazelcast.jet.pipeline.Sinks;
 import com.hazelcast.jet.pipeline.StreamSource;
 import com.hazelcast.jet.pipeline.StreamStage;
-import com.hazelcast.jet.pipeline.test.AssertionCompletedException;
-import com.hazelcast.jet.pipeline.test.AssertionSinks;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
 
-import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.Properties;
 import java.util.concurrent.CompletionException;
@@ -55,7 +53,7 @@ public class KafkaConnectSourceTest extends AbstractSoakTest {
     }
 
     @Override
-    protected void test(HazelcastInstance client, String name) throws MalformedURLException {
+    protected void test(HazelcastInstance client, String name) {
         int jobCounter = 0;
         final long begin = System.currentTimeMillis();
         try {
@@ -74,23 +72,20 @@ public class KafkaConnectSourceTest extends AbstractSoakTest {
         }
     }
 
-    private void runJob(HazelcastInstance client) throws MalformedURLException {
-        final int itemCount = 10;
+    private void runJob(HazelcastInstance client) {
+        final int itemCount = 100;
 
         Properties connectorProperties = getConnectorProperties(itemCount);
 
         StreamSource<Order> source = KafkaConnectSources.connect(connectorProperties, Order::new);
-
-        // Throws AssertionCompletedException
-        Sink<Order> sink = AssertionSinks.assertCollectedEventually(60,
-                list -> assertEquals(itemCount, list.size()));
 
         Pipeline pipeline = Pipeline.create();
         StreamStage<Order> streamStage = pipeline.readFrom(source)
                 .withoutTimestamps()
                 .setLocalParallelism(2);
 
-        streamStage.writeTo(sink);
+        String listName = "test_kafka_connect_list";
+        streamStage.writeTo(Sinks.list(listName));
 
         JobConfig jobConfig = new JobConfig();
         URL connectorURL = getConnectorURL();
@@ -100,13 +95,20 @@ public class KafkaConnectSourceTest extends AbstractSoakTest {
 
         try {
             job.join();
-            fail("Job should have completed with an AssertionCompletedException, but completed normally");
-        } catch (CompletionException e) {
-            String errorMsg = e.getCause().getMessage();
-            assertTrue("Job was expected to complete with AssertionCompletedException, but completed with: " +
-                       e.getCause(),
-                    errorMsg.contains(AssertionCompletedException.class.getName()));
+        } catch (CompletionException exception) {
+            Throwable cause = exception.getCause();
+            boolean stoppingConnector = cause.getMessage().contains("Stopping connector");
+            String message = "Job was expected to complete with Stopping connector message but completed with: " +
+                             cause;
+            assertTrue(message, stoppingConnector);
         }
+        // Ensure that the list is not empty. It is not possible to assert the list size since, when one of the
+        // connector tasks finishes, the other one may still be running.
+        IList<Object> list = client.getList(listName);
+        assertNotEmpty(list, "List should not be empty");
+
+        // Clear the list for next iteration
+        list.clear();
     }
 
     private Properties getConnectorProperties(int itemCount) {

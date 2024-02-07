@@ -37,8 +37,7 @@ import static com.hazelcast.jet.tests.common.Util.sleepSeconds;
 
 public class KafkaConnectSourceTest extends AbstractSoakTest {
 
-    private static final String CONNECTOR_URL = "https://repository.hazelcast.com/download"
-                                                + "/tests/confluentinc-kafka-connect-datagen-0.6.0.zip";
+    private static final String CONNECTOR_URL = "confluentinc-kafka-connect-datagen-0.6.0.zip";
 
     private static final int SLEEP_BETWEEN_TESTS_SECONDS = 2;
 
@@ -89,12 +88,13 @@ public class KafkaConnectSourceTest extends AbstractSoakTest {
         Pipeline pipeline = Pipeline.create();
         StreamStage<Order> streamStage = pipeline.readFrom(source)
                 .withoutTimestamps()
-                .setLocalParallelism(1);
+                .setLocalParallelism(2);
 
         streamStage.writeTo(sink);
 
         JobConfig jobConfig = new JobConfig();
-        jobConfig.addJarsInZip(new URL(CONNECTOR_URL));
+        URL connectorURL = getConnectorURL();
+        jobConfig.addJarsInZip(connectorURL);
 
         Job job = client.getJet().newJob(pipeline, jobConfig);
 
@@ -106,11 +106,10 @@ public class KafkaConnectSourceTest extends AbstractSoakTest {
             assertTrue("Job was expected to complete with AssertionCompletedException, but completed with: " +
                        e.getCause(),
                     errorMsg.contains(AssertionCompletedException.class.getName()));
-
         }
     }
 
-    private static Properties getConnectorProperties(int itemCount) {
+    private Properties getConnectorProperties(int itemCount) {
         Properties connectorProperties = new Properties();
         connectorProperties.setProperty("name", "datagen-connector");
         connectorProperties.setProperty("connector.class", "io.confluent.kafka.connect.datagen.DatagenConnector");
@@ -119,6 +118,13 @@ public class KafkaConnectSourceTest extends AbstractSoakTest {
         connectorProperties.setProperty("kafka.topic", "orders");
         connectorProperties.setProperty("quickstart", "orders");
         return connectorProperties;
+    }
+
+    private URL getConnectorURL() {
+        ClassLoader classLoader = KafkaConnectSourceTest.class.getClassLoader();
+        URL resource = classLoader.getResource(KafkaConnectSourceTest.CONNECTOR_URL);
+        assert resource != null;
+        return resource;
     }
 
     @Override

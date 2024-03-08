@@ -17,6 +17,7 @@
 package com.hazelcast.jet.tests.sql.s2sjoin.ft;
 
 import com.hazelcast.core.HazelcastInstance;
+import com.hazelcast.jet.Job;
 import com.hazelcast.jet.kafka.impl.HazelcastJsonValueDeserializer;
 import com.hazelcast.jet.kafka.impl.HazelcastJsonValueSerializer;
 import com.hazelcast.jet.sql.impl.connector.SqlConnector;
@@ -27,7 +28,6 @@ import com.hazelcast.jet.tests.common.sql.DataIngestionTask;
 import com.hazelcast.jet.tests.common.sql.ItemProducer;
 import com.hazelcast.shaded.org.json.JSONObject;
 import com.hazelcast.sql.SqlResult;
-import com.hazelcast.sql.SqlRow;
 import com.hazelcast.sql.SqlService;
 
 import java.time.LocalDateTime;
@@ -38,6 +38,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
+import static com.hazelcast.jet.core.JobStatus.FAILED;
+import static com.hazelcast.jet.tests.common.Util.getJobStatusWithRetry;
 import static com.hazelcast.jet.tests.common.Util.randomName;
 import static com.hazelcast.jet.tests.common.Util.sleepMinutes;
 import static com.hazelcast.jet.tests.common.sql.DataIngestionTask.DEFAULT_QUERY_TIMEOUT_MILLIS;
@@ -114,9 +116,13 @@ public class SqlStreamToStreamFaultToleranceTest extends AbstractSoakTest {
             createSQLJob(client, sqlName, sinkTopic);
             Util.sleepSeconds(15);
             verifySQLJob(client, sqlName, verifier);
+        } catch (Exception e) {
+            logger.severe("Failure in job verify", e);
+            throw e;
         } finally {
-            try (SqlResult dropJobResult = client.getSql().execute("DROP JOB IF EXISTS \"" + sqlName + "\"")) {
-                assertEquals(0L, dropJobResult.updateCount());
+            Job sqlJob = client.getJet().getJob(sqlName);
+            if (sqlJob != null && !sqlJob.getStatus().isTerminal()) {
+                sqlJob.cancel();
             }
             producerTask.stopProducingEvents();
             verifier.finish();
@@ -202,17 +208,12 @@ public class SqlStreamToStreamFaultToleranceTest extends AbstractSoakTest {
     private void verifySQLJob(HazelcastInstance client, String sqlName, KafkaSinkVerifier verifier) {
         long begin = System.currentTimeMillis();
         while (System.currentTimeMillis() - begin < durationInMillis) {
-            boolean active = false;
-            try (SqlResult showJobsResult = client.getSql().execute("SHOW JOBS")) {
-                for (SqlRow row : showJobsResult) {
-                    if (sqlName.equals(row.getObject(0))) {
-                        active = true;
-                        break;
-                    }
-                }
-            }
-            if (!active) {
-                throw new RuntimeException("Job " + sqlName + " is inactive!");
+            Job sqlJob = client.getJet().getJob(sqlName);
+            if (sqlJob == null) {
+                // It's possible after cluster restart client can be reconnected but job not restarted
+                logger.warning("Job " + sqlName + " not found");
+            } else if (getJobStatusWithRetry(sqlJob) == FAILED) {
+                sqlJob.join();
             }
 
             verifier.checkStatus();

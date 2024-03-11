@@ -71,13 +71,15 @@ public class KafkaSinkVerifier {
             ConsumerRecords<Integer, HazelcastJsonValue> records = consumer.poll(Duration.ofSeconds(1));
             try {
                 long now = System.currentTimeMillis();
-                if (records.isEmpty() && now - lastInputTime > ALLOWED_NO_INPUT_MS) {
-                    throw new AssertionError("No new data was added during last " + ALLOWED_NO_INPUT_MS);
+                if (records.isEmpty()) {
+                    if (now - lastInputTime > ALLOWED_NO_INPUT_MS) {
+                        throw new AssertionError("No new data was added during last " + ALLOWED_NO_INPUT_MS);
+                    }
+                } else {
+                    records.forEach(verificationQueue::add);
+                    verifyQueue();
+                    lastInputTime = now;
                 }
-
-                records.forEach(verificationQueue::add);
-                verifyQueue();
-                lastInputTime = now;
                 sleepMillis(SLEEP_AFTER_VERIFICATION_CYCLE_MS);
             } catch (Throwable e) {
                 logger.severe("Exception thrown while processing consumer records.", e);

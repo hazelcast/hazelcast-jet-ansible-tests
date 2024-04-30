@@ -6,7 +6,7 @@
     <parent>
         <groupId>com.hazelcast.jet.tests</groupId>
         <artifactId>hazelcast-jet-ansible-tests</artifactId>
-        <version>5.4.0-SNAPSHOT</version>
+        <version>5.5.0-SNAPSHOT</version>
     </parent>
 
     <artifactId>sql-stream-to-stream-fault-tolerance-test</artifactId>

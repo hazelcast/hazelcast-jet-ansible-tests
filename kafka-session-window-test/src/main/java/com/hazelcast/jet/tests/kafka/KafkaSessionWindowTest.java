@@ -27,7 +27,10 @@ import com.hazelcast.jet.kafka.KafkaSources;
 import com.hazelcast.jet.pipeline.Pipeline;
 import com.hazelcast.jet.pipeline.Sink;
 import com.hazelcast.jet.pipeline.SinkBuilder;
+import com.hazelcast.jet.pipeline.Sinks;
+import com.hazelcast.jet.pipeline.StreamStage;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
+import com.hazelcast.map.IMap;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -44,6 +47,7 @@ import static com.hazelcast.jet.core.JobStatus.RUNNING;
 import static com.hazelcast.jet.core.JobStatus.STARTING;
 import static com.hazelcast.jet.pipeline.WindowDefinition.session;
 import static com.hazelcast.jet.tests.common.Util.getJobStatusWithRetry;
+import static java.util.Map.entry;
 import static java.util.concurrent.TimeUnit.MINUTES;
 
 public class KafkaSessionWindowTest extends AbstractSoakTest {
@@ -55,6 +59,9 @@ public class KafkaSessionWindowTest extends AbstractSoakTest {
 
     private static final String TOPIC = KafkaSessionWindowTest.class.getSimpleName();
     private static final String RESULTS_TOPIC = TOPIC + "-RESULTS";
+
+    private static final String ITEM_PROCESSED_MAP = "KafkaSessionWindowTest_itemProcessedMap";
+    private static final String ITEM_PROCESSED_MAP_KEY = "KafkaSessionWindowTest_itemProcessedMapKey";
 
     private int sessionTimeout;
     private int snapshotIntervalMs;
@@ -105,18 +112,36 @@ public class KafkaSessionWindowTest extends AbstractSoakTest {
         Job verificationJob = client.getJet().newJob(verificationPipeline(), verificationJobConfig);
 
         long begin = System.currentTimeMillis();
-        while (System.currentTimeMillis() - begin < durationInMillis) {
-            MINUTES.sleep(1);
-            assertFalse(producerFuture.isDone());
-            JobStatus status = getJobStatusWithRetry(verificationJob);
-            if (status != STARTING && status != RUNNING) {
-                throw new AssertionError("Job is failed, jobStatus: " + status);
-            }
-        }
-        System.out.println("Cancelling jobs..");
+        String previousProcessedUuid = "initialValue";
+        IMap<String, String> itemProcessedMap = client.getMap(ITEM_PROCESSED_MAP);
+        itemProcessedMap.put(ITEM_PROCESSED_MAP_KEY, previousProcessedUuid);
+        int iteration = 0;
+        try {
+            while (System.currentTimeMillis() - begin < durationInMillis) {
+                MINUTES.sleep(1);
+                assertFalse(producerFuture.isDone());
+                JobStatus status = getJobStatusWithRetry(verificationJob);
+                if (status != STARTING && status != RUNNING) {
+                    throw new AssertionError("Job is failed, jobStatus: " + status);
+                }
 
-        testJob.cancel();
-        verificationJob.cancel();
+                // check whether verification pipeline actually processed some items
+                // start to check this after 5minutes
+                if (iteration >= 4) {
+                    String currentLastProcessedUuid = itemProcessedMap.get(ITEM_PROCESSED_MAP_KEY);
+                    assertNotNull(currentLastProcessedUuid);
+                    assertNotEquals(previousProcessedUuid, currentLastProcessedUuid);
+                    previousProcessedUuid = currentLastProcessedUuid;
+                } else {
+                    iteration++;
+                }
+            }
+        } finally {
+            System.out.println("Cancelling jobs..");
+            testJob.cancel();
+            verificationJob.cancel();
+        }
+
     }
 
     protected void teardown(Throwable t) throws Exception {
@@ -145,9 +170,15 @@ public class KafkaSessionWindowTest extends AbstractSoakTest {
         Pipeline pipeline = Pipeline.create();
 
         Properties properties = kafkaPropertiesForResults(brokerUri, offsetReset);
-        pipeline.readFrom(KafkaSources.<String, Long>kafka(properties, RESULTS_TOPIC))
-                .withoutTimestamps()
+        StreamStage<Map.Entry<String, Long>> beforeSink = pipeline
+                .readFrom(KafkaSources.<String, Long>kafka(properties, RESULTS_TOPIC))
+                .withoutTimestamps();
+        beforeSink
                 .writeTo(buildVerificationSink());
+        // for checking that we actually receive some new items
+        beforeSink
+                .map(t -> entry(ITEM_PROCESSED_MAP_KEY, UuidUtil.newUnsecureUuidString()))
+                .writeTo(Sinks.map(ITEM_PROCESSED_MAP));
 
         return pipeline;
     }

@@ -31,6 +31,7 @@ import com.hazelcast.jet.pipeline.Sinks;
 import com.hazelcast.jet.pipeline.StreamStage;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
 import com.hazelcast.map.IMap;
+import java.time.Duration;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -115,7 +116,6 @@ public class KafkaSessionWindowTest extends AbstractSoakTest {
         String previousProcessedUuid = "initialValue";
         IMap<String, String> itemProcessedMap = client.getMap(ITEM_PROCESSED_MAP);
         itemProcessedMap.put(ITEM_PROCESSED_MAP_KEY, previousProcessedUuid);
-        int iteration = 0;
         try {
             while (System.currentTimeMillis() - begin < durationInMillis) {
                 MINUTES.sleep(1);
@@ -127,13 +127,11 @@ public class KafkaSessionWindowTest extends AbstractSoakTest {
 
                 // check whether verification pipeline actually processed some items
                 // start to check this after 5minutes
-                if (iteration >= 4) {
+                if (System.currentTimeMillis() - begin > Duration.ofMinutes(5).toMillis()) {
                     String currentLastProcessedUuid = itemProcessedMap.get(ITEM_PROCESSED_MAP_KEY);
                     assertNotNull(currentLastProcessedUuid);
                     assertNotEquals(previousProcessedUuid, currentLastProcessedUuid);
                     previousProcessedUuid = currentLastProcessedUuid;
-                } else {
-                    iteration++;
                 }
             }
         } finally {

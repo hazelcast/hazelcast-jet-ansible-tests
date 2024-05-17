@@ -26,6 +26,7 @@ import com.hazelcast.jet.pipeline.Pipeline;
 import com.hazelcast.jet.pipeline.StreamSource;
 import com.hazelcast.jet.pipeline.StreamStage;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -170,7 +171,7 @@ public class StatefulMapTest extends AbstractSoakTest {
     }
 
     private long processTimeoutItems(String name, KafkaConsumer<Long, Long> txTimeoutConsumer) {
-        ConsumerRecords<Long, Long> records = txTimeoutConsumer.poll(POLL_TIMEOUT);
+        ConsumerRecords<Long, Long> records = txTimeoutConsumer.poll(Duration.ofMillis(POLL_TIMEOUT));
         for (ConsumerRecord<Long, Long> record : records) {
             if (record.value() != -1) {
                 throw new AssertionError(

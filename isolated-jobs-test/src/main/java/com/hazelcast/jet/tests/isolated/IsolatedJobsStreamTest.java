@@ -86,7 +86,8 @@ public class IsolatedJobsStreamTest extends AbstractSoakTest {
         String logPrefix = "[" + name + "] ";
 
         UUID excludedMember = client.getCluster().getMembers().iterator().next().getUuid();
-        Job streamJob = createStreamJob(client, excludedMember, name);
+        Job streamJob = JobDefinition.createStreamJob(jobWindowTumbleInMinutes, sleepBetweenStreamRecordsMs,
+                snapshotIntervalMs, client, excludedMember, name);
         waitForJobStatus(streamJob, RUNNING);
 
         long validationCount = 0;
@@ -134,31 +135,36 @@ public class IsolatedJobsStreamTest extends AbstractSoakTest {
         });
     }
 
-    private Job createStreamJob(HazelcastInstance client, UUID excludedMember, String jobName) {
-        Pipeline p = Pipeline.create();
-        p.readFrom(Sources.createStreamSource(sleepBetweenStreamRecordsMs))
-                .withIngestionTimestamps()
-                .window(WindowDefinition.tumbling(TimeUnit.MINUTES.toMillis(jobWindowTumbleInMinutes)))
-                .aggregate(AggregateOperations.toList())
-                .map(WindowResult::result)
-                .writeTo(Sinks.list(jobName));
+    public static class JobDefinition {
+        public static Job createStreamJob(int jobWindowTumbleInMinutes, int sleepBetweenStreamRecordsMs,
+                                          int snapshotIntervalMs, HazelcastInstance client,
+                                          UUID excludedMember, String jobName) {
+            Pipeline p = Pipeline.create();
+            p.readFrom(Sources.createStreamSource(sleepBetweenStreamRecordsMs))
+                    .withIngestionTimestamps()
+                    .window(WindowDefinition.tumbling(TimeUnit.MINUTES.toMillis(jobWindowTumbleInMinutes)))
+                    .aggregate(AggregateOperations.toList())
+                    .map(WindowResult::result)
+                    .writeTo(Sinks.list(jobName));
 
-        JobConfig jobConfig = new JobConfig();
-        jobConfig.setName(jobName);
-        if (jobName.startsWith(STABLE_CLUSTER)) {
-            jobConfig.addClass(IsolatedJobsStreamTest.class);
-        } else {
-            jobConfig.setSnapshotIntervalMillis(snapshotIntervalMs);
-            jobConfig.setProcessingGuarantee(AT_LEAST_ONCE);
+            JobConfig jobConfig = new JobConfig();
+            jobConfig.setName(jobName);
+            if (jobName.startsWith(STABLE_CLUSTER)) {
+                jobConfig.addClass(IsolatedJobsStreamTest.class);
+            } else {
+                jobConfig.setSnapshotIntervalMillis(snapshotIntervalMs);
+                jobConfig.setProcessingGuarantee(AT_LEAST_ONCE);
+            }
+            jobConfig.addClass(Sources.class)
+                    .addClass(JetMemberSelectorUtil.class)
+                    .addClass(JobDefinition.class);
+
+
+            return client.getJet().newJobBuilder(p)
+                    .withMemberSelector(excludeMember(excludedMember))
+                    .withConfig(jobConfig)
+                    .start();
+
         }
-        jobConfig.addClass(Sources.class)
-                .addClass(JetMemberSelectorUtil.class);
-
-
-        return client.getJet().newJobBuilder(p)
-                .withMemberSelector(excludeMember(excludedMember))
-                .withConfig(jobConfig)
-                .start();
-
     }
 }

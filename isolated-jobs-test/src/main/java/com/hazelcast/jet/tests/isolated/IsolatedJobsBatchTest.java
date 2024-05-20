@@ -117,7 +117,8 @@ public class IsolatedJobsBatchTest extends AbstractSoakTest {
 
         return client.getJet()
                 .newJobBuilder(p)
-                .withConfig(new JobConfig().setName("IsolatedJobsTestBatchJob" + index)
+                .withConfig(new JobConfig()
+                        .setName("IsolatedJobsTestBatchJob" + index)
                         .addClass(Sources.class)
                         .addClass(JetMemberSelectorUtil.class))
                 .withMemberSelector(excludeMember(excludedMember))

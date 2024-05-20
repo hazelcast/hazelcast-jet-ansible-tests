@@ -13,7 +13,6 @@
         <module>remote-controller-client</module>
         <module>soak-tests-common</module>
         <module>soak-tests-common-sql</module>
-        <module>isolated-jobs-test</module>
     </modules>
 
     <properties>
@@ -136,6 +135,7 @@
                 <module>event-journal-test</module>
                 <module>generic-map-store-test</module>
                 <module>hdfs-test</module>
+                <module>isolated-jobs-test</module>
                 <module>jar-submission-module</module>
                 <module>jdbc-test</module>
                 <module>jms-test</module>
@@ -187,6 +187,7 @@
                 <module>event-journal-test</module>
                 <module>generic-map-store-test</module>
                 <module>hdfs-test</module>
+                <module>isolated-jobs-test</module>
                 <module>jar-submission-module</module>
                 <module>jdbc-test</module>
                 <module>jms-test</module>

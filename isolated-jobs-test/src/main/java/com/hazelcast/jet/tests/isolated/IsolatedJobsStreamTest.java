@@ -37,6 +37,7 @@ import static com.hazelcast.jet.core.JobStatus.RUNNING;
 import static com.hazelcast.jet.tests.common.Util.getJobStatusWithRetry;
 import static com.hazelcast.jet.tests.common.Util.sleepMinutes;
 import static com.hazelcast.jet.tests.common.Util.waitForJobStatus;
+import static com.hazelcast.jet.tests.isolated.JetMemberSelectorUtil.excludeMember;
 import static java.util.stream.Collectors.joining;
 
 /**
@@ -145,18 +146,18 @@ public class IsolatedJobsStreamTest extends AbstractSoakTest {
         JobConfig jobConfig = new JobConfig();
         jobConfig.setName(jobName);
         if (jobName.startsWith(STABLE_CLUSTER)) {
-            jobConfig.addClass(IsolatedJobsStreamTest.class);
+            jobConfig.addClass(IsolatedJobsStreamTest.class)
+            .addClass(Sources.class)
+            .addClass(JetMemberSelectorUtil.class);
         } else {
             jobConfig.setSnapshotIntervalMillis(snapshotIntervalMs);
             jobConfig.setProcessingGuarantee(AT_LEAST_ONCE);
         }
-        jobConfig.addClass(Sources.class);
 
         return client.getJet().newJobBuilder(p)
-                .withMemberSelector(member -> !member.getUuid().equals(excludedMember))
+                .withMemberSelector(excludeMember(excludedMember))
                 .withConfig(new JobConfig().setName(jobName))
                 .start();
 
     }
-
 }

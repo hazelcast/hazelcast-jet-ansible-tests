@@ -13,6 +13,7 @@
         <module>remote-controller-client</module>
         <module>soak-tests-common</module>
         <module>soak-tests-common-sql</module>
+        <module>isolated-jobs-test</module>
     </modules>
 
     <properties>

@@ -24,7 +24,7 @@ public final class JetMemberSelectorUtil {
     private JetMemberSelectorUtil() {
     }
 
-    static JetMemberSelector excludeMember(UUID excludedMember) {
+    public static JetMemberSelector excludeMember(UUID excludedMember) {
         return member -> !member.getUuid().equals(excludedMember);
     }
 }

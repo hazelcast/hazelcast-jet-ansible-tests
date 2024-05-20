@@ -28,7 +28,7 @@ public final class Sources {
     private Sources() {
     }
 
-    static StreamSource<UUID> createStreamSource(int sleepBetweenStreamRecordsMs) {
+    public static StreamSource<UUID> createStreamSource(int sleepBetweenStreamRecordsMs) {
         return SourceBuilder.stream("IsolatedJobsStreamSource",
                         context -> context.hazelcastInstance().getCluster().getLocalMember().getUuid())
                 .<UUID>fillBufferFn((ctx, buf) -> {
@@ -41,7 +41,7 @@ public final class Sources {
                 .build();
     }
 
-    static BatchSource<UUID> createBatchSource(long index) {
+    public static BatchSource<UUID> createBatchSource(long index) {
         return SourceBuilder.batch("IsolatedJobsTestBatchSource" + index, context ->
                         context.hazelcastInstance().getCluster().getLocalMember().getUuid())
                 .<UUID>fillBufferFn((uuid, buffer) -> {

@@ -25,8 +25,6 @@ import com.hazelcast.jet.core.JobStatus;
 import com.hazelcast.jet.datamodel.WindowResult;
 import com.hazelcast.jet.pipeline.Pipeline;
 import com.hazelcast.jet.pipeline.Sinks;
-import com.hazelcast.jet.pipeline.SourceBuilder;
-import com.hazelcast.jet.pipeline.StreamSource;
 import com.hazelcast.jet.pipeline.WindowDefinition;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
 
@@ -37,7 +35,6 @@ import java.util.concurrent.TimeUnit;
 import static com.hazelcast.jet.config.ProcessingGuarantee.AT_LEAST_ONCE;
 import static com.hazelcast.jet.core.JobStatus.RUNNING;
 import static com.hazelcast.jet.tests.common.Util.getJobStatusWithRetry;
-import static com.hazelcast.jet.tests.common.Util.sleepMillis;
 import static com.hazelcast.jet.tests.common.Util.sleepMinutes;
 import static com.hazelcast.jet.tests.common.Util.waitForJobStatus;
 import static java.util.stream.Collectors.joining;
@@ -138,7 +135,7 @@ public class IsolatedJobsStreamTest extends AbstractSoakTest {
 
     private Job createStreamJob(HazelcastInstance client, UUID excludedMember, String jobName) {
         Pipeline p = Pipeline.create();
-        p.readFrom(createStreamSource())
+        p.readFrom(Sources.createStreamSource(sleepBetweenStreamRecordsMs))
                 .withIngestionTimestamps()
                 .window(WindowDefinition.tumbling(TimeUnit.MINUTES.toMillis(jobWindowTumbleInMinutes)))
                 .aggregate(AggregateOperations.toList())
@@ -153,6 +150,7 @@ public class IsolatedJobsStreamTest extends AbstractSoakTest {
             jobConfig.setSnapshotIntervalMillis(snapshotIntervalMs);
             jobConfig.setProcessingGuarantee(AT_LEAST_ONCE);
         }
+        jobConfig.addClass(Sources.class);
 
         return client.getJet().newJobBuilder(p)
                 .withMemberSelector(member -> !member.getUuid().equals(excludedMember))
@@ -161,17 +159,4 @@ public class IsolatedJobsStreamTest extends AbstractSoakTest {
 
     }
 
-    private StreamSource<UUID> createStreamSource() {
-        int localSleepBetweenStreamRecordsMs1 = sleepBetweenStreamRecordsMs;
-        return SourceBuilder.stream("IsolatedJobsStreamSource",
-                        context -> context.hazelcastInstance().getCluster().getLocalMember().getUuid())
-                .<UUID>fillBufferFn((ctx, buf) -> {
-                    buf.add(ctx);
-                    sleepMillis(localSleepBetweenStreamRecordsMs1);
-                })
-                .distributed(1)
-                .createSnapshotFn(ctx -> ctx)
-                .restoreSnapshotFn((ctx, state) -> ctx = state.get(0))
-                .build();
-    }
 }

@@ -21,10 +21,8 @@ import com.hazelcast.collection.IList;
 import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.config.JobConfig;
-import com.hazelcast.jet.pipeline.BatchSource;
 import com.hazelcast.jet.pipeline.Pipeline;
 import com.hazelcast.jet.pipeline.Sinks;
-import com.hazelcast.jet.pipeline.SourceBuilder;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
 
 import java.util.List;
@@ -113,24 +111,14 @@ public class IsolatedJobsBatchTest extends AbstractSoakTest {
 
     public static Job createBatchJob(HazelcastInstance client, UUID excludedMember, long index) {
         Pipeline p = Pipeline.create();
-        p.readFrom(createBatchSource(index))
+        p.readFrom(Sources.createBatchSource(index))
                 .writeTo(Sinks.list(BATCH_SINK_PREFIX + index));
 
         return client.getJet().newJobBuilder(p)
                 .withMemberSelector(member -> !member.getUuid().equals(excludedMember))
-                .withConfig(new JobConfig().setName("IsolatedJobsTestBatchJob" + index))
+                .withConfig(new JobConfig().setName("IsolatedJobsTestBatchJob" + index)
+                        .addClass(Sources.class))
                 .start();
-    }
-
-    private static BatchSource<UUID> createBatchSource(long index) {
-        return SourceBuilder.batch("IsolatedJobsTestBatchSource" + index, context ->
-                        context.hazelcastInstance().getCluster().getLocalMember().getUuid())
-                .<UUID>fillBufferFn((uuid, buffer) -> {
-                    buffer.add(uuid);
-                    buffer.close();
-                })
-                .distributed(1)
-                .build();
     }
 
 }

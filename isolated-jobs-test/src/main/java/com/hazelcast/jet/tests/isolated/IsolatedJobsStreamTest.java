@@ -156,7 +156,7 @@ public class IsolatedJobsStreamTest extends AbstractSoakTest {
 
         return client.getJet().newJobBuilder(p)
                 .withMemberSelector(excludeMember(excludedMember))
-                .withConfig(new JobConfig().setName(jobName))
+                .withConfig(jobConfig)
                 .start();
 
     }

@@ -146,13 +146,14 @@ public class IsolatedJobsStreamTest extends AbstractSoakTest {
         JobConfig jobConfig = new JobConfig();
         jobConfig.setName(jobName);
         if (jobName.startsWith(STABLE_CLUSTER)) {
-            jobConfig.addClass(IsolatedJobsStreamTest.class)
-            .addClass(Sources.class)
-            .addClass(JetMemberSelectorUtil.class);
+            jobConfig.addClass(IsolatedJobsStreamTest.class);
         } else {
             jobConfig.setSnapshotIntervalMillis(snapshotIntervalMs);
             jobConfig.setProcessingGuarantee(AT_LEAST_ONCE);
         }
+        jobConfig.addClass(Sources.class)
+                .addClass(JetMemberSelectorUtil.class);
+
 
         return client.getJet().newJobBuilder(p)
                 .withMemberSelector(excludeMember(excludedMember))

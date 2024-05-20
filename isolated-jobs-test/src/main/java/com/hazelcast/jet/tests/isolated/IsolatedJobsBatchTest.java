@@ -115,11 +115,12 @@ public class IsolatedJobsBatchTest extends AbstractSoakTest {
         p.readFrom(Sources.createBatchSource(index))
                 .writeTo(Sinks.list(BATCH_SINK_PREFIX + index));
 
-        return client.getJet().newJobBuilder(p)
-                .withMemberSelector(excludeMember(excludedMember))
+        return client.getJet()
+                .newJobBuilder(p)
                 .withConfig(new JobConfig().setName("IsolatedJobsTestBatchJob" + index)
                         .addClass(Sources.class)
                         .addClass(JetMemberSelectorUtil.class))
+                .withMemberSelector(excludeMember(excludedMember))
                 .start();
     }
 

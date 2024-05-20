@@ -66,10 +66,10 @@ public class IsolatedJobsBatchTest extends AbstractSoakTest {
             assertBatchSink(client, jobCount, excludedMember);
             clearSink(client, jobCount);
 
+            jobCount++;
             if (jobCount % LOG_JOB_COUNT_THRESHOLD == 0) {
                 logger.info("Job count: " + jobCount);
             }
-            jobCount++;
             sleepMinutes(sleepBetweenNewJobsInMinutes);
         }
         logger.info("Final job count: " + jobCount);

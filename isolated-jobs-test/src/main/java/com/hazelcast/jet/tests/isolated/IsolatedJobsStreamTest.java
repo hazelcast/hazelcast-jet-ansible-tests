@@ -101,10 +101,10 @@ public class IsolatedJobsStreamTest extends AbstractSoakTest {
             assertStreamSink(client, excludedMember, name);
             clearSink(client, name);
 
+            validationCount++;
             if (validationCount % logVerificationCountThreshold == 0) {
                 logger.info(logPrefix + "Validations count: " + validationCount);
             }
-            validationCount++;
         }
         logger.info(logPrefix + "Final validations count: " + validationCount);
     }

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.hazelcast.jet.tests.isolated;
+package com.hazelcast.jet.tests.isolatedjobs;
 
 import static com.hazelcast.jet.tests.common.Util.parseArguments;
 

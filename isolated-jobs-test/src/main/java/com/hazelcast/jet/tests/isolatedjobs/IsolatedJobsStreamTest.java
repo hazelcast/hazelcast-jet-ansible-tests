@@ -14,31 +14,28 @@
  * limitations under the License.
  */
 
-package com.hazelcast.jet.tests.isolated;
+package com.hazelcast.jet.tests.isolatedjobs;
 
-import com.hazelcast.collection.IList;
+import com.hazelcast.cluster.Member;
 import com.hazelcast.core.HazelcastInstance;
+import com.hazelcast.function.FunctionEx;
 import com.hazelcast.jet.Job;
-import com.hazelcast.jet.aggregate.AggregateOperations;
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.core.JobStatus;
-import com.hazelcast.jet.datamodel.WindowResult;
 import com.hazelcast.jet.pipeline.Pipeline;
 import com.hazelcast.jet.pipeline.Sinks;
-import com.hazelcast.jet.pipeline.WindowDefinition;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
 
-import java.util.List;
+import java.util.Collection;
+import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.TimeUnit;
 
 import static com.hazelcast.jet.config.ProcessingGuarantee.AT_LEAST_ONCE;
 import static com.hazelcast.jet.core.JobStatus.RUNNING;
 import static com.hazelcast.jet.tests.common.Util.getJobStatusWithRetry;
 import static com.hazelcast.jet.tests.common.Util.sleepMinutes;
 import static com.hazelcast.jet.tests.common.Util.waitForJobStatus;
-import static com.hazelcast.jet.tests.isolated.JetMemberSelectorUtil.excludeMember;
-import static java.util.stream.Collectors.joining;
+import static com.hazelcast.jet.tests.isolatedjobs.JetMemberSelectorUtil.excludeMember;
 
 /**
  * This test requires Enterprise License with Advanced Compute Feature.
@@ -47,14 +44,12 @@ import static java.util.stream.Collectors.joining;
  */
 public class IsolatedJobsStreamTest extends AbstractSoakTest {
     private static final int DEFAULT_LOG_VERIFICATION_COUNT_THRESHOLD = 5;
-    private static final int DEFAULT_SLEEP_BETWEEN_VALIDATIONS_IN_MINUTES = 2;
-    private static final int DEFAULT_JOB_WINDOW_TUMBLE_IN_MINUTES = 1;
+    private static final int DEFAULT_SLEEP_BETWEEN_VALIDATIONS_IN_MINUTES = 1;
     private static final int DEFAULT_SNAPSHOT_INTERVAL_MS = 1000;
-    private static final int DEFAULT_SLEEP_BETWEEN_STREAM_RECORDS_MS = 1000 * 30;
+    private static final int DEFAULT_SLEEP_BETWEEN_STREAM_RECORDS_MS = 1000 * 15;
     private int snapshotIntervalMs;
     private int logVerificationCountThreshold;
     private int sleepBeforeValidationInMinutes;
-    private int jobWindowTumbleInMinutes;
     private int sleepBetweenStreamRecordsMs;
 
     public static void main(final String[] args) throws Exception {
@@ -74,8 +69,6 @@ public class IsolatedJobsStreamTest extends AbstractSoakTest {
                 DEFAULT_LOG_VERIFICATION_COUNT_THRESHOLD);
         sleepBeforeValidationInMinutes = propertyInt("sleepBeforeValidationInMinutes",
                 DEFAULT_SLEEP_BETWEEN_VALIDATIONS_IN_MINUTES);
-        jobWindowTumbleInMinutes = propertyInt("jobWindowTumbleInMinutes",
-                DEFAULT_JOB_WINDOW_TUMBLE_IN_MINUTES);
         sleepBetweenStreamRecordsMs = propertyInt("sleepBetweenStreamRecordsMs",
                 DEFAULT_SLEEP_BETWEEN_STREAM_RECORDS_MS);
     }
@@ -85,9 +78,12 @@ public class IsolatedJobsStreamTest extends AbstractSoakTest {
         long begin = System.currentTimeMillis();
         String logPrefix = "[" + name + "] ";
 
-        UUID excludedMember = client.getCluster().getMembers().iterator().next().getUuid();
-        Job streamJob = JobDefinition.createStreamJob(jobWindowTumbleInMinutes, sleepBetweenStreamRecordsMs,
-                snapshotIntervalMs, client, excludedMember, name);
+        Member excludedMember = client.getCluster().getMembers().iterator().next();
+        UUID excludedMemberUuid = excludedMember.getUuid();
+        String excludedMemberAddress = excludedMember.getSocketAddress().toString();
+
+        Job streamJob = JobDefinition.createStreamJob(sleepBetweenStreamRecordsMs,
+                snapshotIntervalMs, client, excludedMemberUuid, name);
         waitForJobStatus(streamJob, RUNNING);
 
         long validationCount = 0;
@@ -98,7 +94,7 @@ public class IsolatedJobsStreamTest extends AbstractSoakTest {
 
             sleepMinutes(sleepBeforeValidationInMinutes);
 
-            assertStreamSink(client, excludedMember, name);
+            assertStreamSinkMap(client, excludedMemberAddress, name);
             clearSink(client, name);
 
             validationCount++;
@@ -115,37 +111,30 @@ public class IsolatedJobsStreamTest extends AbstractSoakTest {
     }
 
     private void clearSink(HazelcastInstance client, String jobName) {
-        client.getList(jobName).clear();
+        client.getMap(jobName).clear();
     }
 
-    private void assertStreamSink(HazelcastInstance client, UUID excludedMember, String jobName) {
-        IList<List<UUID>> list = client.getList(jobName);
-        assertFalse("There was no records in the List from job " + jobName, list.isEmpty());
-        list.forEach(uuids -> {
-            boolean result = uuids.stream()
-                    .noneMatch(uuid -> uuid.equals(excludedMember));
-            if (!result) {
+    private void assertStreamSinkMap(HazelcastInstance client, String excludedMemberAddress, String jobName) {
+        Map<String, String> map = client.getMap(jobName);
+        assertFalse("There was no entries in the Map from job " + jobName, map.isEmpty());
+        Collection<String> mapValues = map.values();
+        mapValues.forEach(address -> {
+            if (address.equals(excludedMemberAddress)) {
                 throw new AssertionError("Job (" + jobName + ") was executed on excluded member ("
-                        + excludedMember + ")." +
-                        "List of members from execution: " + uuids.stream()
-                        .map(UUID::toString)
-                        .collect(joining(","))
-                );
+                        + excludedMemberAddress + ")." +
+                        "List of members from execution: " + String.join(",", mapValues));
             }
         });
     }
 
     public static class JobDefinition {
-        public static Job createStreamJob(int jobWindowTumbleInMinutes, int sleepBetweenStreamRecordsMs,
+        public static Job createStreamJob(int sleepBetweenStreamRecordsMs,
                                           int snapshotIntervalMs, HazelcastInstance client,
                                           UUID excludedMember, String jobName) {
             Pipeline p = Pipeline.create();
             p.readFrom(Sources.createStreamSource(sleepBetweenStreamRecordsMs))
                     .withIngestionTimestamps()
-                    .window(WindowDefinition.tumbling(TimeUnit.MINUTES.toMillis(jobWindowTumbleInMinutes)))
-                    .aggregate(AggregateOperations.toList())
-                    .map(WindowResult::result)
-                    .writeTo(Sinks.list(jobName));
+                    .writeTo(Sinks.map(jobName, FunctionEx.identity(), FunctionEx.identity()));
 
             JobConfig jobConfig = new JobConfig();
             jobConfig.setName(jobName);

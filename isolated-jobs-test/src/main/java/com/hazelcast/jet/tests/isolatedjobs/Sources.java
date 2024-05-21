@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.hazelcast.jet.tests.isolated;
+package com.hazelcast.jet.tests.isolatedjobs;
 
 import com.hazelcast.jet.pipeline.BatchSource;
 import com.hazelcast.jet.pipeline.SourceBuilder;
@@ -28,10 +28,14 @@ public final class Sources {
     private Sources() {
     }
 
-    public static StreamSource<UUID> createStreamSource(int sleepBetweenStreamRecordsMs) {
+    public static StreamSource<String> createStreamSource(int sleepBetweenStreamRecordsMs) {
         return SourceBuilder.stream("IsolatedJobsStreamSource",
-                        context -> context.hazelcastInstance().getCluster().getLocalMember().getUuid())
-                .<UUID>fillBufferFn((ctx, buf) -> {
+                        context -> context.hazelcastInstance()
+                                .getCluster()
+                                .getLocalMember()
+                                .getSocketAddress()
+                                .toString())
+                .<String>fillBufferFn((ctx, buf) -> {
                     buf.add(ctx);
                     sleepMillis(sleepBetweenStreamRecordsMs);
                 })

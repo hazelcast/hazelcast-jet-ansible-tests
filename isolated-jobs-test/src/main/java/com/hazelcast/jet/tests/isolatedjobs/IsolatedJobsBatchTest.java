@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.hazelcast.jet.tests.isolated;
+package com.hazelcast.jet.tests.isolatedjobs;
 
 import com.hazelcast.cluster.Member;
 import com.hazelcast.collection.IList;
@@ -31,7 +31,7 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 
 import static com.hazelcast.jet.tests.common.Util.sleepMinutes;
-import static com.hazelcast.jet.tests.isolated.JetMemberSelectorUtil.excludeMember;
+import static com.hazelcast.jet.tests.isolatedjobs.JetMemberSelectorUtil.excludeMember;
 import static java.util.stream.Collectors.joining;
 
 /**
@@ -40,37 +40,42 @@ import static java.util.stream.Collectors.joining;
  * in the pom.xml) and license must be set (it can be done in {@link AbstractSoakTest#run(String[])})
  */
 public class IsolatedJobsBatchTest extends AbstractSoakTest {
-    public static final int DEFAULT_SLEEP_BETWEEN_NEW_JOBS_IN_MINUTES = 1;
+    public static final int DEFAULT_SLEEP_BETWEEN_NEW_JOBS_MS = 5_000;
     public static final String BATCH_SINK_PREFIX = "IsolatedJobsTestBatchSink";
-    private static final int LOG_JOB_COUNT_THRESHOLD = 15;
-    private int sleepBetweenNewJobsInMinutes;
+    private static final int LOG_JOB_COUNT_THRESHOLD = 60;
+    private int sleepBetweenNewJobsMs;
 
     public static void main(final String[] args) throws Exception {
+        setRunLocal();
         new IsolatedJobsBatchTest().run(args);
     }
 
     @Override
     protected void init(HazelcastInstance client) throws Exception {
-        sleepBetweenNewJobsInMinutes = propertyInt("sleepBetweenNewJobsInMinutes",
-                DEFAULT_SLEEP_BETWEEN_NEW_JOBS_IN_MINUTES);
+        sleepBetweenNewJobsMs = propertyInt("sleepBetweenNewJobsMs",
+                DEFAULT_SLEEP_BETWEEN_NEW_JOBS_MS);
     }
 
     @Override
     protected void test(HazelcastInstance client, String name) throws Throwable {
         long begin = System.currentTimeMillis();
         long jobCount = 0;
+        List<UUID> membersUuids = client.getCluster().getMembers().stream()
+                .map(Member::getUuid)
+                .collect(Collectors.toList());
+
         while (System.currentTimeMillis() - begin < durationInMillis) {
-            UUID excludedMember = getRandomMemberUUID(client);
+            UUID excludedMember = getRandomMemberUUID(membersUuids);
             createBatchJob(client, excludedMember, jobCount)
                     .join();
-            assertBatchSink(client, jobCount, excludedMember);
+            assertBatchSink(client, jobCount, membersUuids, excludedMember);
             clearSink(client, jobCount);
 
             jobCount++;
             if (jobCount % LOG_JOB_COUNT_THRESHOLD == 0) {
                 logger.info("Job count: " + jobCount);
             }
-            sleepMinutes(sleepBetweenNewJobsInMinutes);
+            sleepMinutes(sleepBetweenNewJobsMs);
         }
         logger.info("Final job count: " + jobCount);
     }
@@ -79,15 +84,14 @@ public class IsolatedJobsBatchTest extends AbstractSoakTest {
         client.getList(BATCH_SINK_PREFIX + jobCount).clear();
     }
 
-    private void assertBatchSink(HazelcastInstance client, long jobCount, UUID excludedMember) {
-        List<UUID> expectedUuids = client.getCluster().getMembers().stream()
-                .map(Member::getUuid)
+    private void assertBatchSink(HazelcastInstance client, long jobCount, List<UUID> membersUuids, UUID excludedMember) {
+        List<UUID> expectedUuids = membersUuids
+                .stream()
                 .filter(uuid -> !uuid.equals(excludedMember))
                 .collect(Collectors.toList());
 
         IList<UUID> list = client.getList(BATCH_SINK_PREFIX + jobCount);
-        assertEquals(expectedUuids.size(), list.size());
-
+        //Check if job was not processed on excluded member
         list.forEach(uuid -> {
             if (!expectedUuids.contains(uuid)) {
                 throw new AssertionError("Job was executed on excluded member ( " + uuid + ")."
@@ -96,13 +100,22 @@ public class IsolatedJobsBatchTest extends AbstractSoakTest {
                         .collect(joining(",")));
             }
         });
+
+        //Check if job was processed on all expected members
+        expectedUuids.forEach(expectedMemberUuid -> {
+            if (!list.contains(expectedMemberUuid)) {
+                throw new AssertionError("Job was not executed on expected member ( " + expectedMemberUuid + ")."
+                        + "List of members from execution: " + list.stream()
+                        .map(UUID::toString)
+                        .collect(joining(",")));
+            }
+        });
     }
 
 
-    private UUID getRandomMemberUUID(HazelcastInstance client) {
-        Member[] members = client.getCluster().getMembers().toArray(Member[]::new);
-        int randomIndex = ThreadLocalRandom.current().nextInt(members.length);
-        return members[randomIndex].getUuid();
+    private UUID getRandomMemberUUID(List<UUID> uuids) {
+        int randomIndex = ThreadLocalRandom.current().nextInt(uuids.size());
+        return uuids.get(randomIndex);
     }
 
     @Override

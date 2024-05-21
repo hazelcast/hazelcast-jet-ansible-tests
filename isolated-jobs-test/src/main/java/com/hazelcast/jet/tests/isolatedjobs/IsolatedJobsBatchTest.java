@@ -46,7 +46,6 @@ public class IsolatedJobsBatchTest extends AbstractSoakTest {
     private int sleepBetweenNewJobsMs;
 
     public static void main(final String[] args) throws Exception {
-        setRunLocal();
         new IsolatedJobsBatchTest().run(args);
     }
 

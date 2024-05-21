@@ -30,7 +30,7 @@ import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 
-import static com.hazelcast.jet.tests.common.Util.sleepMinutes;
+import static com.hazelcast.jet.tests.common.Util.sleepMillis;
 import static com.hazelcast.jet.tests.isolatedjobs.JetMemberSelectorUtil.excludeMember;
 import static java.util.stream.Collectors.joining;
 
@@ -74,7 +74,7 @@ public class IsolatedJobsBatchTest extends AbstractSoakTest {
             if (jobCount % LOG_JOB_COUNT_THRESHOLD == 0) {
                 logger.info("Job count: " + jobCount);
             }
-            sleepMinutes(sleepBetweenNewJobsMs);
+            sleepMillis(sleepBetweenNewJobsMs);
         }
         logger.info("Final job count: " + jobCount);
     }

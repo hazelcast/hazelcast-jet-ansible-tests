@@ -135,6 +135,7 @@
                 <module>event-journal-test</module>
                 <module>generic-map-store-test</module>
                 <module>hdfs-test</module>
+                <module>isolated-jobs-test</module>
                 <module>jar-submission-module</module>
                 <module>jdbc-test</module>
                 <module>jms-test</module>
@@ -186,6 +187,7 @@
                 <module>event-journal-test</module>
                 <module>generic-map-store-test</module>
                 <module>hdfs-test</module>
+                <module>isolated-jobs-test</module>
                 <module>jar-submission-module</module>
                 <module>jdbc-test</module>
                 <module>jms-test</module>

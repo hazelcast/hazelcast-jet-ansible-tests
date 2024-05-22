@@ -91,14 +91,12 @@ public class IsolatedJobsBatchTest extends AbstractSoakTest {
 
         IList<UUID> list = client.getList(BATCH_SINK_PREFIX + jobCount);
         //Check if job was not processed on excluded member
-        list.forEach(uuid -> {
-            if (!expectedUuids.contains(uuid)) {
-                throw new AssertionError("Job was executed on excluded member ( " + uuid + ")."
-                        + "List of members from execution: " + list.stream()
-                        .map(UUID::toString)
-                        .collect(joining(",")));
-            }
-        });
+        if (list.contains(excludedMember)) {
+            throw new AssertionError("Job was executed on excluded member ( " + excludedMember + ")."
+                    + "List of members from execution: " + list.stream()
+                    .map(UUID::toString)
+                    .collect(joining(",")));
+        }
 
         //Check if job was processed on all expected members
         expectedUuids.forEach(expectedMemberUuid -> {

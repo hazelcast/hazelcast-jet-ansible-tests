@@ -16,6 +16,8 @@
 
 package com.hazelcast.jet.tests.isolatedjobs;
 
+import com.hazelcast.client.HazelcastClient;
+import com.hazelcast.client.config.ClientConfig;
 import com.hazelcast.cluster.Member;
 import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.function.FunctionEx;
@@ -23,7 +25,6 @@ import com.hazelcast.jet.Job;
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.core.JobStatus;
 import com.hazelcast.jet.pipeline.Pipeline;
-import com.hazelcast.jet.pipeline.Sinks;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
 
 import java.util.Collection;
@@ -32,6 +33,7 @@ import java.util.UUID;
 
 import static com.hazelcast.jet.config.ProcessingGuarantee.AT_LEAST_ONCE;
 import static com.hazelcast.jet.core.JobStatus.RUNNING;
+import static com.hazelcast.jet.pipeline.Sinks.remoteMap;
 import static com.hazelcast.jet.tests.common.Util.getJobStatusWithRetry;
 import static com.hazelcast.jet.tests.common.Util.sleepMinutes;
 import static com.hazelcast.jet.tests.common.Util.waitForJobStatus;
@@ -44,13 +46,16 @@ import static com.hazelcast.jet.tests.isolatedjobs.JetMemberSelectorUtil.exclude
  */
 public class IsolatedJobsStreamTest extends AbstractSoakTest {
     private static final int DEFAULT_LOG_VERIFICATION_COUNT_THRESHOLD = 5;
-    private static final int DEFAULT_SLEEP_BETWEEN_VALIDATIONS_IN_MINUTES = 1;
+    private static final int DEFAULT_SLEEP_BETWEEN_VALIDATIONS_IN_MINUTES = 2;
     private static final int DEFAULT_SNAPSHOT_INTERVAL_MS = 1000;
     private static final int DEFAULT_SLEEP_BETWEEN_STREAM_RECORDS_MS = 1000 * 15;
     private int snapshotIntervalMs;
     private int logVerificationCountThreshold;
     private int sleepBeforeValidationInMinutes;
     private int sleepBetweenStreamRecordsMs;
+
+    private transient ClientConfig remoteClusterClientConfig;
+    private transient HazelcastInstance remoteClient;
 
     public static void main(final String[] args) throws Exception {
         new IsolatedJobsStreamTest().run(args);
@@ -71,6 +76,8 @@ public class IsolatedJobsStreamTest extends AbstractSoakTest {
                 DEFAULT_SLEEP_BETWEEN_VALIDATIONS_IN_MINUTES);
         sleepBetweenStreamRecordsMs = propertyInt("sleepBetweenStreamRecordsMs",
                 DEFAULT_SLEEP_BETWEEN_STREAM_RECORDS_MS);
+        remoteClusterClientConfig = remoteClusterClientConfig();
+        remoteClient = HazelcastClient.newHazelcastClient(remoteClusterClientConfig);
     }
 
     @Override
@@ -83,7 +90,7 @@ public class IsolatedJobsStreamTest extends AbstractSoakTest {
         String excludedMemberAddress = excludedMember.getSocketAddress().toString();
 
         Job streamJob = JobDefinition.createStreamJob(sleepBetweenStreamRecordsMs,
-                snapshotIntervalMs, client, excludedMemberUuid, name);
+                snapshotIntervalMs, client, excludedMemberUuid, name, remoteClusterClientConfig);
         waitForJobStatus(streamJob, RUNNING);
 
         long validationCount = 0;
@@ -94,7 +101,7 @@ public class IsolatedJobsStreamTest extends AbstractSoakTest {
 
             sleepMinutes(sleepBeforeValidationInMinutes);
 
-            assertStreamSinkMap(client, excludedMemberAddress, name);
+            assertStreamSinkMap(remoteClient, excludedMemberAddress, name);
             clearSink(client, name);
 
             validationCount++;
@@ -114,8 +121,8 @@ public class IsolatedJobsStreamTest extends AbstractSoakTest {
         client.getMap(jobName).clear();
     }
 
-    private void assertStreamSinkMap(HazelcastInstance client, String excludedMemberAddress, String jobName) {
-        Map<String, String> map = client.getMap(jobName);
+    private void assertStreamSinkMap(HazelcastInstance remoteClient, String excludedMemberAddress, String jobName) {
+        Map<String, String> map = remoteClient.getMap(jobName);
         assertFalse("There was no entries in the Map from job " + jobName, map.isEmpty());
         Collection<String> mapValues = map.values();
         mapValues.forEach(address -> {
@@ -130,11 +137,11 @@ public class IsolatedJobsStreamTest extends AbstractSoakTest {
     public static class JobDefinition {
         public static Job createStreamJob(int sleepBetweenStreamRecordsMs,
                                           int snapshotIntervalMs, HazelcastInstance client,
-                                          UUID excludedMember, String jobName) {
+                                          UUID excludedMember, String jobName, ClientConfig remoteClientConfig) {
             Pipeline p = Pipeline.create();
             p.readFrom(Sources.createStreamSource(sleepBetweenStreamRecordsMs))
                     .withIngestionTimestamps()
-                    .writeTo(Sinks.map(jobName, FunctionEx.identity(), FunctionEx.identity()));
+                    .writeTo(remoteMap(jobName, remoteClientConfig, FunctionEx.identity(), FunctionEx.identity()));
 
             JobConfig jobConfig = new JobConfig();
             jobConfig.setName(jobName);

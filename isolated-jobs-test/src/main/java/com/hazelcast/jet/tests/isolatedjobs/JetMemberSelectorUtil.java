@@ -24,7 +24,11 @@ public final class JetMemberSelectorUtil {
     private JetMemberSelectorUtil() {
     }
 
-    public static JetMemberSelector excludeMember(UUID excludedMember) {
+    public static JetMemberSelector excludeMemberWithUuid(UUID excludedMember) {
         return member -> !member.getUuid().equals(excludedMember);
+    }
+
+    public static JetMemberSelector excludeMemberWithAddress(String address) {
+        return member -> !member .getSocketAddress().toString().equals(address);
     }
 }

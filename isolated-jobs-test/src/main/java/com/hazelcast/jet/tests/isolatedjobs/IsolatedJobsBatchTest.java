@@ -31,7 +31,7 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 
 import static com.hazelcast.jet.tests.common.Util.sleepMillis;
-import static com.hazelcast.jet.tests.isolatedjobs.JetMemberSelectorUtil.excludeMember;
+import static com.hazelcast.jet.tests.isolatedjobs.JetMemberSelectorUtil.excludeMemberWithUuid;
 import static java.util.stream.Collectors.joining;
 
 /**
@@ -131,7 +131,7 @@ public class IsolatedJobsBatchTest extends AbstractSoakTest {
                         .setName("IsolatedJobsTestBatchJob" + index)
                         .addClass(Sources.class)
                         .addClass(JetMemberSelectorUtil.class))
-                .withMemberSelector(excludeMember(excludedMember))
+                .withMemberSelector(excludeMemberWithUuid(excludedMember))
                 .start();
     }
 

@@ -25,19 +25,19 @@ import com.hazelcast.jet.Job;
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.core.JobStatus;
 import com.hazelcast.jet.pipeline.Pipeline;
+import com.hazelcast.jet.pipeline.Sink;
+import com.hazelcast.jet.pipeline.Sinks;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
 
 import java.util.Collection;
 import java.util.Map;
-import java.util.UUID;
 
 import static com.hazelcast.jet.config.ProcessingGuarantee.AT_LEAST_ONCE;
 import static com.hazelcast.jet.core.JobStatus.RUNNING;
-import static com.hazelcast.jet.pipeline.Sinks.remoteMap;
 import static com.hazelcast.jet.tests.common.Util.getJobStatusWithRetry;
 import static com.hazelcast.jet.tests.common.Util.sleepMinutes;
 import static com.hazelcast.jet.tests.common.Util.waitForJobStatus;
-import static com.hazelcast.jet.tests.isolatedjobs.JetMemberSelectorUtil.excludeMember;
+import static com.hazelcast.jet.tests.isolatedjobs.JetMemberSelectorUtil.excludeMemberWithAddress;
 
 /**
  * This test requires Enterprise License with Advanced Compute Feature.
@@ -86,12 +86,14 @@ public class IsolatedJobsStreamTest extends AbstractSoakTest {
         String logPrefix = "[" + name + "] ";
 
         Member excludedMember = client.getCluster().getMembers().iterator().next();
-        UUID excludedMemberUuid = excludedMember.getUuid();
         String excludedMemberAddress = excludedMember.getSocketAddress().toString();
 
         Job streamJob = JobDefinition.createStreamJob(sleepBetweenStreamRecordsMs,
-                snapshotIntervalMs, client, excludedMemberUuid, name, remoteClusterClientConfig);
+                snapshotIntervalMs, client, excludedMemberAddress, name, remoteClusterClientConfig);
         waitForJobStatus(streamJob, RUNNING);
+        //For Dynamic cluster tests assertions and clear actions needs to be done on map stored in stable cluster
+        //In this case Pipeline writes data to this map with usage of Sinks#remoteMap
+        HazelcastInstance outputClient = name.startsWith(DYNAMIC_CLUSTER) ? remoteClient : client;
 
         long validationCount = 0;
         while (System.currentTimeMillis() - begin < durationInMillis) {
@@ -101,8 +103,8 @@ public class IsolatedJobsStreamTest extends AbstractSoakTest {
 
             sleepMinutes(sleepBeforeValidationInMinutes);
 
-            assertStreamSinkMap(remoteClient, excludedMemberAddress, name);
-            clearSink(client, name);
+            assertStreamSinkMap(outputClient, excludedMemberAddress, name);
+            clearSink(outputClient, name);
 
             validationCount++;
             if (validationCount % logVerificationCountThreshold == 0) {
@@ -121,8 +123,8 @@ public class IsolatedJobsStreamTest extends AbstractSoakTest {
         client.getMap(jobName).clear();
     }
 
-    private void assertStreamSinkMap(HazelcastInstance remoteClient, String excludedMemberAddress, String jobName) {
-        Map<String, String> map = remoteClient.getMap(jobName);
+    private void assertStreamSinkMap(HazelcastInstance client, String excludedMemberAddress, String jobName) {
+        Map<String, String> map = client.getMap(jobName);
         assertFalse("There was no entries in the Map from job " + jobName, map.isEmpty());
         Collection<String> mapValues = map.values();
         mapValues.forEach(address -> {
@@ -137,27 +139,34 @@ public class IsolatedJobsStreamTest extends AbstractSoakTest {
     public static class JobDefinition {
         public static Job createStreamJob(int sleepBetweenStreamRecordsMs,
                                           int snapshotIntervalMs, HazelcastInstance client,
-                                          UUID excludedMember, String jobName, ClientConfig remoteClientConfig) {
-            Pipeline p = Pipeline.create();
-            p.readFrom(Sources.createStreamSource(sleepBetweenStreamRecordsMs))
-                    .withIngestionTimestamps()
-                    .writeTo(remoteMap(jobName, remoteClientConfig, FunctionEx.identity(), FunctionEx.identity()));
+                                          String excludedMember, String jobName, ClientConfig remoteClientConfig) {
+            Sink<String> sink;
 
             JobConfig jobConfig = new JobConfig();
             jobConfig.setName(jobName);
             if (jobName.startsWith(STABLE_CLUSTER)) {
                 jobConfig.addClass(IsolatedJobsStreamTest.class);
+                //Use local map for stable cluster
+                sink = Sinks.map(jobName, FunctionEx.identity(), FunctionEx.identity());
             } else {
                 jobConfig.setSnapshotIntervalMillis(snapshotIntervalMs);
                 jobConfig.setProcessingGuarantee(AT_LEAST_ONCE);
+                // Use remote map from stable cluster for dynamic cluster test to prevent issues with cleared map during
+                // restarts of a dynamic cluster
+                sink = Sinks.remoteMap(jobName, remoteClientConfig, FunctionEx.identity(), FunctionEx.identity());
             }
             jobConfig.addClass(Sources.class)
                     .addClass(JetMemberSelectorUtil.class)
                     .addClass(JobDefinition.class);
 
+            Pipeline p = Pipeline.create();
+
+            p.readFrom(Sources.createStreamSource(sleepBetweenStreamRecordsMs))
+                    .withIngestionTimestamps()
+                    .writeTo(sink);
 
             return client.getJet().newJobBuilder(p)
-                    .withMemberSelector(excludeMember(excludedMember))
+                    .withMemberSelector(excludeMemberWithAddress(excludedMember))
                     .withConfig(jobConfig)
                     .start();
 

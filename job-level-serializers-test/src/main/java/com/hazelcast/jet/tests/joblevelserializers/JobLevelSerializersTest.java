@@ -22,7 +22,7 @@ import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.pipeline.Pipeline;
 import com.hazelcast.jet.pipeline.Sinks;
 import com.hazelcast.jet.pipeline.Sources;
-import com.hazelcast.jet.tests.common.AbstractSoakTest;
+import com.hazelcast.jet.tests.common.AbstractJetSoakTest;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -31,7 +31,7 @@ import java.util.stream.IntStream;
 
 import static com.hazelcast.jet.tests.common.Util.sleepMillis;
 
-public class JobLevelSerializersTest extends AbstractSoakTest {
+public class JobLevelSerializersTest extends AbstractJetSoakTest {
 
     private static final int PAUSE_BETWEEN_JOBS_MS = 1_000;
     private static final int LOG_JOB_COUNT_THRESHOLD = 500;

@@ -19,7 +19,7 @@ package com.hazelcast.jet.tests.mapstore;
 import com.hazelcast.config.MapConfig;
 import com.hazelcast.config.MapStoreConfig;
 import com.hazelcast.core.HazelcastInstance;
-import com.hazelcast.jet.tests.common.AbstractSoakTest;
+import com.hazelcast.jet.tests.common.AbstractJetSoakTest;
 import com.hazelcast.jet.tests.common.Util;
 import com.hazelcast.map.IMap;
 import com.hazelcast.nio.serialization.genericrecord.GenericRecord;
@@ -34,7 +34,7 @@ import java.util.Random;
 
 import static com.hazelcast.jet.tests.common.Util.getTimeElapsed;
 
-public class GenericMapStoreTest extends AbstractSoakTest {
+public class GenericMapStoreTest extends AbstractJetSoakTest {
 
     private static final String DB_AND_USER = "/generic-mapstore-test?user=root&password=Soak-test,1";
     private static final String TABLE_NAME_PREFIX = "PERSON_";
@@ -66,7 +66,7 @@ public class GenericMapStoreTest extends AbstractSoakTest {
             + "TYPE JDBC "
             + "OPTIONS('jdbcUrl'='" + connectionUrl + "')"
         );
-        AbstractSoakTest.assertEquals(0L, createDataConnResult.updateCount());
+        AbstractJetSoakTest.assertEquals(0L, createDataConnResult.updateCount());
 
         MapConfig mapConfig = new MapConfig(tableName);
         MapStoreConfig mapStoreConfig = new MapStoreConfig()
@@ -107,13 +107,13 @@ public class GenericMapStoreTest extends AbstractSoakTest {
     private void runAndVerifyMapStoreOperations(int key) {
         // MapStore.store()
         GenericRecord person = map.get(key);
-        AbstractSoakTest.assertEquals("name-" + key, person.getString("name"));
+        AbstractJetSoakTest.assertEquals("name-" + key, person.getString("name"));
 
         // MapStore.delete()
         map.delete(key);
 
         // MapStore.load()
-        AbstractSoakTest.assertNull(map.put(key, person));
+        AbstractJetSoakTest.assertNull(map.put(key, person));
 
         // Make sure data is loaded from MapStore each time
         map.evict(key);

@@ -27,7 +27,7 @@ import com.hazelcast.jet.core.JobStatus;
 import com.hazelcast.jet.pipeline.Pipeline;
 import com.hazelcast.jet.pipeline.Sink;
 import com.hazelcast.jet.pipeline.Sinks;
-import com.hazelcast.jet.tests.common.AbstractSoakTest;
+import com.hazelcast.jet.tests.common.AbstractJetSoakTest;
 
 import java.util.Collection;
 import java.util.Map;
@@ -42,9 +42,9 @@ import static com.hazelcast.jet.tests.isolatedjobs.JetMemberSelectorUtil.exclude
 /**
  * This test requires Enterprise License with Advanced Compute Feature.
  * To run this test locally, you have to use EE version (it can be forced by adding dependency to hazelcast-enterprise
- * in the pom.xml) and license must be set (it can be done in {@link AbstractSoakTest#run(String[])})
+ * in the pom.xml) and license must be set (it can be done in {@link AbstractJetSoakTest#run(String[])})
  */
-public class IsolatedJobsStreamTest extends AbstractSoakTest {
+public class IsolatedJobsStreamTest extends AbstractJetSoakTest {
     private static final int DEFAULT_LOG_VERIFICATION_COUNT_THRESHOLD = 5;
     private static final int DEFAULT_SLEEP_BETWEEN_VALIDATIONS_IN_MINUTES = 2;
     private static final int DEFAULT_SNAPSHOT_INTERVAL_MS = 1000;

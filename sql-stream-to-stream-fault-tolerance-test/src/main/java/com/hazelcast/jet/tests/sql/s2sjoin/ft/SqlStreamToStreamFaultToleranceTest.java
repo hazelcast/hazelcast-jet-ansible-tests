@@ -22,7 +22,7 @@ import com.hazelcast.jet.kafka.impl.HazelcastJsonValueDeserializer;
 import com.hazelcast.jet.kafka.impl.HazelcastJsonValueSerializer;
 import com.hazelcast.jet.sql.impl.connector.SqlConnector;
 import com.hazelcast.jet.sql.impl.connector.kafka.KafkaSqlConnector;
-import com.hazelcast.jet.tests.common.AbstractSoakTest;
+import com.hazelcast.jet.tests.common.AbstractJetSoakTest;
 import com.hazelcast.jet.tests.common.Util;
 import com.hazelcast.jet.tests.common.sql.DataIngestionTask;
 import com.hazelcast.jet.tests.common.sql.ItemProducer;
@@ -44,7 +44,7 @@ import static com.hazelcast.jet.tests.common.Util.randomName;
 import static com.hazelcast.jet.tests.common.Util.sleepMinutes;
 import static com.hazelcast.jet.tests.common.sql.DataIngestionTask.DEFAULT_QUERY_TIMEOUT_MILLIS;
 
-public class SqlStreamToStreamFaultToleranceTest extends AbstractSoakTest {
+public class SqlStreamToStreamFaultToleranceTest extends AbstractJetSoakTest {
 
     private static final String EVENTS_SOURCE_PREFIX = "source_topic_";
     private static final String EVENTS_SINK_PREFIX = "sink_topic_";
@@ -177,7 +177,7 @@ public class SqlStreamToStreamFaultToleranceTest extends AbstractSoakTest {
                         + ", '" + SqlConnector.OPTION_VALUE_FORMAT + "'='json-flat'"
                         + ")"
         );
-        AbstractSoakTest.assertEquals(0L, sourceMappingCreateResult.updateCount());
+        AbstractJetSoakTest.assertEquals(0L, sourceMappingCreateResult.updateCount());
 
         String sinkTopicName = name + "_" + sinkName;
         SqlResult sinkMappingCreateResult = sqlService.execute(
@@ -192,7 +192,7 @@ public class SqlStreamToStreamFaultToleranceTest extends AbstractSoakTest {
                         + ", '" + SqlConnector.OPTION_VALUE_FORMAT + "'='json-flat'"
                         + ")"
         );
-        AbstractSoakTest.assertEquals(0L, sinkMappingCreateResult.updateCount());
+        AbstractJetSoakTest.assertEquals(0L, sinkMappingCreateResult.updateCount());
 
         sqlService.execute("CREATE VIEW " + name + "_" + viewName1 + " AS "
                 + "SELECT * FROM TABLE(IMPOSE_ORDER(TABLE "
@@ -249,6 +249,6 @@ public class SqlStreamToStreamFaultToleranceTest extends AbstractSoakTest {
                         + " NOT SHARED "
                         + "OPTIONS ( " + propertiesToOptions(kafkaProps) + ")"
         );
-        AbstractSoakTest.assertEquals(0L, createDataConnResult.updateCount());
+        AbstractJetSoakTest.assertEquals(0L, createDataConnResult.updateCount());
     }
 }

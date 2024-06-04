@@ -31,7 +31,7 @@ import com.hazelcast.jet.pipeline.SourceBuilder;
 import com.hazelcast.jet.pipeline.SourceBuilder.SourceBuffer;
 import com.hazelcast.jet.pipeline.Sources;
 import com.hazelcast.jet.pipeline.StreamSource;
-import com.hazelcast.jet.tests.common.AbstractSoakTest;
+import com.hazelcast.jet.tests.common.AbstractJetSoakTest;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -49,7 +49,7 @@ import static com.hazelcast.jet.tests.common.Util.getJobStatusWithRetry;
 import static com.hazelcast.jet.tests.common.Util.sleepSeconds;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
-public class JdbcTest extends AbstractSoakTest {
+public class JdbcTest extends AbstractJetSoakTest {
 
     private static final String DB_AND_USER = "/soak-test?user=root&password=Soak-test,1";
     private static final String QUEUE_NAME = JdbcTest.class.getSimpleName();

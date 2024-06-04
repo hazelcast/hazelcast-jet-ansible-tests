@@ -22,7 +22,7 @@ import com.hazelcast.jet.core.ProcessorMetaSupplier;
 import com.hazelcast.jet.pipeline.Pipeline;
 import com.hazelcast.jet.pipeline.ServiceFactories;
 import com.hazelcast.jet.pipeline.test.TestSources;
-import com.hazelcast.jet.tests.common.AbstractSoakTest;
+import com.hazelcast.jet.tests.common.AbstractJetSoakTest;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -39,7 +39,7 @@ import static com.hazelcast.jet.tests.common.Util.sleepMillis;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.stream.Collectors.toList;
 
-public class AttachMLModelTest extends AbstractSoakTest {
+public class AttachMLModelTest extends AbstractJetSoakTest {
 
     private static final int LOG_JOB_COUNT_THRESHOLD = 100;
     private static final int LOG_JOB_COUNT_LARGE_FILE_THRESHOLD = 10;

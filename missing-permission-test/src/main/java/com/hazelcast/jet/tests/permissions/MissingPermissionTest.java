@@ -21,13 +21,13 @@ import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.pipeline.Pipeline;
 import com.hazelcast.jet.pipeline.Sinks;
 import com.hazelcast.jet.pipeline.Sources;
-import com.hazelcast.jet.tests.common.AbstractSoakTest;
+import com.hazelcast.jet.tests.common.AbstractJetSoakTest;
 import com.hazelcast.map.IMap;
 import java.security.AccessControlException;
 
 import static com.hazelcast.jet.tests.common.Util.sleepMillis;
 
-public class MissingPermissionTest extends AbstractSoakTest {
+public class MissingPermissionTest extends AbstractJetSoakTest {
 
     private static final String SOURCE_MAP_NAME = "missingMapPermissionSourceMap";
     private static final String SINK_MAP_NAME = "missingMapPermissionSinkMap";

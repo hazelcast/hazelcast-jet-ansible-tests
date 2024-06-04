@@ -25,7 +25,7 @@ import com.hazelcast.jet.kafka.KafkaSources;
 import com.hazelcast.jet.pipeline.Pipeline;
 import com.hazelcast.jet.pipeline.StreamSource;
 import com.hazelcast.jet.pipeline.StreamStage;
-import com.hazelcast.jet.tests.common.AbstractSoakTest;
+import com.hazelcast.jet.tests.common.AbstractJetSoakTest;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -71,7 +71,7 @@ import static java.util.concurrent.TimeUnit.SECONDS;
  *     "emitted items count"/generatorBatchCount. This is checked at the end
  *     of the test.
  */
-public class StatefulMapTest extends AbstractSoakTest {
+public class StatefulMapTest extends AbstractJetSoakTest {
 
     static final long TIMED_OUT_CODE = -1;
     static final int WAIT_TX_TIMEOUT_FACTOR = 4;

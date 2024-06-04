@@ -29,7 +29,7 @@ import com.hazelcast.jet.pipeline.Sink;
 import com.hazelcast.jet.pipeline.Sinks;
 import com.hazelcast.jet.pipeline.StreamSource;
 import com.hazelcast.jet.pipeline.test.TestSources;
-import com.hazelcast.jet.tests.common.AbstractSoakTest;
+import com.hazelcast.jet.tests.common.AbstractJetSoakTest;
 import com.mongodb.ConnectionString;
 import com.mongodb.MongoClientSettings;
 import com.mongodb.client.MongoClient;
@@ -50,7 +50,7 @@ import static com.hazelcast.jet.tests.common.Util.sleepSeconds;
 import static java.util.concurrent.TimeUnit.MINUTES;
 import static java.util.stream.Collectors.toList;
 
-public class MongoTest extends AbstractSoakTest {
+public class MongoTest extends AbstractJetSoakTest {
     private static final int DEFAULT_ITEM_COUNT = 5_000;
     private static final int LOG_JOB_COUNT_THRESHOLD = 50;
     private static final int SLEEP_BETWEEN_READS_SECONDS = 2;

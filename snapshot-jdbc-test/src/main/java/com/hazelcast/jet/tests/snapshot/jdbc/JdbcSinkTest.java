@@ -26,7 +26,7 @@ import com.hazelcast.jet.pipeline.Sink;
 import com.hazelcast.jet.pipeline.Sinks;
 import com.hazelcast.jet.pipeline.SourceBuilder;
 import com.hazelcast.jet.pipeline.StreamSource;
-import com.hazelcast.jet.tests.common.AbstractSoakTest;
+import com.hazelcast.jet.tests.common.AbstractJetSoakTest;
 import com.mysql.cj.jdbc.MysqlXADataSource;
 
 import javax.sql.DataSource;
@@ -40,7 +40,7 @@ import static com.hazelcast.jet.tests.common.Util.sleepMillis;
 import static com.hazelcast.jet.tests.common.Util.sleepMinutes;
 import static com.hazelcast.jet.tests.snapshot.jdbc.JdbcSinkTest.DataSourceSupplier.getDataSourceSupplier;
 
-public class JdbcSinkTest extends AbstractSoakTest {
+public class JdbcSinkTest extends AbstractJetSoakTest {
 
     public static final String TABLE_PREFIX = "JdbcSinkTest";
     private static final String DATABASE_NAME = "snapshot-jdbc-test-db";

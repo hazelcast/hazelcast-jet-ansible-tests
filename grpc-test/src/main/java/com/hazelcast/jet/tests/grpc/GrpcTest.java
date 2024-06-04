@@ -24,7 +24,7 @@ import com.hazelcast.jet.pipeline.Pipeline;
 import com.hazelcast.jet.pipeline.ServiceFactory;
 import com.hazelcast.jet.pipeline.Sinks;
 import com.hazelcast.jet.pipeline.Sources;
-import com.hazelcast.jet.tests.common.AbstractSoakTest;
+import com.hazelcast.jet.tests.common.AbstractJetSoakTest;
 import com.hazelcast.jet.tests.grpc.greeter.GreeterGrpc;
 import com.hazelcast.jet.tests.grpc.greeter.GreeterOuterClass.HelloReply;
 import com.hazelcast.jet.tests.grpc.greeter.GreeterOuterClass.HelloRequest;
@@ -42,7 +42,7 @@ import static com.hazelcast.query.Predicates.alwaysTrue;
 import static java.util.stream.Collectors.toList;
 import static java.util.stream.IntStream.range;
 
-public class GrpcTest extends AbstractSoakTest {
+public class GrpcTest extends AbstractJetSoakTest {
 
     private static final String SOURCE_MAP_NAME = "grpcSourceMap";
     private static final String SINK_LIST_NAME = "grpcSinkList";

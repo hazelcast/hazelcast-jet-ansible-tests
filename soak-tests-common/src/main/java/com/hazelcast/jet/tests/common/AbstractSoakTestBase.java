@@ -35,101 +35,21 @@ import static com.hazelcast.jet.tests.common.Util.sleepSeconds;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.MINUTES;
 
-public abstract class AbstractSoakTest {
+public abstract class AbstractSoakTestBase {
 
-    public static final String STABLE_CLUSTER = "Stable";
-    public static final String DYNAMIC_CLUSTER = "Dynamic";
+    public static final String STABLE_CLUSTER = ClusterType.STABLE.getPrettyName();
+    public static final String DYNAMIC_CLUSTER = ClusterType.DYNAMIC.getPrettyName();
 
     private static final int DEFAULT_DURATION_MINUTES = 30;
-    private static final int CACHE_EVICTION_SIZE = 2000000;
-    private static final double WAIT_TIMEOUT_FACTOR = 1.1;
-    private static final int DELAY_BETWEEN_INIT_AND_TEST_SECONDS = 15;
+    protected static final double WAIT_TIMEOUT_FACTOR = 1.1;
+    protected static final int DELAY_BETWEEN_INIT_AND_TEST_SECONDS = 15;
 
     protected transient ClientConfig stableClusterClientConfig;
-    protected transient HazelcastInstance stableClusterClient;
-    protected transient ILogger logger;
     protected long durationInMillis;
 
-    private transient HazelcastInstance hz;
-
-    protected final void run(String[] args) throws Exception {
-        parseArguments(args);
-
-        HazelcastInstance[] instances = null;
-        if (isRunLocal()) {
-            Config config = new Config();
-            CacheSimpleConfig cacheConfig = new CacheSimpleConfig()
-                    .setName("CooperativeMapCacheSourceTest_SourceCache");
-            cacheConfig.getEvictionConfig().setSize(CACHE_EVICTION_SIZE);
-            config.addCacheConfig(cacheConfig);
-            config.setJetConfig(new JetConfig()
-                    .setEnabled(true)
-                    .setResourceUploadEnabled(true));
-
-            instances = new HazelcastInstance[]{
-                Hazelcast.newHazelcastInstance(config), Hazelcast.newHazelcastInstance(config)};
-            hz = HazelcastClient.newHazelcastClient();
-        } else {
-            hz = Hazelcast.bootstrappedInstance();
-        }
-        logger = getLogger(getClass());
-
-        logger.info("Initializing...");
-        try {
-            durationInMillis = durationInMillis();
-            init(hz);
-            sleepSeconds(DELAY_BETWEEN_INIT_AND_TEST_SECONDS);
-        } catch (Throwable t) {
-            t.printStackTrace();
-            logger.severe(t);
-            teardown(t);
-            logger.info("Finished with failure at init");
-            System.exit(1);
-        }
-        logger.info("Running...");
-        try {
-            testInternal();
-        } catch (Throwable t) {
-            t.printStackTrace();
-            logger.severe(t);
-            teardown(t);
-            logger.info("Finished with failure at test");
-            System.exit(1);
-        }
-        logger.info("Teardown...");
-        teardown(null);
-        if (hz != null) {
-            hz.shutdown();
-        }
-        if (stableClusterClient != null) {
-            stableClusterClient.shutdown();
-        }
-        if (instances != null) {
-            Hazelcast.shutdownAll();
-        }
-        logger.info("Finished OK");
-        System.exit(0);
-    }
-
-    protected abstract void init(HazelcastInstance client) throws Exception;
-
-    protected abstract void test(HazelcastInstance client, String name) throws Throwable;
+    protected abstract void run(String[] args) throws Exception;
 
     protected abstract void teardown(Throwable t) throws Exception;
-
-    /**
-     * If {@code true} then {@link #test(HazelcastInstance, String)} method will be
-     * called with the dynamic cluster client (which should be the bootstrapped
-     * instance) and stable cluster client (which needs a `remoteClusterYaml`
-     * defined).
-     */
-    protected boolean runOnBothClusters() {
-        return false;
-    }
-
-    protected boolean runOnlyAsClient() {
-        return false;
-    }
 
     protected String property(String name, String defaultValue) {
         return System.getProperty(name, defaultValue);
@@ -151,57 +71,6 @@ public abstract class AbstractSoakTest {
         return new YamlClientConfigBuilder(remoteClusterYaml).build();
     }
 
-    private void testInternal() throws Throwable {
-        if (!runOnBothClusters() && !runOnlyAsClient()) {
-            test(hz, getClass().getSimpleName());
-            return;
-        }
-
-        stableClusterClientConfig = remoteClusterClientConfig();
-        stableClusterClient = HazelcastClient.newHazelcastClient(stableClusterClientConfig);
-
-        if (runOnlyAsClient()) {
-            test(stableClusterClient, getClass().getSimpleName());
-            return;
-        }
-
-        Throwable[] exceptions = new Throwable[2];
-        String dynamicName = DYNAMIC_CLUSTER + "-" + getClass().getSimpleName();
-        String stableName = STABLE_CLUSTER + "-" + getClass().getSimpleName();
-        ExecutorService executorService = Executors.newFixedThreadPool(2);
-        executorService.execute(() -> {
-            try {
-                test(hz, dynamicName);
-            } catch (Throwable t) {
-                logger.severe("Exception in " + dynamicName, t);
-                exceptions[0] = t;
-            }
-        });
-        executorService.execute(() -> {
-            try {
-                test(stableClusterClient, stableName);
-            } catch (Throwable t) {
-                logger.severe("Exception in " + stableName, t);
-                exceptions[1] = t;
-            }
-        });
-        executorService.shutdown();
-        executorService.awaitTermination((long) (durationInMillis * WAIT_TIMEOUT_FACTOR), MILLISECONDS);
-
-        if (exceptions[0] != null) {
-            logger.severe("Exception in " + dynamicName, exceptions[0]);
-        }
-        if (exceptions[1] != null) {
-            logger.severe("Exception in " + stableName, exceptions[1]);
-        }
-        if (exceptions[0] != null) {
-            throw exceptions[0];
-        }
-        if (exceptions[1] != null) {
-            throw exceptions[1];
-        }
-    }
-
     protected int propertyInt(String name, int defaultValue) {
         String value = System.getProperty(name);
         if (value != null) {
@@ -218,20 +87,12 @@ public abstract class AbstractSoakTest {
         return defaultValue;
     }
 
-    protected ILogger getLogger(Class clazz) {
-        return hz.getLoggingService().getLogger(clazz);
-    }
-
-    private static boolean isRunLocal() {
+    protected static boolean isRunLocal() {
         return System.getProperty("runLocal") != null;
     }
 
     protected static void setRunLocal() {
         System.setProperty("runLocal", "true");
-    }
-
-    protected static ILogger getLogger(HazelcastInstance instance, Class clazz) {
-        return instance.getLoggingService().getLogger(clazz);
     }
 
     protected static void assertEquals(int expected, int actual) {

@@ -26,7 +26,7 @@ import com.hazelcast.jet.pipeline.Pipeline;
 import com.hazelcast.jet.pipeline.Sink;
 import com.hazelcast.jet.pipeline.Sinks;
 import com.hazelcast.jet.pipeline.test.TestSources;
-import com.hazelcast.jet.tests.common.AbstractSoakTest;
+import com.hazelcast.jet.tests.common.AbstractJetSoakTest;
 import java.io.IOException;
 
 import java.sql.SQLException;
@@ -50,7 +50,7 @@ import org.elasticsearch.client.RestHighLevelClient;
 import static com.hazelcast.jet.tests.common.Util.sleepSeconds;
 import static java.util.stream.Collectors.toList;
 
-public class ElasticTest extends AbstractSoakTest {
+public class ElasticTest extends AbstractJetSoakTest {
 
     private static final String SINK_LIST_NAME = ElasticTest.class.getSimpleName() + "_listSink";
     private static final int DEFAULT_ITEM_COUNT = 10_000;

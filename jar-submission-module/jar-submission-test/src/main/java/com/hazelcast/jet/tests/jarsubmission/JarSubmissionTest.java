@@ -23,7 +23,7 @@ import com.hazelcast.jet.Job;
 import com.hazelcast.jet.core.JobStatus;
 import com.hazelcast.jet.impl.JetClientInstanceImpl;
 import com.hazelcast.jet.impl.SubmitJobParameters;
-import com.hazelcast.jet.tests.common.AbstractSoakTest;
+import com.hazelcast.jet.tests.common.AbstractJetSoakTest;
 import com.hazelcast.map.IMap;
 
 import java.io.IOException;
@@ -37,7 +37,7 @@ import java.util.concurrent.Executors;
 import static com.hazelcast.jet.tests.common.Util.sleepMillis;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
-public class JarSubmissionTest extends AbstractSoakTest {
+public class JarSubmissionTest extends AbstractJetSoakTest {
 
     private static final int SMALL_JAR_LOG_JOB_COUNT_THRESHOLD = 100;
     private static final int LARGE_JAR_LOG_JOB_COUNT_THRESHOLD = 50;

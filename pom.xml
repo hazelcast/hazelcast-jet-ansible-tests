@@ -167,6 +167,18 @@
                 <module>sql-stream-to-stream-join-test</module>
                 <module>sql-stream-to-stream-fault-tolerance-test</module>
                 <module>sql-tumble-window-test</module>
+                <module>subset-routing-test</module>
+            </modules>
+        </profile>
+        <profile>
+            <id>client</id>
+            <activation>
+                <property>
+                    <name>jet</name>
+                </property>
+            </activation>
+            <modules>
+                <module>subset-routing-test</module>
             </modules>
         </profile>
         <profile>

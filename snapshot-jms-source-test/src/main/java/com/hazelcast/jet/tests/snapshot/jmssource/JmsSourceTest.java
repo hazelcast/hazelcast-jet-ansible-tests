@@ -25,7 +25,7 @@ import com.hazelcast.jet.pipeline.Pipeline;
 import com.hazelcast.jet.pipeline.Sink;
 import com.hazelcast.jet.pipeline.Sources;
 import com.hazelcast.jet.pipeline.StreamSource;
-import com.hazelcast.jet.tests.common.AbstractSoakTest;
+import com.hazelcast.jet.tests.common.AbstractJetSoakTest;
 import com.hazelcast.jet.tests.jms.JmsMessageProducer;
 import com.hazelcast.logging.ILogger;
 import jakarta.jms.ConnectionFactory;
@@ -43,7 +43,7 @@ import static com.hazelcast.jet.tests.jms.JmsMessageProducer.MESSAGE_PREFIX;
 import static com.hazelcast.jet.tests.snapshot.jmssource.JmsSourceTest.JmsFactorySupplier.getConnectionFactory;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
-public class JmsSourceTest extends AbstractSoakTest {
+public class JmsSourceTest extends AbstractJetSoakTest {
 
     private static final int SNAPSHOT_INTERVAL = 5_000;
     private static final int ASSERTION_RETRY_COUNT = 60;

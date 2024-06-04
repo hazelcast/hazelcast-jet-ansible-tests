@@ -25,7 +25,7 @@ import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.config.ProcessingGuarantee;
 import com.hazelcast.jet.pipeline.Pipeline;
 import com.hazelcast.jet.pipeline.Sources;
-import com.hazelcast.jet.tests.common.AbstractSoakTest;
+import com.hazelcast.jet.tests.common.AbstractJetSoakTest;
 import com.hazelcast.map.IMap;
 
 import java.util.concurrent.CancellationException;
@@ -40,7 +40,7 @@ import static com.hazelcast.jet.tests.common.Util.sleepMinutes;
 import static com.hazelcast.jet.tests.common.Util.sleepSeconds;
 import static com.hazelcast.jet.tests.common.Util.waitForJobStatus;
 
-public class JobManagementTest extends AbstractSoakTest {
+public class JobManagementTest extends AbstractJetSoakTest {
 
     private static final int DEFAULT_SNAPSHOT_INTERVAL = 5000;
     private static final int EVENT_JOURNAL_CAPACITY = 1_500_000;

@@ -19,7 +19,7 @@ package com.hazelcast.jet.tests.sql.s2sjoin;
 import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.jet.sql.impl.connector.SqlConnector;
 import com.hazelcast.jet.sql.impl.connector.kafka.KafkaSqlConnector;
-import com.hazelcast.jet.tests.common.AbstractSoakTest;
+import com.hazelcast.jet.tests.common.AbstractJetSoakTest;
 import com.hazelcast.jet.tests.common.Util;
 import com.hazelcast.jet.tests.common.sql.DataIngestionTask;
 import com.hazelcast.jet.tests.common.sql.ItemProducer;
@@ -42,7 +42,7 @@ import java.util.concurrent.TimeoutException;
 import static com.hazelcast.jet.tests.common.Util.getTimeElapsed;
 import static com.hazelcast.jet.tests.common.Util.randomName;
 
-public class SqlStreamToStreamJoinSoakTest extends AbstractSoakTest {
+public class SqlStreamToStreamJoinSoakTest extends AbstractJetSoakTest {
     private static final String EVENTS_SOURCE_PREFIX = "events_topic_";
 
     private static final int PROGRESS_PRINT_QUERIES_INTERVAL = 20_000;
@@ -90,7 +90,7 @@ public class SqlStreamToStreamJoinSoakTest extends AbstractSoakTest {
                 + ", 'auto.offset.reset'='earliest'"
                 + ")"
         );
-        AbstractSoakTest.assertEquals(0L, sourceMappingCreateResult.updateCount());
+        AbstractJetSoakTest.assertEquals(0L, sourceMappingCreateResult.updateCount());
 
         try (ItemProducer producer = new ItemProducer(brokerUri)) {
             producer.produceItems(
@@ -139,7 +139,7 @@ public class SqlStreamToStreamJoinSoakTest extends AbstractSoakTest {
                     // checking only event_tick to simplify our destiny.
                     Long leftRowIndex = sqlRow.getObject(1);
                     Long rightRowIndex = sqlRow.getObject(3);
-                    AbstractSoakTest.assertEquals(leftRowIndex, rightRowIndex);
+                    AbstractJetSoakTest.assertEquals(leftRowIndex, rightRowIndex);
                 } catch (TimeoutException e) {
                     sqlRowFuture.cancel(true);
                     throw new RuntimeException("Timed out after " + streamingResultsTimeout

@@ -29,7 +29,7 @@ import com.hazelcast.jet.pipeline.ServiceFactory;
 import com.hazelcast.jet.pipeline.Sinks;
 import com.hazelcast.jet.pipeline.Sources;
 import com.hazelcast.jet.pipeline.StreamStage;
-import com.hazelcast.jet.tests.common.AbstractSoakTest;
+import com.hazelcast.jet.tests.common.AbstractJetSoakTest;
 import com.hazelcast.jet.tests.common.BasicEventJournalProducer;
 import com.hazelcast.jet.tests.eventjournal.EventJournalConsumer;
 import com.hazelcast.logging.ILogger;
@@ -53,7 +53,7 @@ import static com.hazelcast.jet.tests.common.Util.sleepMinutes;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.MINUTES;
 
-public class AsyncTransformTest extends AbstractSoakTest {
+public class AsyncTransformTest extends AbstractJetSoakTest {
 
     private static final String SOURCE = AsyncTransformTest.class.getSimpleName();
     private static final String ORDERED_SINK = SOURCE + "-orderedSink";

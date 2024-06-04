@@ -30,7 +30,7 @@ import com.hazelcast.jet.pipeline.Sinks;
 import com.hazelcast.jet.pipeline.file.FileFormat;
 import com.hazelcast.jet.pipeline.file.FileSources;
 import com.hazelcast.jet.pipeline.test.TestSources;
-import com.hazelcast.jet.tests.common.AbstractSoakTest;
+import com.hazelcast.jet.tests.common.AbstractJetSoakTest;
 import com.hazelcast.jet.tests.file.ingestion.domain.AvroUser;
 import com.hazelcast.jet.tests.file.ingestion.domain.JsonUser;
 import org.apache.avro.reflect.ReflectDatumWriter;
@@ -68,7 +68,7 @@ import static com.hazelcast.jet.tests.file.ingestion.FileIngestionTest.JobType.P
 import static java.util.stream.Collectors.toList;
 import static org.apache.hadoop.mapreduce.Job.getInstance;
 
-public class FileIngestionTest extends AbstractSoakTest {
+public class FileIngestionTest extends AbstractJetSoakTest {
 
 
     private static final String LOCAL_DIRECTORY = "/tmp/file-ingestion/";

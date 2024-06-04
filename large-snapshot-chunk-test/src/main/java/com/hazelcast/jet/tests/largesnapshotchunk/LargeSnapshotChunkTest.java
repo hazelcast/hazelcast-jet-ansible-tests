@@ -26,7 +26,7 @@ import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.pipeline.Pipeline;
 import com.hazelcast.jet.pipeline.Sources;
 import com.hazelcast.jet.pipeline.WindowDefinition;
-import com.hazelcast.jet.tests.common.AbstractSoakTest;
+import com.hazelcast.jet.tests.common.AbstractJetSoakTest;
 
 import java.io.IOException;
 import java.util.Map.Entry;
@@ -40,7 +40,7 @@ import static com.hazelcast.jet.pipeline.Sinks.fromProcessor;
 import static com.hazelcast.jet.tests.common.Util.getJobStatusWithRetry;
 import static com.hazelcast.jet.tests.common.Util.sleepMinutes;
 
-public class LargeSnapshotChunkTest extends AbstractSoakTest {
+public class LargeSnapshotChunkTest extends AbstractJetSoakTest {
 
     private static final int DEFAULT_SNAPSHOT_INTERVAL = 5000;
     private static final int EVENT_JOURNAL_CAPACITY = 600_000;

@@ -16,23 +16,11 @@
 
 package com.hazelcast.jet.tests.common;
 
-import com.hazelcast.client.HazelcastClient;
 import com.hazelcast.client.config.ClientConfig;
 import com.hazelcast.client.config.YamlClientConfigBuilder;
-import com.hazelcast.config.CacheSimpleConfig;
-import com.hazelcast.config.Config;
-import com.hazelcast.core.Hazelcast;
-import com.hazelcast.core.HazelcastInstance;
-import com.hazelcast.jet.config.JetConfig;
-import com.hazelcast.logging.ILogger;
 
 import java.io.IOException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
-import static com.hazelcast.jet.tests.common.Util.parseArguments;
-import static com.hazelcast.jet.tests.common.Util.sleepSeconds;
-import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.MINUTES;
 
 public abstract class AbstractSoakTestBase {
@@ -40,9 +28,9 @@ public abstract class AbstractSoakTestBase {
     public static final String STABLE_CLUSTER = ClusterType.STABLE.getPrettyName();
     public static final String DYNAMIC_CLUSTER = ClusterType.DYNAMIC.getPrettyName();
 
-    private static final int DEFAULT_DURATION_MINUTES = 30;
     protected static final double WAIT_TIMEOUT_FACTOR = 1.1;
     protected static final int DELAY_BETWEEN_INIT_AND_TEST_SECONDS = 15;
+    private static final int DEFAULT_DURATION_MINUTES = 30;
 
     protected transient ClientConfig stableClusterClientConfig;
     protected long durationInMillis;

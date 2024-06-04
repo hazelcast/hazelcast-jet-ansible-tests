@@ -189,7 +189,8 @@ public abstract class AbstractClientSoakTest extends AbstractSoakTestBase {
         }
         String remoteClusterYaml = property("remoteStableClusterYaml", null);
         if (remoteClusterYaml == null) {
-            throw new IllegalArgumentException("Remote cluster yaml should be set, use -DremoteStableClusterYaml to specify it");
+            throw new IllegalArgumentException("Remote cluster yaml should be set, " +
+                    "use -DremoteStableClusterYaml to specify it");
         }
 
         return new YamlClientConfigBuilder(remoteClusterYaml).build();
@@ -201,7 +202,8 @@ public abstract class AbstractClientSoakTest extends AbstractSoakTestBase {
         }
         String remoteClusterYaml = property("remoteDynamicClusterYaml", null);
         if (remoteClusterYaml == null) {
-            throw new IllegalArgumentException("Remote cluster yaml should be set, use -DremoteDynamicClusterYaml to specify it");
+            throw new IllegalArgumentException("Remote cluster yaml should be set, " +
+                    "use -DremoteDynamicClusterYaml to specify it");
         }
 
         return new YamlClientConfigBuilder(remoteClusterYaml).build();

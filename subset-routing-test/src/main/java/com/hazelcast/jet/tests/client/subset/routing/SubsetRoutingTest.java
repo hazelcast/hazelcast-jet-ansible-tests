@@ -49,7 +49,7 @@ public class SubsetRoutingTest extends AbstractClientSoakTest {
     private int logVerificationCountThreshold;
     private int sleepBeforeValidationInMinutes;
 
-    private transient UUID connectedMemberUuid = null;
+    private transient UUID connectedMemberUuid;
     private long maxWaitForExpectedConnectionInMinutes;
     private int sleepBetweenConnectionAssertionAttemptsInSeconds;
 
@@ -126,7 +126,8 @@ public class SubsetRoutingTest extends AbstractClientSoakTest {
                 .onException(lastException::set)
                 .onLoopTimeout(() -> {
                     if (lastException.get() != null) {
-                        throw new IllegalStateException("Timed out waiting for cluster active connection", lastException.get());
+                        throw new IllegalStateException("Timed out waiting for cluster active connection",
+                                lastException.get());
                     }
                     throw new IllegalStateException("Timed out waiting for cluster active connection");
                 })
@@ -151,17 +152,22 @@ public class SubsetRoutingTest extends AbstractClientSoakTest {
                     return effectiveMemberList.size() == 1 && activeConnections == 1;
                 })
                 .onConditionPass(() -> {
-                    UUID newConnectedMemberUuid = getEffectiveMemberList(clientInstance).iterator().next().getUuid();
+                    UUID newConnectedMemberUuid = getEffectiveMemberList(clientInstance)
+                            .iterator().next().getUuid();
                     if (!newConnectedMemberUuid.equals(connectedMemberUuid)) {
-                        logger.info("Client is connected to a new member: " + newConnectedMemberUuid + " previously: " + connectedMemberUuid);
+                        logger.info("Client is connected to a new member: "
+                                + newConnectedMemberUuid + " previously: " + connectedMemberUuid);
                     }
                     connectedMemberUuid = newConnectedMemberUuid;
                 })
                 .onConditionFail(
-                        () -> logger.warning("Assertion failed. Active connections: " + getActiveConnections(clientInstance) + " effective members: " + membersToString(getEffectiveMemberList(clientInstance))))
+                        () -> logger.warning("Assertion failed. Active connections: "
+                                + getActiveConnections(clientInstance) + " effective members: "
+                                + membersToString(getEffectiveMemberList(clientInstance))))
                 .onLoopTimeout(
                         () -> {
-                            throw new IllegalStateException("Timeout during waiting for expected connection and effective members." +
+                            throw new IllegalStateException("Timeout during waiting for expected connection " +
+                                    "and effective members." +
                                     " Active connections: " + getActiveConnections(clientInstance) +
                                     " Effective members:" + membersToString(getEffectiveMemberList(clientInstance)) +
                                     " Previously client was connected to " + connectedMemberUuid + " member");
@@ -193,10 +199,10 @@ public class SubsetRoutingTest extends AbstractClientSoakTest {
 
     public static HazelcastClientInstanceImpl getHazelcastClientInstanceImpl(HazelcastInstance hz) {
         HazelcastClientInstanceImpl impl = null;
-        if (hz instanceof HazelcastClientProxy proxy) {
-            impl = proxy.client;
-        } else if (hz instanceof HazelcastClientInstanceImpl instanceImpl) {
-            impl = instanceImpl;
+        if (hz instanceof HazelcastClientProxy) {
+            impl = ((HazelcastClientProxy) hz).client;
+        } else if (hz instanceof HazelcastClientInstanceImpl) {
+            impl = (HazelcastClientInstanceImpl) hz;
         }
         return impl;
     }

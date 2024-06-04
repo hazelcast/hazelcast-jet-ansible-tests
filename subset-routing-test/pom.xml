@@ -68,17 +68,12 @@
                             <filters>
                                 <filter>
                                     <artifact>*:*</artifact>
-                                    <excludes>
-                                        <exclude>META-INF/*.SF</exclude>
-                                        <exclude>META-INF/*.DSA</exclude>
-                                        <exclude>META-INF/*.RSA</exclude>
-                                    </excludes>
                                 </filter>
                             </filters>
                             <artifactSet>
                                 <includes>
-                                    <include>com.hazelcast.jet.tests:*</include>
-                                    <include>com.hazelcast.jet.tests.client.subset.routing:*</include>
+                                    <!-- For client tests we need dependencies to hazelcast, etc -->
+                                    <include>*:*</include>
                                 </includes>
                             </artifactSet>
                         </configuration>

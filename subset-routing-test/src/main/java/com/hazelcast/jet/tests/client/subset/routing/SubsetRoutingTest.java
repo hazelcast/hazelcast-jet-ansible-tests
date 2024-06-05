@@ -25,7 +25,7 @@ import com.hazelcast.cluster.Member;
 import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.jet.tests.common.AbstractClientSoakTest;
 import com.hazelcast.jet.tests.common.ClusterType;
-import com.hazelcast.jet.tests.common.GenericLoopExecutor;
+import com.hazelcast.jet.tests.common.ConditionVerifierWithTimeout;
 
 import java.time.Duration;
 import java.util.Collection;
@@ -112,19 +112,17 @@ public class SubsetRoutingTest extends AbstractClientSoakTest {
     }
 
     private void assertRequestToCluster(HazelcastClientInstanceImpl clientInstance) {
-
         AtomicReference<Throwable> lastException = new AtomicReference<>();
 
-
-        GenericLoopExecutor loopExecutor = new GenericLoopExecutor(
+        ConditionVerifierWithTimeout conditionVerifier = new ConditionVerifierWithTimeout(
                 Duration.ofMinutes(maxWaitForExpectedConnectionInMinutes),
                 Duration.ofSeconds(sleepBetweenConnectionAssertionAttemptsInSeconds));
 
-        loopExecutor
-                //invoke method which uses current data from cluster
-                .condition(() -> !clientInstance.getCluster().getMembers().isEmpty())
+        conditionVerifier
+                //This method will throw OperationTimeoutException for unavailable cluster
+                .condition(() -> clientInstance.getMap(this.getClass().getSimpleName()).isEmpty())
                 .onException(lastException::set)
-                .onLoopTimeout(() -> {
+                .onTimeout(() -> {
                     if (lastException.get() != null) {
                         throw new IllegalStateException("Timed out waiting for cluster active connection",
                                 lastException.get());
@@ -144,7 +142,7 @@ public class SubsetRoutingTest extends AbstractClientSoakTest {
         Duration maxLoopDuration = Duration.ofMinutes(maxWaitForExpectedConnectionInMinutes);
         Duration sleepBetweenAttempts = Duration.ofSeconds(sleepBetweenConnectionAssertionAttemptsInSeconds);
 
-        GenericLoopExecutor executor = new GenericLoopExecutor(maxLoopDuration, sleepBetweenAttempts);
+        ConditionVerifierWithTimeout executor = new ConditionVerifierWithTimeout(maxLoopDuration, sleepBetweenAttempts);
 
         executor.condition(() -> {
                     Collection<Member> effectiveMemberList = getEffectiveMemberList(clientInstance);
@@ -164,7 +162,7 @@ public class SubsetRoutingTest extends AbstractClientSoakTest {
                         () -> logger.warning("Assertion failed. Active connections: "
                                 + getActiveConnections(clientInstance) + " effective members: "
                                 + membersToString(getEffectiveMemberList(clientInstance))))
-                .onLoopTimeout(
+                .onTimeout(
                         () -> {
                             throw new IllegalStateException("Timeout during waiting for expected connection " +
                                     "and effective members." +

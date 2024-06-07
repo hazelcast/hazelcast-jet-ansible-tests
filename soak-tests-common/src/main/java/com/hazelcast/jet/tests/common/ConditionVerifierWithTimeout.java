@@ -31,8 +31,8 @@ public class ConditionVerifierWithTimeout {
     private final long maxDurationMillis;
     private final long sleepBetweenAttemptsMillis;
     private BooleanSupplier condition;
-    private Runnable onConditionPass = () -> {}; // Default no-op
-    private Runnable onConditionFail = () -> {}; // Default no-op
+    private Runnable onConditionPass = () -> { }; // Default no-op
+    private Runnable onConditionFail = () -> { }; // Default no-op
     private Consumer<Exception> onException = e -> {
         e.printStackTrace();
         throw new IllegalStateException(e);

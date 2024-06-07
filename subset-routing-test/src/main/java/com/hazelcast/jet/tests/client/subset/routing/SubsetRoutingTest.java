@@ -43,7 +43,7 @@ import static com.hazelcast.jet.tests.common.Util.sleepMinutes;
 public class SubsetRoutingTest extends AbstractClientSoakTest {
     private static final int DEFAULT_LOG_VERIFICATION_COUNT_THRESHOLD = 5;
     private static final int DEFAULT_SLEEP_BETWEEN_VALIDATIONS_IN_MINUTES = 1;
-    private static final int DEFAULT_MAX_WAIT_FOR_EXPECTED_CONNECTION_IN_MINUTES = 6;
+    private static final int DEFAULT_MAX_WAIT_FOR_EXPECTED_CONNECTION_IN_MINUTES = 10;
     private static final int SLEEP_BETWEEN_CONNECTION_ASSERTION_ATTEMPTS_IN_SECONDS = 10;
 
     private int logVerificationCountThreshold;

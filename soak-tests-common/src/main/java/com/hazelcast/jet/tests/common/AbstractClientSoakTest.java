@@ -39,22 +39,42 @@ import static com.hazelcast.jet.tests.common.Util.parseArguments;
 import static com.hazelcast.jet.tests.common.Util.sleepSeconds;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
+/**
+ * This class allows to create test which will be run from a client perspective side
+ */
 public abstract class AbstractClientSoakTest extends AbstractSoakTestBase {
 
     protected transient HazelcastInstance stableClusterClient;
     protected transient HazelcastInstance dynamicClusterClient;
     protected transient ClientConfig dynamicClusterClientConfig;
-
     protected transient Logger logger;
 
-
+    /**
+     * Implementation of this method is invoked before test for each of cluster, similar to @Before from JUnit
+     */
     protected abstract void beforeTest(HazelcastInstance client, ClusterType clusterType) throws Exception;
 
+    /**
+     * Implementation of this method is invoked before test, similar to @BeforeClass from JUnit
+     */
     protected abstract void init() throws Exception;
 
+    /**
+     * Implementation of this method should be a test
+     */
     protected abstract void test(HazelcastInstance client, ClusterType clusterType, String name) throws Throwable;
 
+    /**
+     * Implementation of this method configures for which clusters test will be run
+     */
     protected abstract List<ClusterType> runOnClusters();
+
+    /**
+     * It can be overridden to provide special configuration for client during local run of test
+     */
+    protected ClientConfig localClientConfig() {
+        return new ClientConfig();
+    }
 
     @Override
     protected final void run(String[] args) throws Exception {
@@ -112,22 +132,34 @@ public abstract class AbstractClientSoakTest extends AbstractSoakTestBase {
         System.exit(0);
     }
 
-    private Logger getLogger(Class<? extends AbstractClientSoakTest> aClass) {
-        return Logger.getLogger(aClass.getName());
+    protected ClientConfig stableClusterClientConfig() throws IOException {
+        if (isRunLocal()) {
+            return localClientConfig();
+        }
+        String remoteClusterYaml = property("remoteStableClusterYaml", null);
+        if (remoteClusterYaml == null) {
+            throw new IllegalArgumentException("Remote cluster yaml should be set, " +
+                    "use -DremoteStableClusterYaml to specify it");
+        }
+
+        return new YamlClientConfigBuilder(remoteClusterYaml).build();
     }
 
-    private void initialize(HazelcastInstance client, ClusterType clusterType) throws Exception {
-        logger.info("Evaluate beforeTest... on " + clusterType.getPrettyName() + " cluster");
-        try {
-            beforeTest(client, clusterType);
-            sleepSeconds(DELAY_BETWEEN_INIT_AND_TEST_SECONDS);
-        } catch (Throwable t) {
-            t.printStackTrace();
-            severeLog("Exception during the beforeTest", t);
-            teardown(t);
-            logger.info("Finished with failure at beforeTest");
-            System.exit(1);
+    protected ClientConfig dynamicClusterClientConfig() throws IOException {
+        if (isRunLocal()) {
+            return localClientConfig();
         }
+        String remoteClusterYaml = property("remoteDynamicClusterYaml", null);
+        if (remoteClusterYaml == null) {
+            throw new IllegalArgumentException("Remote cluster yaml should be set, " +
+                    "use -DremoteDynamicClusterYaml to specify it");
+        }
+
+        return new YamlClientConfigBuilder(remoteClusterYaml).build();
+    }
+
+    protected void severeLog(String log, Throwable t) {
+        logger.log(Level.SEVERE, log, t);
     }
 
     private void testInternal() throws Throwable {
@@ -179,38 +211,22 @@ public abstract class AbstractClientSoakTest extends AbstractSoakTestBase {
         }
     }
 
-    protected ClientConfig localClientConfig() {
-        return new ClientConfig();
+    private void initialize(HazelcastInstance client, ClusterType clusterType) throws Exception {
+        logger.info("Evaluate beforeTest... on " + clusterType.getPrettyName() + " cluster");
+        try {
+            beforeTest(client, clusterType);
+            sleepSeconds(DELAY_BETWEEN_INIT_AND_TEST_SECONDS);
+        } catch (Throwable t) {
+            t.printStackTrace();
+            severeLog("Exception during the beforeTest", t);
+            teardown(t);
+            logger.info("Finished with failure at beforeTest");
+            System.exit(1);
+        }
     }
 
-    protected ClientConfig stableClusterClientConfig() throws IOException {
-        if (isRunLocal()) {
-            return localClientConfig();
-        }
-        String remoteClusterYaml = property("remoteStableClusterYaml", null);
-        if (remoteClusterYaml == null) {
-            throw new IllegalArgumentException("Remote cluster yaml should be set, " +
-                    "use -DremoteStableClusterYaml to specify it");
-        }
-
-        return new YamlClientConfigBuilder(remoteClusterYaml).build();
-    }
-
-    protected ClientConfig dynamicClusterClientConfig() throws IOException {
-        if (isRunLocal()) {
-            return localClientConfig();
-        }
-        String remoteClusterYaml = property("remoteDynamicClusterYaml", null);
-        if (remoteClusterYaml == null) {
-            throw new IllegalArgumentException("Remote cluster yaml should be set, " +
-                    "use -DremoteDynamicClusterYaml to specify it");
-        }
-
-        return new YamlClientConfigBuilder(remoteClusterYaml).build();
-    }
-
-    protected void severeLog(String log, Throwable t) {
-        logger.log(Level.SEVERE, log, t);
+    private Logger getLogger(Class<? extends AbstractClientSoakTest> aClass) {
+        return Logger.getLogger(aClass.getName());
     }
 
 }

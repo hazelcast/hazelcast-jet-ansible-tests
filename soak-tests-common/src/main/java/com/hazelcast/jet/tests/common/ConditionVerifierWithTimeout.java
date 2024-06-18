@@ -21,14 +21,14 @@ import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
 /**
- * A class that verifies a condition within a specified timeout period.
+ * A class that verifies a condition and stops immediately when the condition is met or a timeout occurs.
  * It allows setting custom actions for condition pass, condition fail, exceptions, and timeout.
  * This class can replace a traditional while loop that waits for a condition and handles
  * timeout, condition failure, etc.
  */
 public class ConditionVerifierWithTimeout {
 
-    private final long maxDurationMillis;
+    private final long timeoutMillis;
     private final long sleepBetweenAttemptsMillis;
     private BooleanSupplier condition;
     private Runnable onConditionPass = () -> { }; // Default no-op
@@ -40,18 +40,19 @@ public class ConditionVerifierWithTimeout {
     private Runnable onTimeout;
 
     /**
-     * Constructs a ConditionVerifierWithTimeout with specified maximum loop duration and sleep interval between attempts.
+     * Constructs a ConditionVerifierWithTimeout with specified maximum verification duration and sleep interval between
+     * attempts.
      *
-     * @param maxLoopDuration the maximum duration to run the loop
-     * @param sleepBetweenAttempts the duration to sleep between loop attempts
+     * @param timeout the maximum duration to run the verification
+     * @param sleepBetweenAttempts the duration to sleep between verification attempts
      */
-    public ConditionVerifierWithTimeout(Duration maxLoopDuration, Duration sleepBetweenAttempts) {
-        this.maxDurationMillis = maxLoopDuration.toMillis();
+    public ConditionVerifierWithTimeout(Duration timeout, Duration sleepBetweenAttempts) {
+        this.timeoutMillis = timeout.toMillis();
         this.sleepBetweenAttemptsMillis = sleepBetweenAttempts.toMillis();
     }
 
     /**
-     * Sets the condition to be checked in each loop iteration.
+     * Sets the condition to be checked in each verification iteration.
      *
      * @param condition the condition to be checked
      */
@@ -81,7 +82,7 @@ public class ConditionVerifierWithTimeout {
     }
 
     /**
-     * Sets the action to be performed when an exception occurs during the loop execution.
+     * Sets the action to be performed when an exception occurs during the verification execution.
      *
      * @param onException the action to be performed
      */
@@ -91,7 +92,7 @@ public class ConditionVerifierWithTimeout {
     }
 
     /**
-     * Sets the action to be performed when the loop times out without meeting the condition.
+     * Sets the action to be performed when the verification times out without meeting the condition.
      *
      * @param onTimeout the action to be performed
      */
@@ -101,17 +102,17 @@ public class ConditionVerifierWithTimeout {
     }
 
     /**
-     * Executes the loop, checking the condition in each iteration and performing the appropriate actions.
+     * Executes the verification, checking the condition in each iteration and performing the appropriate actions.
      * Throws an exception if the condition or onTimeout actions are not set.
      */
     public void execute() {
         validate();
         long begin = System.currentTimeMillis();
-        while (System.currentTimeMillis() - begin < maxDurationMillis) {
+        while (System.currentTimeMillis() - begin < timeoutMillis) {
             try {
                 if (condition.getAsBoolean()) {
                     onConditionPass.run();
-                    return; // Condition passed, exiting loop
+                    return; // Condition passed, exiting verification
                 } else {
                     onConditionFail.run();
                 }
@@ -131,7 +132,6 @@ public class ConditionVerifierWithTimeout {
             throw new IllegalStateException("onTimeout has not been set");
         }
     }
-
 
     private void sleepMillis(long millis) {
         try {

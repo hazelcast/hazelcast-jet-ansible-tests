@@ -46,13 +46,12 @@ public class SubsetRoutingTest extends AbstractClientSoakTest {
     private static final int DEFAULT_MAX_WAIT_FOR_EXPECTED_CONNECTION_IN_MINUTES = 10;
     private static final int SLEEP_BETWEEN_CONNECTION_ASSERTION_ATTEMPTS_IN_SECONDS = 10;
 
+    private transient UUID connectedMemberUuid;
+
     private int logVerificationCountThreshold;
     private int sleepBeforeValidationInMinutes;
-
-    private transient UUID connectedMemberUuid;
     private long maxWaitForExpectedConnectionInMinutes;
     private int sleepBetweenConnectionAssertionAttemptsInSeconds;
-
 
     public static void main(String[] args) throws Exception {
         new SubsetRoutingTest().run(args);
@@ -69,7 +68,6 @@ public class SubsetRoutingTest extends AbstractClientSoakTest {
         return clientConfig;
     }
 
-
     @Override
     protected void init() throws Exception {
         logVerificationCountThreshold = propertyInt("logVerificationCountThreshold",
@@ -82,10 +80,8 @@ public class SubsetRoutingTest extends AbstractClientSoakTest {
                 SLEEP_BETWEEN_CONNECTION_ASSERTION_ATTEMPTS_IN_SECONDS);
     }
 
-
     @Override
     protected void beforeTest(HazelcastInstance client, ClusterType clusterType) throws Exception {
-
     }
 
     @Override
@@ -114,12 +110,12 @@ public class SubsetRoutingTest extends AbstractClientSoakTest {
     private void assertRequestToCluster(HazelcastClientInstanceImpl clientInstance) {
         AtomicReference<Throwable> lastException = new AtomicReference<>();
 
-        ConditionVerifierWithTimeout conditionVerifier = new ConditionVerifierWithTimeout(
+        ConditionVerifierWithTimeout verifier = new ConditionVerifierWithTimeout(
                 Duration.ofMinutes(maxWaitForExpectedConnectionInMinutes),
                 Duration.ofSeconds(sleepBetweenConnectionAssertionAttemptsInSeconds));
 
-        conditionVerifier
-                //This method will throw OperationTimeoutException for unavailable cluster
+        verifier
+                //This method throws OperationTimeoutException for unavailable cluster
                 .condition(() -> clientInstance.getMap(this.getClass().getSimpleName()).isEmpty())
                 .onException(lastException::set)
                 .onTimeout(() -> {
@@ -142,9 +138,9 @@ public class SubsetRoutingTest extends AbstractClientSoakTest {
         Duration maxLoopDuration = Duration.ofMinutes(maxWaitForExpectedConnectionInMinutes);
         Duration sleepBetweenAttempts = Duration.ofSeconds(sleepBetweenConnectionAssertionAttemptsInSeconds);
 
-        ConditionVerifierWithTimeout executor = new ConditionVerifierWithTimeout(maxLoopDuration, sleepBetweenAttempts);
+        ConditionVerifierWithTimeout verifier = new ConditionVerifierWithTimeout(maxLoopDuration, sleepBetweenAttempts);
 
-        executor.condition(() -> {
+        verifier.condition(() -> {
                     Collection<Member> effectiveMemberList = getEffectiveMemberList(clientInstance);
                     int activeConnections = getActiveConnections(clientInstance);
                     return effectiveMemberList.size() == 1 && activeConnections == 1;
@@ -173,7 +169,6 @@ public class SubsetRoutingTest extends AbstractClientSoakTest {
                 .execute();
     }
 
-
     private static String membersToString(Collection<Member> effectiveMemberList) {
         return effectiveMemberList
                 .stream()
@@ -192,7 +187,6 @@ public class SubsetRoutingTest extends AbstractClientSoakTest {
 
     @Override
     protected void teardown(Throwable t) throws Exception {
-
     }
 
     public static HazelcastClientInstanceImpl getHazelcastClientInstanceImpl(HazelcastInstance hz) {

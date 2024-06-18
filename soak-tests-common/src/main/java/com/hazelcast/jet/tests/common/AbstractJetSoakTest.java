@@ -31,6 +31,9 @@ import static com.hazelcast.jet.tests.common.Util.parseArguments;
 import static com.hazelcast.jet.tests.common.Util.sleepSeconds;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
+/**
+ * This class allows to create test which will be run from a server perspective side
+ */
 public abstract class AbstractJetSoakTest extends AbstractSoakTestBase {
 
     private static final int CACHE_EVICTION_SIZE = 2000000;
@@ -40,8 +43,14 @@ public abstract class AbstractJetSoakTest extends AbstractSoakTestBase {
 
     private transient HazelcastInstance hz;
 
-
+    /**
+     * Implementation of this method is invoked before test, similar to @BeforeClass from JUnit
+     */
     protected abstract void init(HazelcastInstance client) throws Exception;
+
+    /**
+     * Implementation of this method is invoked before test for each of cluster, similar to @Before from JUnit
+     */
     protected abstract void test(HazelcastInstance client, String name) throws Throwable;
 
     /**

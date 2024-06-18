@@ -48,7 +48,7 @@ public class IsolatedJobsStreamTest extends AbstractJetSoakTest {
     private static final int DEFAULT_LOG_VERIFICATION_COUNT_THRESHOLD = 5;
     private static final int DEFAULT_SLEEP_BETWEEN_VALIDATIONS_IN_MINUTES = 2;
     private static final int DEFAULT_SNAPSHOT_INTERVAL_MS = 1000;
-    private static final int DEFAULT_SLEEP_BETWEEN_STREAM_RECORDS_MS = 1000 * 15;
+    private static final int DEFAULT_SLEEP_BETWEEN_STREAM_RECORDS_MS = 500;
     private int snapshotIntervalMs;
     private int logVerificationCountThreshold;
     private int sleepBeforeValidationInMinutes;

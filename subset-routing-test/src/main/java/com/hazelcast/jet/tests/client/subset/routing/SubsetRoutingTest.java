@@ -26,6 +26,7 @@ import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.jet.tests.common.AbstractClientSoakTest;
 import com.hazelcast.jet.tests.common.ClusterType;
 import com.hazelcast.jet.tests.common.ConditionVerifierWithTimeout;
+import com.hazelcast.jet.tests.common.ConditionVerifierWithTimeout.ConditionResult;
 
 import java.time.Duration;
 import java.util.Collection;
@@ -45,8 +46,6 @@ public class SubsetRoutingTest extends AbstractClientSoakTest {
     private static final int DEFAULT_SLEEP_BETWEEN_VALIDATIONS_IN_MINUTES = 1;
     private static final int DEFAULT_MAX_WAIT_FOR_EXPECTED_CONNECTION_IN_MINUTES = 10;
     private static final int SLEEP_BETWEEN_CONNECTION_ASSERTION_ATTEMPTS_IN_SECONDS = 10;
-
-    private transient UUID connectedMemberUuid;
 
     private int logVerificationCountThreshold;
     private int sleepBeforeValidationInMinutes;
@@ -110,13 +109,15 @@ public class SubsetRoutingTest extends AbstractClientSoakTest {
     private void assertRequestToCluster(HazelcastClientInstanceImpl clientInstance) {
         AtomicReference<Throwable> lastException = new AtomicReference<>();
 
-        ConditionVerifierWithTimeout verifier = new ConditionVerifierWithTimeout(
+        ConditionVerifierWithTimeout<Void> verifier = new ConditionVerifierWithTimeout<>(
                 Duration.ofMinutes(maxWaitForExpectedConnectionInMinutes),
                 Duration.ofSeconds(sleepBetweenConnectionAssertionAttemptsInSeconds));
 
         verifier
                 //This method throws OperationTimeoutException for unavailable cluster
-                .condition(() -> clientInstance.getMap(this.getClass().getSimpleName()).isEmpty())
+                .condition(() -> new ConditionResult<>(
+                        clientInstance.getMap(this.getClass().getSimpleName()).isEmpty()
+                ))
                 .onException(lastException::set)
                 .onTimeout(() -> {
                     if (lastException.get() != null) {
@@ -138,43 +139,49 @@ public class SubsetRoutingTest extends AbstractClientSoakTest {
         Duration maxLoopDuration = Duration.ofMinutes(maxWaitForExpectedConnectionInMinutes);
         Duration sleepBetweenAttempts = Duration.ofSeconds(sleepBetweenConnectionAssertionAttemptsInSeconds);
 
-        ConditionVerifierWithTimeout verifier = new ConditionVerifierWithTimeout(maxLoopDuration, sleepBetweenAttempts);
+        final UUID[] connectedMemberUuid = {null};
+
+        ConditionVerifierWithTimeout<ConnectionsContext> verifier = new ConditionVerifierWithTimeout<>(maxLoopDuration,
+                sleepBetweenAttempts);
 
         verifier.condition(() -> {
                     Collection<Member> effectiveMemberList = getEffectiveMemberList(clientInstance);
                     int activeConnections = getActiveConnections(clientInstance);
-                    return effectiveMemberList.size() == 1 && activeConnections == 1;
+                    return new ConditionResult<>(
+                            effectiveMemberList.size() == 1 && activeConnections == 1,
+                            new ConnectionsContext(activeConnections, effectiveMemberList));
                 })
-                .onConditionPass(() -> {
-                    UUID newConnectedMemberUuid = getEffectiveMemberList(clientInstance)
+                .onConditionPass((context) -> {
+                    UUID newConnectedMemberUuid = context.effectiveMemberList
                             .iterator().next().getUuid();
-                    if (!newConnectedMemberUuid.equals(connectedMemberUuid)) {
+                    if (!newConnectedMemberUuid.equals(connectedMemberUuid[0])) {
                         logger.info("Client is connected to a new member: "
-                                + newConnectedMemberUuid + " previously: " + connectedMemberUuid);
+                                + newConnectedMemberUuid + " previously: " + connectedMemberUuid[0]);
                     }
-                    connectedMemberUuid = newConnectedMemberUuid;
+                    connectedMemberUuid[0] = newConnectedMemberUuid;
                 })
                 .onConditionFail(
-                        () -> logger.warning("Assertion failed. Active connections: "
-                                + getActiveConnections(clientInstance) + " effective members: "
-                                + membersToString(getEffectiveMemberList(clientInstance))))
+                        (context) -> logger.info("Waiting for expected connection... Currently,"
+                                + " active connections: "
+                                + context.activeConnections + " effective members: "
+                                + membersToString(context.effectiveMemberList)))
                 .onTimeout(
                         () -> {
                             throw new IllegalStateException("Timeout during waiting for expected connection " +
                                     "and effective members." +
                                     " Active connections: " + getActiveConnections(clientInstance) +
                                     " Effective members:" + membersToString(getEffectiveMemberList(clientInstance)) +
-                                    " Previously client was connected to " + connectedMemberUuid + " member");
+                                    " Previously client was connected to " + connectedMemberUuid[0] + " member");
                         })
                 .execute();
     }
 
     private static String membersToString(Collection<Member> effectiveMemberList) {
-        return effectiveMemberList
+        return '[' + effectiveMemberList
                 .stream()
                 .map(Member::getUuid)
                 .map(Objects::toString)
-                .collect(Collectors.joining(","));
+                .collect(Collectors.joining(",")) + ']';
     }
 
     private static int getActiveConnections(HazelcastClientInstanceImpl clientInstance) {
@@ -197,6 +204,16 @@ public class SubsetRoutingTest extends AbstractClientSoakTest {
             impl = (HazelcastClientInstanceImpl) hz;
         }
         return impl;
+    }
+
+    public static class ConnectionsContext {
+        private final int activeConnections;
+        private final Collection<Member> effectiveMemberList;
+
+        public ConnectionsContext(int activeConnections, Collection<Member> effectiveMemberList) {
+            this.activeConnections = activeConnections;
+            this.effectiveMemberList = effectiveMemberList;
+        }
     }
 
 }

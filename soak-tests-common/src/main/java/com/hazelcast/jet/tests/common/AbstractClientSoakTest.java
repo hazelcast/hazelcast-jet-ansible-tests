@@ -199,9 +199,9 @@ public abstract class AbstractClientSoakTest extends AbstractSoakTestBase {
                     exceptions.put(STABLE, t);
                 }
             });
-            executorService.shutdown();
         }
 
+        executorService.shutdown();
         executorService.awaitTermination((long) (durationInMillis * WAIT_TIMEOUT_FACTOR), MILLISECONDS);
 
         if (!exceptions.isEmpty()) {

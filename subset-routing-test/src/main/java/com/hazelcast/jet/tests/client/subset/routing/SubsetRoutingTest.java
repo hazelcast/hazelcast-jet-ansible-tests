@@ -46,12 +46,12 @@ public class SubsetRoutingTest extends AbstractClientSoakTest {
     private static final int DEFAULT_SLEEP_BETWEEN_VALIDATIONS_IN_MINUTES = 1;
     private static final int DEFAULT_MAX_WAIT_FOR_EXPECTED_CONNECTION_IN_MINUTES = 10;
     private static final int SLEEP_BETWEEN_CONNECTION_ASSERTION_ATTEMPTS_IN_SECONDS = 10;
-    private static final ThreadLocal<UUID> CONNECTED_MEMBER_UUID = ThreadLocal.withInitial(() -> null);
 
     private int logVerificationCountThreshold;
     private int sleepBeforeValidationInMinutes;
     private long maxWaitForExpectedConnectionInMinutes;
     private int sleepBetweenConnectionAssertionAttemptsInSeconds;
+    private final ThreadLocal<UUID> connectedMemberUuid = ThreadLocal.withInitial(() -> null);
 
     public static void main(String[] args) throws Exception {
         new SubsetRoutingTest().run(args);
@@ -153,11 +153,11 @@ public class SubsetRoutingTest extends AbstractClientSoakTest {
                 .onConditionPass((context) -> {
                     UUID newConnectedMemberUuid = context.effectiveMemberList
                             .iterator().next().getUuid();
-                    if (!newConnectedMemberUuid.equals(CONNECTED_MEMBER_UUID.get())) {
+                    if (!newConnectedMemberUuid.equals(connectedMemberUuid.get())) {
                         logger.info("Client is connected to a new member: "
-                                + newConnectedMemberUuid + " previously: " + CONNECTED_MEMBER_UUID.get());
+                                + newConnectedMemberUuid + " previously: " + connectedMemberUuid.get());
                     }
-                    CONNECTED_MEMBER_UUID.set(newConnectedMemberUuid);
+                    connectedMemberUuid.set(newConnectedMemberUuid);
                 })
                 .onConditionFail(
                         (context) -> logger.info("Waiting for expected connection... Currently,"
@@ -170,7 +170,7 @@ public class SubsetRoutingTest extends AbstractClientSoakTest {
                                     "and effective members." +
                                     " Active connections: " + getActiveConnections(clientInstance) +
                                     " Effective members:" + membersToString(getEffectiveMemberList(clientInstance)) +
-                                    " Previously client was connected to " + CONNECTED_MEMBER_UUID.get() + " member");
+                                    " Previously client was connected to " + connectedMemberUuid.get() + " member");
                         })
                 .execute();
     }

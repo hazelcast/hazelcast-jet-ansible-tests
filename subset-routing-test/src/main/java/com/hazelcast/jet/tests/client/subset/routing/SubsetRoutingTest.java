@@ -51,6 +51,7 @@ public class SubsetRoutingTest extends AbstractClientSoakTest {
     private int sleepBeforeValidationInMinutes;
     private long maxWaitForExpectedConnectionInMinutes;
     private int sleepBetweenConnectionAssertionAttemptsInSeconds;
+    private final ThreadLocal<UUID> connectedMemberUuid = ThreadLocal.withInitial(() -> null);
 
     public static void main(String[] args) throws Exception {
         new SubsetRoutingTest().run(args);
@@ -139,8 +140,6 @@ public class SubsetRoutingTest extends AbstractClientSoakTest {
         Duration maxLoopDuration = Duration.ofMinutes(maxWaitForExpectedConnectionInMinutes);
         Duration sleepBetweenAttempts = Duration.ofSeconds(sleepBetweenConnectionAssertionAttemptsInSeconds);
 
-        final UUID[] connectedMemberUuid = {null};
-
         ConditionVerifierWithTimeout<ConnectionsContext> verifier = new ConditionVerifierWithTimeout<>(maxLoopDuration,
                 sleepBetweenAttempts);
 
@@ -154,11 +153,11 @@ public class SubsetRoutingTest extends AbstractClientSoakTest {
                 .onConditionPass((context) -> {
                     UUID newConnectedMemberUuid = context.effectiveMemberList
                             .iterator().next().getUuid();
-                    if (!newConnectedMemberUuid.equals(connectedMemberUuid[0])) {
+                    if (!newConnectedMemberUuid.equals(connectedMemberUuid.get())) {
                         logger.info("Client is connected to a new member: "
-                                + newConnectedMemberUuid + " previously: " + connectedMemberUuid[0]);
+                                + newConnectedMemberUuid + " previously: " + connectedMemberUuid.get());
                     }
-                    connectedMemberUuid[0] = newConnectedMemberUuid;
+                    connectedMemberUuid.set(newConnectedMemberUuid);
                 })
                 .onConditionFail(
                         (context) -> logger.info("Waiting for expected connection... Currently,"
@@ -171,7 +170,7 @@ public class SubsetRoutingTest extends AbstractClientSoakTest {
                                     "and effective members." +
                                     " Active connections: " + getActiveConnections(clientInstance) +
                                     " Effective members:" + membersToString(getEffectiveMemberList(clientInstance)) +
-                                    " Previously client was connected to " + connectedMemberUuid[0] + " member");
+                                    " Previously client was connected to " + connectedMemberUuid.get() + " member");
                         })
                 .execute();
     }

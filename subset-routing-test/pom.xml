@@ -26,6 +26,12 @@
             <groupId>com.hazelcast.jet.tests</groupId>
             <artifactId>soak-tests-common</artifactId>
             <version>${hazelcast.version}</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>com.hazelcast</groupId>
+                    <artifactId>hazelcast</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
 
     </dependencies>
@@ -71,6 +77,10 @@
                                 </filter>
                             </filters>
                             <artifactSet>
+                                <excludes>
+                                    <!-- Exclude OS -->
+                                    <exclude>com.hazelcast:hazelcast</exclude>
+                                </excludes>
                                 <includes>
                                     <!-- For client tests we need dependencies to hazelcast, etc -->
                                     <include>*:*</include>

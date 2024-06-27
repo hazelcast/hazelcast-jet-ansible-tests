@@ -159,7 +159,7 @@ public class SubsetRoutingTest extends AbstractClientSoakTest {
                     }
                     CONNECTED_MEMBER_UUID.set(newConnectedMemberUuid);
                 })
-                .onConditionFail(
+                .onConditionNotPassedYet(
                         (context) -> logger.info("Waiting for expected connection... Currently,"
                                 + " active connections: "
                                 + context.activeConnections + " effective members: "

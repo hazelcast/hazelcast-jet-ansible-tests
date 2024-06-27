@@ -31,7 +31,7 @@ public class ConditionVerifierWithTimeout<T> {
     private final long sleepBetweenAttemptsMillis;
     private Supplier<ConditionResult<T>> condition;
     private Consumer<T> onConditionPass = context -> { }; // Default no-op
-    private Consumer<T> onConditionFail = context -> { }; // Default no-op
+    private Consumer<T> onConditionNotPassedYet = context -> { }; // Default no-op
     private Consumer<Exception> onException = e -> {
         e.printStackTrace();
         throw new IllegalStateException(e);
@@ -71,12 +71,12 @@ public class ConditionVerifierWithTimeout<T> {
     }
 
     /**
-     * Sets the action to be performed when the condition fails.
+     * Sets the action to be performed when the condition returns false.
      *
-     * @param onConditionFail the action to be performed
+     * @param onConditionNotPassedYet the action to be performed
      */
-    public ConditionVerifierWithTimeout<T> onConditionFail(Consumer<T> onConditionFail) {
-        this.onConditionFail = onConditionFail;
+    public ConditionVerifierWithTimeout<T> onConditionNotPassedYet(Consumer<T> onConditionNotPassedYet) {
+        this.onConditionNotPassedYet = onConditionNotPassedYet;
         return this;
     }
 
@@ -114,7 +114,7 @@ public class ConditionVerifierWithTimeout<T> {
                     onConditionPass.accept(result.getContext());
                     return; // Condition passed, exiting verification
                 } else {
-                    onConditionFail.accept(result.getContext());
+                    onConditionNotPassedYet.accept(result.getContext());
                 }
             } catch (Exception e) {
                 onException.accept(e);

@@ -26,7 +26,7 @@ import com.hazelcast.jet.pipeline.Sink;
 import com.hazelcast.jet.pipeline.Sinks;
 import com.hazelcast.jet.pipeline.SourceBuilder;
 import com.hazelcast.jet.pipeline.StreamSource;
-import com.hazelcast.jet.tests.common.AbstractSoakTest;
+import com.hazelcast.jet.tests.common.AbstractJetSoakTest;
 import jakarta.jms.ConnectionFactory;
 import org.apache.activemq.ActiveMQXAConnectionFactory;
 
@@ -36,7 +36,7 @@ import static com.hazelcast.jet.tests.common.Util.sleepMillis;
 import static com.hazelcast.jet.tests.common.Util.sleepMinutes;
 import static com.hazelcast.jet.tests.snapshot.jmssink.JmsSinkTest.JmsFactorySupplier.getConnectionFactory;
 
-public class JmsSinkTest extends AbstractSoakTest {
+public class JmsSinkTest extends AbstractJetSoakTest {
 
     public static final String SINK_QUEUE = "JmsSinkTest_sink";
 

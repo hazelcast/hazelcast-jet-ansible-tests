@@ -24,7 +24,7 @@ import com.hazelcast.jet.mongodb.MongoSources;
 import com.hazelcast.jet.mongodb.impl.MongoUtilities;
 import com.hazelcast.jet.pipeline.Pipeline;
 import com.hazelcast.jet.pipeline.StreamSource;
-import com.hazelcast.jet.tests.common.AbstractSoakTest;
+import com.hazelcast.jet.tests.common.AbstractJetSoakTest;
 import com.hazelcast.logging.ILogger;
 import com.mongodb.ConnectionString;
 import com.mongodb.MongoClientSettings;
@@ -46,7 +46,7 @@ import static com.hazelcast.jet.tests.common.Util.sleepSeconds;
 import static com.hazelcast.jet.tests.mongo.stream.MongoLongStreamTest.MongoClientSupplier.getMongoClient;
 import static java.util.concurrent.TimeUnit.MINUTES;
 
-public class MongoLongStreamTest extends AbstractSoakTest {
+public class MongoLongStreamTest extends AbstractJetSoakTest {
     private static final String MONGO_DATABASE = MongoLongStreamTest.class.getSimpleName();
     private static final int ASSERTION_RETRY_COUNT = 60;
     private static final int DEFAULT_SNAPSHOT_INTERVAL = 5000;

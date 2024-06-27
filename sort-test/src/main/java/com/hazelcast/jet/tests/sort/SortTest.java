@@ -23,7 +23,7 @@ import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.pipeline.Pipeline;
 import com.hazelcast.jet.pipeline.Sinks;
 import com.hazelcast.jet.pipeline.Sources;
-import com.hazelcast.jet.tests.common.AbstractSoakTest;
+import com.hazelcast.jet.tests.common.AbstractJetSoakTest;
 import com.hazelcast.map.IMap;
 import java.util.Iterator;
 
@@ -36,7 +36,7 @@ import static com.hazelcast.query.Predicates.alwaysTrue;
 import static java.util.stream.Collectors.toList;
 import static java.util.stream.IntStream.range;
 
-public class SortTest extends AbstractSoakTest {
+public class SortTest extends AbstractJetSoakTest {
 
     private static final String SOURCE_MAP_NAME = "sortSourceMap";
     private static final String SINK_LIST_NAME = "sortSinkList";

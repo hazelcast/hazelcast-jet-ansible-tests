@@ -17,7 +17,7 @@
 package com.hazelcast.jet.sql.tests.json;
 
 import com.hazelcast.core.HazelcastInstance;
-import com.hazelcast.jet.tests.common.AbstractSoakTest;
+import com.hazelcast.jet.tests.common.AbstractJetSoakTest;
 import com.hazelcast.jet.tests.common.Util;
 import com.hazelcast.jet.tests.common.sql.SqlResultProcessor;
 import com.hazelcast.sql.SqlResult;
@@ -32,7 +32,7 @@ import java.util.concurrent.TimeUnit;
 
 import static com.hazelcast.jet.tests.common.Util.getTimeElapsed;
 
-public abstract class AbstractJsonMapTest extends AbstractSoakTest {
+public abstract class AbstractJsonMapTest extends AbstractJetSoakTest {
 
     protected static final int DEFAULT_QUERY_TIMEOUT_MILLIS = 100;
     private static final int PROGRESS_PRINT_QUERIES_INTERVAL = 500;

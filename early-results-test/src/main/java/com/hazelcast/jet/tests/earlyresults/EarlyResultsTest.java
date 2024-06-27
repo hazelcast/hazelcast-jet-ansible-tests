@@ -26,7 +26,7 @@ import com.hazelcast.jet.pipeline.Sink;
 import com.hazelcast.jet.pipeline.SinkBuilder;
 import com.hazelcast.jet.pipeline.StreamStage;
 import com.hazelcast.jet.pipeline.WindowDefinition;
-import com.hazelcast.jet.tests.common.AbstractSoakTest;
+import com.hazelcast.jet.tests.common.AbstractJetSoakTest;
 import com.hazelcast.logging.ILogger;
 
 import java.util.HashMap;
@@ -36,7 +36,7 @@ import static com.hazelcast.jet.core.JobStatus.FAILED;
 import static com.hazelcast.jet.tests.common.Util.getJobStatusWithRetry;
 import static com.hazelcast.jet.tests.common.Util.sleepMinutes;
 
-public class EarlyResultsTest extends AbstractSoakTest {
+public class EarlyResultsTest extends AbstractJetSoakTest {
 
     private static final int ONE_THOUSAND = 1000;
     private static final int DEFAULT_WINDOW_SIZE = 100;

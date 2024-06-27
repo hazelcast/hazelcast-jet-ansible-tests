@@ -23,7 +23,7 @@ import com.hazelcast.config.MapConfig;
 import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.internal.util.UuidUtil;
 import com.hazelcast.jet.sql.impl.connector.map.IMapSqlConnector;
-import com.hazelcast.jet.tests.common.AbstractSoakTest;
+import com.hazelcast.jet.tests.common.AbstractJetSoakTest;
 import com.hazelcast.jet.tests.common.Util;
 import com.hazelcast.jet.tests.sql.pojo.Key;
 import com.hazelcast.jet.tests.sql.pojo.Pojo;
@@ -45,7 +45,7 @@ import static com.hazelcast.jet.sql.impl.connector.SqlConnector.JAVA_FORMAT;
 import static com.hazelcast.jet.tests.common.Util.getTimeElapsed;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
-public abstract class AbstractSqlMapTest extends AbstractSoakTest {
+public abstract class AbstractSqlMapTest extends AbstractJetSoakTest {
 
     protected static final int DEFAULT_DATA_SET_SIZE = 65536;
     protected static final int DEFAULT_QUERY_TIMEOUT_MILLIS = 100;

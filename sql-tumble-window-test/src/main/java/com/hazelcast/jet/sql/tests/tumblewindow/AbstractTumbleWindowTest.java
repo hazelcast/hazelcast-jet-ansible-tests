@@ -19,7 +19,7 @@ package com.hazelcast.jet.sql.tests.tumblewindow;
 import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.internal.util.UuidUtil;
 import com.hazelcast.jet.sql.impl.connector.kafka.KafkaSqlConnector;
-import com.hazelcast.jet.tests.common.AbstractSoakTest;
+import com.hazelcast.jet.tests.common.AbstractJetSoakTest;
 import com.hazelcast.jet.tests.common.Util;
 import com.hazelcast.jet.tests.common.sql.TestRecordProducer;
 import com.hazelcast.logging.ILogger;
@@ -41,7 +41,7 @@ import static com.hazelcast.jet.sql.impl.connector.SqlConnector.OPTION_KEY_FORMA
 import static com.hazelcast.jet.sql.impl.connector.SqlConnector.OPTION_VALUE_FORMAT;
 import static com.hazelcast.jet.tests.common.Util.getTimeElapsed;
 
-public abstract class AbstractTumbleWindowTest extends AbstractSoakTest {
+public abstract class AbstractTumbleWindowTest extends AbstractJetSoakTest {
     private static final int DEFAULT_QUERY_TIMEOUT_MILLIS = 100;
     private static final int PROGRESS_PRINT_QUERIES_INTERVAL = 500;
 
@@ -216,7 +216,7 @@ public abstract class AbstractTumbleWindowTest extends AbstractSoakTest {
                 // ingest data to Kafka using new timestamps
                 try (SqlResult res = produceTradeRecords(
                         currentEventStartTime.getAndAdd(EVENT_WINDOW_COUNT), includeLateEvent)) {
-                    AbstractSoakTest.assertEquals(0L, res.updateCount());
+                    AbstractJetSoakTest.assertEquals(0L, res.updateCount());
                 } catch (HazelcastSqlException e) {
                     logger.warning("Failed to produce new records. Retrying in 10 seconds.", e);
                     Util.sleepSeconds(PRODUCER_RETRY_DELAY_SECONDS);

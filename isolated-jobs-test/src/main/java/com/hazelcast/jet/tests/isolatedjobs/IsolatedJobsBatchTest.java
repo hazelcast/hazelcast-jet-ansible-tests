@@ -23,7 +23,7 @@ import com.hazelcast.jet.Job;
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.pipeline.Pipeline;
 import com.hazelcast.jet.pipeline.Sinks;
-import com.hazelcast.jet.tests.common.AbstractSoakTest;
+import com.hazelcast.jet.tests.common.AbstractJetSoakTest;
 
 import java.util.List;
 import java.util.UUID;
@@ -37,9 +37,9 @@ import static java.util.stream.Collectors.joining;
 /**
  * This test requires Enterprise License with Advanced Compute Feature.
  * To run this test locally, you have to use EE version (it can be forced by adding dependency to hazelcast-enterprise
- * in the pom.xml) and license must be set (it can be done in {@link AbstractSoakTest#run(String[])})
+ * in the pom.xml) and license must be set (it can be done in {@link AbstractJetSoakTest#run(String[])})
  */
-public class IsolatedJobsBatchTest extends AbstractSoakTest {
+public class IsolatedJobsBatchTest extends AbstractJetSoakTest {
     public static final int DEFAULT_SLEEP_BETWEEN_NEW_JOBS_MS = 5_000;
     public static final String BATCH_SINK_PREFIX = "IsolatedJobsTestBatchSink";
     private static final int LOG_JOB_COUNT_THRESHOLD = 60;

@@ -25,7 +25,7 @@ import com.hazelcast.jet.function.Observer;
 import com.hazelcast.jet.pipeline.Pipeline;
 import com.hazelcast.jet.pipeline.Sinks;
 import com.hazelcast.jet.pipeline.Sources;
-import com.hazelcast.jet.tests.common.AbstractSoakTest;
+import com.hazelcast.jet.tests.common.AbstractJetSoakTest;
 import com.hazelcast.jet.tests.common.BasicEventJournalProducer;
 import com.hazelcast.logging.ILogger;
 import java.util.Map;
@@ -42,7 +42,7 @@ import static com.hazelcast.jet.tests.common.Util.getJobStatusWithRetry;
 import static com.hazelcast.jet.tests.common.Util.sleepMinutes;
 import static com.hazelcast.jet.tests.common.Util.waitForJobStatus;
 
-public class ReturnResultToCallerTest extends AbstractSoakTest {
+public class ReturnResultToCallerTest extends AbstractJetSoakTest {
 
     private static final String SOURCE = ReturnResultToCallerTest.class.getSimpleName();
     private static final int EVENT_JOURNAL_CAPACITY = 600_000;

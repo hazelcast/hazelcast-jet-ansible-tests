@@ -18,7 +18,7 @@ package com.hazelcast.jet.tests.mongo;
 
 import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.jet.Job;
-import com.hazelcast.jet.tests.common.AbstractSoakTest;
+import com.hazelcast.jet.tests.common.AbstractJetSoakTest;
 import com.hazelcast.sql.SqlResult;
 import com.hazelcast.sql.SqlService;
 import com.mongodb.ConnectionString;
@@ -50,7 +50,7 @@ import static java.lang.String.format;
 import static java.time.format.DateTimeFormatter.ISO_DATE_TIME;
 import static java.util.concurrent.TimeUnit.MINUTES;
 
-public class MongoSqlTest extends AbstractSoakTest {
+public class MongoSqlTest extends AbstractJetSoakTest {
     public static final String SELECT_COUNT_FROM = "SELECT COUNT(*) FROM ";
     public static final String WHERE_UPDATED_AND_SOURCE_LIKE = " WHERE updated = ? AND source LIKE ?";
     public static final String WHERE_SOURCE_LIKE = " WHERE source LIKE ?";

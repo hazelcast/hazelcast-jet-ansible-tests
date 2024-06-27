@@ -167,6 +167,18 @@
                 <module>sql-stream-to-stream-join-test</module>
                 <module>sql-stream-to-stream-fault-tolerance-test</module>
                 <module>sql-tumble-window-test</module>
+                <module>subset-routing-test</module>
+            </modules>
+        </profile>
+        <profile>
+            <id>client</id>
+            <activation>
+                <property>
+                    <name>client</name>
+                </property>
+            </activation>
+            <modules>
+                <module>subset-routing-test</module>
             </modules>
         </profile>
         <profile>
@@ -214,6 +226,9 @@
                 <module>grpc-test</module>
                 <module>sort-test</module>
                 <module>file-ingestion-test</module>
+
+                <!-- For now client tests are included in jet profile -->
+                <module>subset-routing-test</module>
             </modules>
         </profile>
         <profile>

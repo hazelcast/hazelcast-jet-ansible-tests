@@ -29,7 +29,7 @@ import com.hazelcast.jet.config.ProcessingGuarantee;
 import com.hazelcast.jet.pipeline.Pipeline;
 import com.hazelcast.jet.pipeline.Sinks;
 import com.hazelcast.jet.pipeline.Sources;
-import com.hazelcast.jet.tests.common.AbstractSoakTest;
+import com.hazelcast.jet.tests.common.AbstractJetSoakTest;
 import com.hazelcast.jet.tests.common.QueueVerifier;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.logging.LoggingService;
@@ -46,7 +46,7 @@ import static com.hazelcast.jet.pipeline.WindowDefinition.sliding;
 import static com.hazelcast.jet.tests.common.Util.getJobStatusWithRetry;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
-public class EventJournalTest extends AbstractSoakTest {
+public class EventJournalTest extends AbstractJetSoakTest {
 
     private static final int DEFAULT_LAG = 1500;
     private static final int DEFAULT_TIMESTAMP_PER_SECOND = 50;

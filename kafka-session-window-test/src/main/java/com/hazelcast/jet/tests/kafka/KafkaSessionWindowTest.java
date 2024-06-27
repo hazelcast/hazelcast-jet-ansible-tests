@@ -29,7 +29,7 @@ import com.hazelcast.jet.pipeline.Sink;
 import com.hazelcast.jet.pipeline.SinkBuilder;
 import com.hazelcast.jet.pipeline.Sinks;
 import com.hazelcast.jet.pipeline.StreamStage;
-import com.hazelcast.jet.tests.common.AbstractSoakTest;
+import com.hazelcast.jet.tests.common.AbstractJetSoakTest;
 import com.hazelcast.map.IMap;
 import java.time.Duration;
 import org.apache.kafka.common.serialization.LongDeserializer;
@@ -51,7 +51,7 @@ import static com.hazelcast.jet.tests.common.Util.getJobStatusWithRetry;
 import static java.util.Map.entry;
 import static java.util.concurrent.TimeUnit.MINUTES;
 
-public class KafkaSessionWindowTest extends AbstractSoakTest {
+public class KafkaSessionWindowTest extends AbstractJetSoakTest {
 
     private static final int DEFAULT_LAG = 1500;
     private static final int DEFAULT_COUNTER_PER_TICKER = 20;

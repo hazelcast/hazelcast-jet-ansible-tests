@@ -150,7 +150,7 @@ public class SubsetRoutingTest extends AbstractClientSoakTest {
                             effectiveMemberList.size() == 1 && activeConnections == 1,
                             new ConnectionsContext(activeConnections, effectiveMemberList));
                 })
-                .onConditionPass((context) -> {
+                .onConditionPass(context -> {
                     UUID newConnectedMemberUuid = context.effectiveMemberList
                             .iterator().next().getUuid();
                     if (!newConnectedMemberUuid.equals(CONNECTED_MEMBER_UUID.get())) {
@@ -160,7 +160,7 @@ public class SubsetRoutingTest extends AbstractClientSoakTest {
                     CONNECTED_MEMBER_UUID.set(newConnectedMemberUuid);
                 })
                 .onConditionNotPassedYet(
-                        (context) -> logger.info("Waiting for expected connection... Currently,"
+                        context -> logger.info("Waiting for expected connection... Currently,"
                                 + " active connections: "
                                 + context.activeConnections + " effective members: "
                                 + membersToString(context.effectiveMemberList)))

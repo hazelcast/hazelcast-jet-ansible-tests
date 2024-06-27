@@ -18,8 +18,13 @@ package com.hazelcast.jet.tests.common;
 
 import com.hazelcast.client.config.ClientConfig;
 import com.hazelcast.client.config.YamlClientConfigBuilder;
+import com.hazelcast.config.Config;
+import com.hazelcast.jet.config.JetConfig;
+import com.hazelcast.logging.ILogger;
 
 import java.io.IOException;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import static java.util.concurrent.TimeUnit.MINUTES;
 
@@ -45,6 +50,14 @@ public abstract class AbstractSoakTestBase {
 
     protected long durationInMillis() {
         return MINUTES.toMillis(propertyInt("durationInMinutes", DEFAULT_DURATION_MINUTES));
+    }
+
+    protected Config localClusterConfig() {
+        Config config = new Config();
+        config.setJetConfig(new JetConfig()
+                .setEnabled(true)
+                .setResourceUploadEnabled(true));
+        return config;
     }
 
     protected ClientConfig remoteClusterClientConfig() throws IOException {
@@ -73,6 +86,22 @@ public abstract class AbstractSoakTestBase {
             return Boolean.parseBoolean(value);
         }
         return defaultValue;
+    }
+
+    protected void handleErrorAndShutdownJvmWithErrorStatus(ILogger logger, Throwable t, String msg) throws Exception {
+        t.printStackTrace();
+        logger.severe(t);
+        teardown(t);
+        logger.info(msg);
+        System.exit(1);
+    }
+
+    protected void handleErrorAndShutdownJvmWithErrorStatus(Logger logger, Throwable t, String msg) throws Exception {
+        t.printStackTrace();
+        logger.log(Level.SEVERE, "Exception", t);
+        teardown(t);
+        logger.info(msg);
+        System.exit(1);
     }
 
     protected static boolean isRunLocal() {

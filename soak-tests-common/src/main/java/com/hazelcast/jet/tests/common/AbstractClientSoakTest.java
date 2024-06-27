@@ -22,7 +22,6 @@ import com.hazelcast.client.config.YamlClientConfigBuilder;
 import com.hazelcast.config.Config;
 import com.hazelcast.core.Hazelcast;
 import com.hazelcast.core.HazelcastInstance;
-import com.hazelcast.jet.config.JetConfig;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -82,10 +81,7 @@ public abstract class AbstractClientSoakTest extends AbstractSoakTestBase {
 
         HazelcastInstance[] instances = null;
         if (isRunLocal()) {
-            Config config = new Config();
-            config.setJetConfig(new JetConfig()
-                    .setEnabled(true)
-                    .setResourceUploadEnabled(true));
+            Config config = localClusterConfig();
 
             instances = new HazelcastInstance[]{
                     Hazelcast.newHazelcastInstance(config), Hazelcast.newHazelcastInstance(config)};
@@ -99,23 +95,16 @@ public abstract class AbstractClientSoakTest extends AbstractSoakTestBase {
         try {
             init();
         } catch (Throwable t) {
-            t.printStackTrace();
-            severeLog("Exception during the init", t);
-            teardown(t);
-            logger.info("Finished with failure at init");
-            System.exit(1);
+            handleErrorAndShutdownJvmWithErrorStatus(logger, t, "Finished with failure at init");
         }
 
         logger.info("Running...");
         try {
             testInternal();
         } catch (Throwable t) {
-            t.printStackTrace();
-            severeLog("Exception: ", t);
-            teardown(t);
-            logger.info("Finished with failure at test");
-            System.exit(1);
+            handleErrorAndShutdownJvmWithErrorStatus(logger, t, "Finished with failure at test");
         }
+
         logger.info("Teardown...");
         teardown(null);
         if (stableClusterClient != null) {
@@ -217,11 +206,7 @@ public abstract class AbstractClientSoakTest extends AbstractSoakTestBase {
             beforeTest(client, clusterType);
             sleepSeconds(DELAY_BETWEEN_INIT_AND_TEST_SECONDS);
         } catch (Throwable t) {
-            t.printStackTrace();
-            severeLog("Exception during the beforeTest", t);
-            teardown(t);
-            logger.info("Finished with failure at beforeTest");
-            System.exit(1);
+            handleErrorAndShutdownJvmWithErrorStatus(logger, t, "Finished with failure at beforeTest");
         }
     }
 

@@ -21,7 +21,6 @@ import com.hazelcast.config.CacheSimpleConfig;
 import com.hazelcast.config.Config;
 import com.hazelcast.core.Hazelcast;
 import com.hazelcast.core.HazelcastInstance;
-import com.hazelcast.jet.config.JetConfig;
 import com.hazelcast.logging.ILogger;
 
 import java.util.concurrent.ExecutorService;
@@ -69,17 +68,14 @@ public abstract class AbstractJetSoakTest extends AbstractSoakTestBase {
 
         HazelcastInstance[] instances = null;
         if (isRunLocal()) {
-            Config config = new Config();
+            Config config = localClusterConfig();
             CacheSimpleConfig cacheConfig = new CacheSimpleConfig()
                     .setName("CooperativeMapCacheSourceTest_SourceCache");
             cacheConfig.getEvictionConfig().setSize(CACHE_EVICTION_SIZE);
             config.addCacheConfig(cacheConfig);
-            config.setJetConfig(new JetConfig()
-                    .setEnabled(true)
-                    .setResourceUploadEnabled(true));
 
             instances = new HazelcastInstance[]{
-                Hazelcast.newHazelcastInstance(config), Hazelcast.newHazelcastInstance(config)};
+                    Hazelcast.newHazelcastInstance(config), Hazelcast.newHazelcastInstance(config)};
             hz = HazelcastClient.newHazelcastClient();
         } else {
             hz = Hazelcast.bootstrappedInstance();
@@ -92,21 +88,13 @@ public abstract class AbstractJetSoakTest extends AbstractSoakTestBase {
             init(hz);
             sleepSeconds(DELAY_BETWEEN_INIT_AND_TEST_SECONDS);
         } catch (Throwable t) {
-            t.printStackTrace();
-            logger.severe(t);
-            teardown(t);
-            logger.info("Finished with failure at init");
-            System.exit(1);
+            handleErrorAndShutdownJvmWithErrorStatus(logger, t, "Finished with failure at init");
         }
         logger.info("Running...");
         try {
             testInternal();
         } catch (Throwable t) {
-            t.printStackTrace();
-            logger.severe(t);
-            teardown(t);
-            logger.info("Finished with failure at test");
-            System.exit(1);
+            handleErrorAndShutdownJvmWithErrorStatus(logger, t, "Finished with failure at test");
         }
         logger.info("Teardown...");
         teardown(null);

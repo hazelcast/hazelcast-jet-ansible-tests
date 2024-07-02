@@ -17,7 +17,6 @@
 package com.hazelcast.jet.tests.kinesis;
 
 import com.amazonaws.SDKGlobalConfiguration;
-import com.amazonaws.regions.Regions;
 import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.config.JobConfig;
@@ -30,6 +29,8 @@ import com.hazelcast.jet.pipeline.Sink;
 import com.hazelcast.jet.pipeline.SourceBuilder;
 import com.hazelcast.jet.pipeline.StreamSource;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
+
+import com.hazelcast.shaded.com.amazonaws.regions.Regions;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -44,7 +45,6 @@ import static com.hazelcast.jet.tests.common.Util.sleepMillis;
 import static com.hazelcast.jet.tests.common.Util.sleepMinutes;
 import static com.hazelcast.jet.tests.common.Util.sleepSeconds;
 import static com.hazelcast.jet.tests.common.Util.waitForJobStatus;
-
 public class KinesisTest extends AbstractSoakTest {
 
     private static final int DEFAULT_SHARD_COUNT = 1;

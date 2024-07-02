@@ -17,7 +17,6 @@
 package com.hazelcast.jet.tests.kinesis;
 
 import com.amazonaws.SDKGlobalConfiguration;
-import com.amazonaws.regions.Regions;
 import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.config.JobConfig;
@@ -30,6 +29,8 @@ import com.hazelcast.jet.pipeline.Sink;
 import com.hazelcast.jet.pipeline.SourceBuilder;
 import com.hazelcast.jet.pipeline.StreamSource;
 import com.hazelcast.jet.tests.common.AbstractJetSoakTest;
+
+import com.hazelcast.shaded.com.amazonaws.regions.Regions;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;

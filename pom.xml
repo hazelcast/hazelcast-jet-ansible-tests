@@ -22,7 +22,9 @@
         <mongodb.version>4.8.1</mongodb.version>
         <main.basedir>${project.basedir}</main.basedir>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <hadoop.version>3.3.0</hadoop.version>
+
+        <hadoop.version>3.4.0</hadoop.version>
+        <aws.sdk2.version>2.24.13</aws.sdk2.version>
 
         <maven.checkstyle.plugin.version>2.17</maven.checkstyle.plugin.version>
         <maven.compiler.plugin.version>2.5.1</maven.compiler.plugin.version>

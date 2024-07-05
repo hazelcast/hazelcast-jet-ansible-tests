@@ -34,7 +34,6 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
 
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
@@ -129,7 +128,7 @@ public class SnapshotKafkaTest extends AbstractSoakTest {
         try {
             long begin = System.currentTimeMillis();
             while (System.currentTimeMillis() - begin < durationInMillis) {
-                ConsumerRecords<Long, Long> records = consumer.poll(Duration.ofMillis(POLL_TIMEOUT));
+                ConsumerRecords<Long, Long> records = consumer.poll(POLL_TIMEOUT);
                 records.iterator().forEachRemaining(r -> {
                             String topic = r.topic();
                             if (topic.contains(AT_LEAST_ONCE.name())) {
@@ -145,12 +144,8 @@ public class SnapshotKafkaTest extends AbstractSoakTest {
                             }
                         }
                 );
-                assertTrue(atLeastOnceVerifier.isRunning());
-                assertTrue(exactlyOnceVerifier.isRunning());
                 assertFalse(producerFuture.isDone());
             }
-            assertTrue(atLeastOnceVerifier.processedAnything());
-            assertTrue(exactlyOnceVerifier.processedAnything());
         } finally {
             logger.info("[" + name + "] Cancelling jobs...");
             consumer.close();

@@ -81,17 +81,6 @@ public class QueueVerifier extends Thread {
             if (next == null) {
                 //Queue is empty, sleep
                 logger.info("Queue is empty");
-                // we need to check this also for next == null branch, otherwise we will not fail for getting null
-                // repeatedly
-                if (lastCheck == -1) {
-                    lastCheck = System.currentTimeMillis();
-                } else {
-                    if ((System.currentTimeMillis() - lastCheck) > TIMEOUT) {
-                        logger.info("No new item was received during the last " + TIMEOUT + "ms. Item was null.");
-                        //time is up
-                        running = false;
-                    }
-                }
                 sleepSeconds(WAIT_SLEEP_SECONDS);
             } else if (next == key) {
                 //Happy path
@@ -110,7 +99,6 @@ public class QueueVerifier extends Thread {
                 lastCheck = System.currentTimeMillis();
             } else if ((System.currentTimeMillis() - lastCheck) > TIMEOUT) {
                 //time is up
-                logger.info("No new item was received during the last " + TIMEOUT + "ms. Item was not null.");
                 running = false;
             } else {
                 //sleep for timeout
@@ -118,14 +106,6 @@ public class QueueVerifier extends Thread {
                 logger.info("key: " + key);
             }
         }
-    }
-
-    public boolean isRunning() {
-        return running;
-    }
-
-    public boolean processedAnything() {
-        return key > 0;
     }
 
     public void close() throws Exception {

@@ -31,7 +31,9 @@ import com.hazelcast.jet.pipeline.Sinks;
 import com.hazelcast.jet.pipeline.StreamStage;
 import com.hazelcast.jet.tests.common.AbstractSoakTest;
 import com.hazelcast.map.IMap;
+
 import java.time.Duration;
+
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -136,8 +138,18 @@ public class KafkaSessionWindowTest extends AbstractSoakTest {
             }
         } finally {
             System.out.println("Cancelling jobs..");
-            testJob.cancel();
-            verificationJob.cancel();
+            try {
+                testJob.cancel();
+            } catch (Throwable t) {
+                System.out.println("Cancelling test job failed... " + t.getMessage());
+                t.printStackTrace();
+            }
+            try {
+                verificationJob.cancel();
+            } catch (Throwable t) {
+                System.out.println("Cancelling verification job failed... " + t.getMessage());
+                t.printStackTrace();
+            }
         }
 
     }

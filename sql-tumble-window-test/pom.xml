@@ -25,7 +25,7 @@
     <parent>
         <artifactId>hazelcast-jet-ansible-tests</artifactId>
         <groupId>com.hazelcast.jet.tests</groupId>
-        <version>5.3.7-SNAPSHOT</version>
+        <version>5.3.8-SNAPSHOT</version>
     </parent>
 
     <properties>

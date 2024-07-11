@@ -18,9 +18,10 @@ package com.hazelcast.jet.tests.client.subset.routing;
 
 
 import com.hazelcast.client.config.ClientConfig;
-import com.hazelcast.client.config.SubsetRoutingConfig;
+import com.hazelcast.client.config.ClusterRoutingConfig;
 import com.hazelcast.client.impl.clientside.HazelcastClientInstanceImpl;
 import com.hazelcast.client.impl.clientside.HazelcastClientProxy;
+import com.hazelcast.client.impl.connection.tcp.RoutingMode;
 import com.hazelcast.cluster.Member;
 import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.jet.tests.common.AbstractClientSoakTest;
@@ -54,17 +55,19 @@ public class SubsetRoutingTest extends AbstractClientSoakTest {
     private int sleepBetweenConnectionAssertionAttemptsInSeconds;
 
     public static void main(String[] args) throws Exception {
+        setRunLocal();
         new SubsetRoutingTest().run(args);
     }
+
+
 
     @Override
     public ClientConfig localClientConfig() {
         ClientConfig clientConfig = new ClientConfig();
         clientConfig.getNetworkConfig()
-                .setSmartRouting(false)
-                .setSubsetRoutingConfig(new SubsetRoutingConfig()
-                        .setRoutingStrategy(PARTITION_GROUPS)
-                        .setEnabled(true));
+                .setClusterRoutingConfig(new ClusterRoutingConfig()
+                        .setRoutingMode(RoutingMode.MULTI_MEMBER)
+                        .setRoutingStrategy(PARTITION_GROUPS));
         return clientConfig;
     }
 

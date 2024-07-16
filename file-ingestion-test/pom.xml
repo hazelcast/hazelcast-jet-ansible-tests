@@ -31,7 +31,7 @@
 
     <properties>
         <main.basedir>${project.parent.basedir}</main.basedir>
-        <aws.sdk2.version>2.24.13</aws.sdk2.version>
+        <aws.sdk2.version>2.26.15</aws.sdk2.version>
         <avro.version>1.11.3</avro.version>
     </properties>
 

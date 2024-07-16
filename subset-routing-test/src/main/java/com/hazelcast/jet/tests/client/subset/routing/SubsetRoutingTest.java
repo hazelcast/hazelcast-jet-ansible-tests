@@ -55,7 +55,6 @@ public class SubsetRoutingTest extends AbstractClientSoakTest {
     private int sleepBetweenConnectionAssertionAttemptsInSeconds;
 
     public static void main(String[] args) throws Exception {
-        setRunLocal();
         new SubsetRoutingTest().run(args);
     }
 

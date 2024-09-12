@@ -19,7 +19,7 @@
     <dependencies>
         <dependency>
             <groupId>com.hazelcast.jet</groupId>
-            <artifactId>hazelcast-jet-cdc-debezium</artifactId>
+            <artifactId>hazelcast-enterprise-cdc-debezium</artifactId>
             <version>${hazelcast.version}</version>
         </dependency>
         <dependency>

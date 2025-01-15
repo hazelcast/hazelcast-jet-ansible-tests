@@ -16,12 +16,43 @@
         <main.basedir>${project.parent.basedir}</main.basedir>
     </properties>
 
+    <profiles>
+        <!-- ==============================
+             1) The default Hazelcast (server) profile
+             ============================== -->
+        <profile>
+            <id>default-hazelcast</id>
+            <!-- Activate by default if no other profiles are chosen -->
+            <activation>
+                <activeByDefault>true</activeByDefault>
+            </activation>
+
+            <dependencies>
+                <dependency>
+                    <groupId>com.hazelcast</groupId>
+                    <artifactId>hazelcast-enterprise</artifactId>
+                    <version>${hazelcast.version}</version>
+                </dependency>
+            </dependencies>
+        </profile>
+
+        <!-- ==============================
+             2) The Java Client profile
+             ============================== -->
+        <profile>
+            <id>java-client</id>
+            <!-- Not active by default; you opt in via -P!default-hazelcast,java-client -->
+            <dependencies>
+                <dependency>
+                    <groupId>com.hazelcast</groupId>
+                    <artifactId>hazelcast-enterprise-java-client</artifactId>
+                    <version>${hazelcast.java.client.version}</version>
+                </dependency>
+            </dependencies>
+        </profile>
+    </profiles>
+
     <dependencies>
-        <dependency>
-            <groupId>com.hazelcast</groupId>
-            <artifactId>hazelcast-enterprise</artifactId>
-            <version>${hazelcast.version}</version>
-        </dependency>
         <dependency>
             <groupId>com.hazelcast.jet.tests</groupId>
             <artifactId>soak-tests-common</artifactId>

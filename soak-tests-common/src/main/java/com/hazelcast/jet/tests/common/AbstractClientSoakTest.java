@@ -83,8 +83,7 @@ public abstract class AbstractClientSoakTest extends AbstractSoakTestBase {
         if (isRunLocal()) {
             Config config = localClusterConfig();
 
-            instances = new HazelcastInstance[]{
-                    Hazelcast.newHazelcastInstance(config), Hazelcast.newHazelcastInstance(config)};
+            instances = null;
         }
 
         logger = getLogger(getClass());

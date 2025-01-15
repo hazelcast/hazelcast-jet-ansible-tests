@@ -18,6 +18,7 @@
     <properties>
         <jdk.version>17</jdk.version>
         <hazelcast.version>6.0.0-SNAPSHOT</hazelcast.version>
+        <hazelcast.java.client.version>5.5.1-SNAPSHOT</hazelcast.java.client.version>
         <mysql.version>8.0.29</mysql.version>
         <mongodb.version>4.8.1</mongodb.version>
         <main.basedir>${project.basedir}</main.basedir>

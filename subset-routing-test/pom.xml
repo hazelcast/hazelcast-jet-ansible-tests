@@ -17,7 +17,9 @@
     </properties>
 
     <dependencies>
-        <!-- 1) Hazelcast Enterprise (server) - default -->
+        <!-- We have here two dependencies which have similar packages class etc,
+         but shade plugin is configured to create tests jars for server and client separately -->
+        <!-- 1) Hazelcast Enterprise -->
         <dependency>
             <groupId>com.hazelcast</groupId>
             <artifactId>hazelcast-enterprise</artifactId>
@@ -130,7 +132,8 @@
                     </execution>
                 </executions>
             </plugin>
-            <!-- Add prefix "original-" to the main jar (without dependencies) as this prefix is used in job to run soaks tests (otherwise it will be copied and run) -->
+            <!-- Add prefix "original-" to the main jar (without dependencies) as this prefix is used in job
+            to run soaks tests (otherwise it will be copied and run) -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-antrun-plugin</artifactId>

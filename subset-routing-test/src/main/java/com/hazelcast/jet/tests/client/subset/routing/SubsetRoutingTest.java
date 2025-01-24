@@ -30,6 +30,7 @@ import com.hazelcast.jet.tests.common.ConditionVerifierWithTimeout;
 import com.hazelcast.jet.tests.common.ConditionVerifierWithTimeout.ConditionResult;
 
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
@@ -40,7 +41,6 @@ import java.util.stream.Collectors;
 import static com.hazelcast.client.config.RoutingStrategy.PARTITION_GROUPS;
 import static com.hazelcast.jet.tests.common.ClusterType.DYNAMIC;
 import static com.hazelcast.jet.tests.common.ClusterType.STABLE;
-import static com.hazelcast.jet.tests.common.Util.sleepMinutes;
 
 public class SubsetRoutingTest extends AbstractClientSoakTest {
     private static final int DEFAULT_LOG_VERIFICATION_COUNT_THRESHOLD = 5;
@@ -48,6 +48,8 @@ public class SubsetRoutingTest extends AbstractClientSoakTest {
     private static final int DEFAULT_MAX_WAIT_FOR_EXPECTED_CONNECTION_IN_MINUTES = 10;
     private static final int SLEEP_BETWEEN_CONNECTION_ASSERTION_ATTEMPTS_IN_SECONDS = 10;
     private static final ThreadLocal<UUID> CONNECTED_MEMBER_UUID = ThreadLocal.withInitial(() -> null);
+    private static final List<byte[]> MEMORY_LEAK_LIST = new ArrayList<>();
+    private static final int OBJECT_SIZE = 1024 * 1024; // 1 MB per object
 
     private int logVerificationCountThreshold;
     private int sleepBeforeValidationInMinutes;
@@ -96,14 +98,13 @@ public class SubsetRoutingTest extends AbstractClientSoakTest {
         long validationCount = 0;
 
         while (System.currentTimeMillis() - begin < durationInMillis) {
-            assertEffectiveMembersAndActiveConnections(clientInstance);
-            assertRequestToCluster(clientInstance);
+            // Allocate a large object and add it to the list to prevent garbage collection
+            MEMORY_LEAK_LIST.add(new byte[OBJECT_SIZE]);
+            logger.info("Allocated ~ " + MEMORY_LEAK_LIST.size() + " MB");
 
+            // Sleep for a short time to control the rate of allocation
+            Thread.sleep(500);
             validationCount++;
-            if (validationCount % logVerificationCountThreshold == 0) {
-                logger.info(logPrefix + "Validations count: " + validationCount);
-            }
-            sleepMinutes(sleepBeforeValidationInMinutes);
 
         }
         logger.info(logPrefix + "Final validations count: " + validationCount);

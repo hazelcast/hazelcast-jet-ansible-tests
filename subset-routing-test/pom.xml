@@ -17,11 +17,22 @@
     </properties>
 
     <dependencies>
+        <!-- We have here two dependencies which have similar packages class etc,
+         but shade plugin is configured to create tests jars for server and client separately -->
+        <!-- 1) Hazelcast Enterprise -->
         <dependency>
             <groupId>com.hazelcast</groupId>
             <artifactId>hazelcast-enterprise</artifactId>
             <version>${hazelcast.version}</version>
         </dependency>
+
+        <!-- 2) Hazelcast Enterprise Java Client -->
+        <dependency>
+            <groupId>com.hazelcast</groupId>
+            <artifactId>hazelcast-enterprise-java-client</artifactId>
+            <version>${hazelcast.java.client.version}</version>
+        </dependency>
+
         <dependency>
             <groupId>com.hazelcast.jet.tests</groupId>
             <artifactId>soak-tests-common</artifactId>
@@ -54,38 +65,92 @@
                 <artifactId>maven-shade-plugin</artifactId>
                 <version>${maven.shade.plugin.version}</version>
                 <executions>
+                    <!-- 1) JAR with hazelcast-enterprise (exclude client) -->
                     <execution>
+                        <id>shade-hz</id>
                         <phase>package</phase>
                         <goals>
                             <goal>shade</goal>
                         </goals>
                         <configuration>
+                            <outputFile>${project.build.directory}/${project.artifactId}-hz-${project.version}.jar</outputFile>
+                            <artifactSet>
+                                <includes>
+                                    <include>*:*</include>
+                                </includes>
+                                <excludes>
+                                    <exclude>com.hazelcast:hazelcast</exclude>
+                                    <exclude>com.hazelcast:hazelcast-enterprise-java-client</exclude>
+                                </excludes>
+                            </artifactSet>
+                            <createDependencyReducedPom>false</createDependencyReducedPom>
                             <transformers>
                                 <transformer
                                         implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
                                 <transformer
                                         implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                                     <manifestEntries>
-                                        <Main-Class>com.hazelcast.jet.tests.client.subset.routing.SubsetRoutingTest</Main-Class>
+                                        <Main-Class>com.hazelcast.jet.tests.client.subset.routing.SubsetRoutingTest
+                                        </Main-Class>
                                     </manifestEntries>
                                 </transformer>
                             </transformers>
-                            <createDependencyReducedPom>false</createDependencyReducedPom>
-                            <filters>
-                                <filter>
-                                    <artifact>*:*</artifact>
-                                </filter>
-                            </filters>
+                        </configuration>
+                    </execution>
+
+                    <!-- 2) JAR with hazelcast-enterprise-java-client (exclude hazelcast enterprise) -->
+                    <execution>
+                        <id>shade-client</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>shade</goal>
+                        </goals>
+                        <configuration>
+                            <outputFile>${project.build.directory}/${project.artifactId}-standalone-client-${project.version}.jar</outputFile>
                             <artifactSet>
-                                <excludes>
-                                    <!-- Exclude OS -->
-                                    <exclude>com.hazelcast:hazelcast</exclude>
-                                </excludes>
                                 <includes>
-                                    <!-- For client tests we need dependencies to hazelcast, etc -->
                                     <include>*:*</include>
                                 </includes>
+                                <excludes>
+                                    <exclude>com.hazelcast:hazelcast</exclude>
+                                    <exclude>com.hazelcast:hazelcast-enterprise</exclude>
+                                </excludes>
                             </artifactSet>
+                            <createDependencyReducedPom>false</createDependencyReducedPom>
+                            <transformers>
+                                <transformer
+                                        implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
+                                <transformer
+                                        implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                                    <manifestEntries>
+                                        <Main-Class>com.hazelcast.jet.tests.client.subset.routing.SubsetRoutingTest
+                                        </Main-Class>
+                                    </manifestEntries>
+                                </transformer>
+                            </transformers>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <!-- Add prefix "original-" to the main jar (without dependencies) as this prefix is used in job
+            to run soaks tests (otherwise it will be copied and run) -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-antrun-plugin</artifactId>
+                <version>3.1.0</version>
+                <executions>
+                    <execution>
+                        <id>rename-after-install</id>
+                        <phase>install</phase>
+                        <goals>
+                            <goal>run</goal>
+                        </goals>
+                        <configuration>
+                            <target>
+                                <move
+                                        file="${project.build.directory}/${project.build.finalName}.jar"
+                                        tofile="${project.build.directory}/original-${project.build.finalName}.jar"/>
+                            </target>
                         </configuration>
                     </execution>
                 </executions>

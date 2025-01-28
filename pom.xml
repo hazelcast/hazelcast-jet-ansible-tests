@@ -171,6 +171,7 @@
                 <module>sql-stream-to-stream-fault-tolerance-test</module>
                 <module>sql-tumble-window-test</module>
                 <module>subset-routing-test</module>
+                <module>subset-routing-test-standalone-client</module>
             </modules>
         </profile>
         <profile>

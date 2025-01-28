@@ -183,6 +183,7 @@
             </activation>
             <modules>
                 <module>subset-routing-test</module>
+                <module>subset-routing-test-standalone-client</module>
             </modules>
         </profile>
         <profile>
@@ -233,6 +234,7 @@
 
                 <!-- For now client tests are included in jet profile -->
                 <module>subset-routing-test</module>
+                <module>subset-routing-test-standalone-client</module>
             </modules>
         </profile>
         <profile>

@@ -10,20 +10,15 @@
         <version>6.0.0-SNAPSHOT</version>
     </parent>
 
-    <artifactId>subset-routing-test</artifactId>
+    <artifactId>subset-routing-test-standalone-client</artifactId>
 
     <properties>
         <main.basedir>${project.parent.basedir}</main.basedir>
+        <jdk.version>8</jdk.version>
+        <maven.compiler.release>8</maven.compiler.release>
     </properties>
 
     <dependencies>
-        <dependency>
-            <groupId>com.hazelcast</groupId>
-            <artifactId>hazelcast-enterprise</artifactId>
-            <version>${hazelcast.version}</version>
-        </dependency>
-
-        <!-- 2) Hazelcast Enterprise Java Client -->
         <dependency>
             <groupId>com.hazelcast</groupId>
             <artifactId>hazelcast-enterprise-java-client</artifactId>
@@ -52,7 +47,7 @@
                 <configuration>
                     <archive>
                         <manifest>
-                            <mainClass>com.hazelcast.jet.tests.client.subset.routing.SubsetRoutingTest</mainClass>
+                            <mainClass>com.hazelcast.jet.tests.standalone.client.subset.routing.SubsetRoutingTest</mainClass>
                         </manifest>
                     </archive>
                 </configuration>
@@ -62,22 +57,21 @@
                 <artifactId>maven-shade-plugin</artifactId>
                 <version>${maven.shade.plugin.version}</version>
                 <executions>
-                    <!-- JAR with hazelcast-enterprise (exclude client) -->
+                    <!-- JAR with hazelcast-enterprise-java-client (exclude hazelcast enterprise) -->
                     <execution>
-                        <id>shade-hz</id>
+                        <id>shade-client</id>
                         <phase>package</phase>
                         <goals>
                             <goal>shade</goal>
                         </goals>
                         <configuration>
-                            <outputFile>${project.build.directory}/${project.artifactId}-hz-${project.version}.jar</outputFile>
                             <artifactSet>
                                 <includes>
                                     <include>*:*</include>
                                 </includes>
                                 <excludes>
                                     <exclude>com.hazelcast:hazelcast</exclude>
-                                    <exclude>com.hazelcast:hazelcast-enterprise-java-client</exclude>
+                                    <exclude>com.hazelcast:hazelcast-enterprise</exclude>
                                 </excludes>
                             </artifactSet>
                             <createDependencyReducedPom>false</createDependencyReducedPom>
@@ -87,34 +81,11 @@
                                 <transformer
                                         implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                                     <manifestEntries>
-                                        <Main-Class>com.hazelcast.jet.tests.client.subset.routing.SubsetRoutingTest
+                                        <Main-Class>com.hazelcast.jet.tests.standalone.client.subset.routing.SubsetRoutingTest
                                         </Main-Class>
                                     </manifestEntries>
                                 </transformer>
                             </transformers>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
-            <!-- Add prefix "original-" to the main jar (without dependencies) as this prefix is used in job
-            to run soaks tests (otherwise it will be copied and run) -->
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-antrun-plugin</artifactId>
-                <version>3.1.0</version>
-                <executions>
-                    <execution>
-                        <id>rename-after-install</id>
-                        <phase>install</phase>
-                        <goals>
-                            <goal>run</goal>
-                        </goals>
-                        <configuration>
-                            <target>
-                                <move
-                                        file="${project.build.directory}/${project.build.finalName}.jar"
-                                        tofile="${project.build.directory}/original-${project.build.finalName}.jar"/>
-                            </target>
                         </configuration>
                     </execution>
                 </executions>

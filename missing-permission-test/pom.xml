@@ -10,7 +10,7 @@
     <parent>
         <artifactId>hazelcast-jet-ansible-tests</artifactId>
         <groupId>com.hazelcast.jet.tests</groupId>
-        <version>5.5.4-SNAPSHOT</version>
+        <version>5.5.5-SNAPSHOT</version>
     </parent>
 
     <properties>

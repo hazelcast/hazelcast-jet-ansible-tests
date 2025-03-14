@@ -17,6 +17,9 @@
     </properties>
 
     <dependencies>
+        <!-- We have here two dependencies which have similar packages class etc,
+         but shade plugin is configured to create tests jars for server and client separately -->
+        <!-- 1) Hazelcast Enterprise -->
         <dependency>
             <groupId>com.hazelcast</groupId>
             <artifactId>hazelcast-enterprise</artifactId>
@@ -62,7 +65,7 @@
                 <artifactId>maven-shade-plugin</artifactId>
                 <version>${maven.shade.plugin.version}</version>
                 <executions>
-                    <!-- JAR with hazelcast-enterprise (exclude client) -->
+                    <!-- 1) JAR with hazelcast-enterprise (exclude client) -->
                     <execution>
                         <id>shade-hz</id>
                         <phase>package</phase>
@@ -78,6 +81,39 @@
                                 <excludes>
                                     <exclude>com.hazelcast:hazelcast</exclude>
                                     <exclude>com.hazelcast:hazelcast-enterprise-java-client</exclude>
+                                </excludes>
+                            </artifactSet>
+                            <createDependencyReducedPom>false</createDependencyReducedPom>
+                            <transformers>
+                                <transformer
+                                        implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
+                                <transformer
+                                        implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                                    <manifestEntries>
+                                        <Main-Class>com.hazelcast.jet.tests.client.subset.routing.SubsetRoutingTest
+                                        </Main-Class>
+                                    </manifestEntries>
+                                </transformer>
+                            </transformers>
+                        </configuration>
+                    </execution>
+
+                    <!-- 2) JAR with hazelcast-enterprise-java-client (exclude hazelcast enterprise) -->
+                    <execution>
+                        <id>shade-client</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>shade</goal>
+                        </goals>
+                        <configuration>
+                            <outputFile>${project.build.directory}/${project.artifactId}-standalone-client-${project.version}.jar</outputFile>
+                            <artifactSet>
+                                <includes>
+                                    <include>*:*</include>
+                                </includes>
+                                <excludes>
+                                    <exclude>com.hazelcast:hazelcast</exclude>
+                                    <exclude>com.hazelcast:hazelcast-enterprise</exclude>
                                 </excludes>
                             </artifactSet>
                             <createDependencyReducedPom>false</createDependencyReducedPom>

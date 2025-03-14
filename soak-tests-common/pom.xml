@@ -13,7 +13,6 @@
     </parent>
 
     <properties>
-        <jdk.version>8</jdk.version>
         <main.basedir>${project.parent.basedir}</main.basedir>
     </properties>
 

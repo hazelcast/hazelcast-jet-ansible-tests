@@ -232,7 +232,7 @@ public class FileIngestionTest extends AbstractJetSoakTest {
                         .build();
                 break;
             default:
-                throw new IllegalArgumentException();
+                throw new IllegalArgumentException("Unknown JobType");
         }
         return source;
     }

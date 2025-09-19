@@ -22,6 +22,7 @@ import com.hazelcast.config.Config;
 import com.hazelcast.core.Hazelcast;
 import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.logging.ILogger;
+import org.apache.log4j.MDC;
 
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -64,6 +65,7 @@ public abstract class AbstractJetSoakTest extends AbstractSoakTestBase {
 
     @Override
     protected final void run(String[] args) throws Exception {
+        MDC.put("test-name", getClass().getSimpleName());
         parseArguments(args);
 
         HazelcastInstance[] instances = null;

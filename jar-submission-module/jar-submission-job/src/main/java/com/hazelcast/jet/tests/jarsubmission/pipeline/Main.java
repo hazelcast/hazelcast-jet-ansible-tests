@@ -22,7 +22,6 @@ import com.hazelcast.jet.Util;
 import com.hazelcast.jet.pipeline.Pipeline;
 import com.hazelcast.jet.pipeline.Sinks;
 import com.hazelcast.jet.pipeline.test.TestSources;
-import com.hazelcast.jet.tests.jarsubmission.exception.ExceptedJarSubmissionException;
 import com.hazelcast.jet.tests.jarsubmission.person.Person;
 import java.util.ArrayList;
 import java.util.List;
@@ -54,7 +53,7 @@ public final class Main {
                 .rebalance()
                 .map(t -> {
                     if (index % 10 == 0) {
-                        throw new ExceptedJarSubmissionException("Expected Exception");
+                        throw new RuntimeException("Expected Exception");
                     }
                     return t;
                 })
@@ -76,7 +75,7 @@ public final class Main {
                 .rebalance()
                 .map(t -> {
                     if (index % 10 == 0) {
-                        throw new ExceptedJarSubmissionException("Expected Exception");
+                        throw new RuntimeException("Expected Exception");
                     }
                     return t;
                 })

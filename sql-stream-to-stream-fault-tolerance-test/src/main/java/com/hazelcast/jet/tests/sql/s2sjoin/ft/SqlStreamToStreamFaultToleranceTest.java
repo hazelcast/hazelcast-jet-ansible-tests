@@ -17,6 +17,7 @@
 package com.hazelcast.jet.tests.sql.s2sjoin.ft;
 
 import com.hazelcast.core.HazelcastInstance;
+import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.kafka.impl.HazelcastJsonValueDeserializer;
 import com.hazelcast.jet.kafka.impl.HazelcastJsonValueSerializer;
@@ -29,6 +30,8 @@ import com.hazelcast.jet.tests.common.sql.ItemProducer;
 import com.hazelcast.shaded.org.json.JSONObject;
 import com.hazelcast.sql.SqlResult;
 import com.hazelcast.sql.SqlService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
@@ -50,6 +53,9 @@ public class SqlStreamToStreamFaultToleranceTest extends AbstractJetSoakTest {
     private static final String EVENTS_SINK_PREFIX = "sink_topic_";
     private static final int DEFAULT_SNAPSHOT_INTERVAL = 5000;
     private static final int DEFAULT_PRODUCER_THREAD_COUNT = 2;
+
+    private static final int RETRY_CANCEL_JOB_COUNT = 10;
+    private static final Logger log = LoggerFactory.getLogger(SqlStreamToStreamFaultToleranceTest.class);
 
     private final int queryTimeout = propertyInt("queryTimeout", Integer.parseInt(DEFAULT_QUERY_TIMEOUT_MILLIS));
     private final String sourceName;
@@ -120,10 +126,7 @@ public class SqlStreamToStreamFaultToleranceTest extends AbstractJetSoakTest {
             logger.severe("Failure in job verify", e);
             throw e;
         } finally {
-            Job sqlJob = client.getJet().getJob(sqlName);
-            if (sqlJob != null && !sqlJob.getStatus().isTerminal()) {
-                sqlJob.cancel();
-            }
+            cancelJobWithRetry(client, sqlName);
             producerTask.stopProducingEvents();
             verifier.finish();
         }
@@ -250,5 +253,28 @@ public class SqlStreamToStreamFaultToleranceTest extends AbstractJetSoakTest {
                         + "OPTIONS ( " + propertiesToOptions(kafkaProps) + ")"
         );
         AbstractJetSoakTest.assertEquals(0L, createDataConnResult.updateCount());
+    }
+
+    private void cancelJobWithRetry(HazelcastInstance client, String sqlName) {
+        Job sqlJob = null;
+        for  (int i=0; i< RETRY_CANCEL_JOB_COUNT; i++) {
+            try {
+                sqlJob = client.getJet().getJob(sqlName);
+                logger.info("Sql job located without exception");
+                break;
+            } catch (RuntimeException e) {
+                try {
+                    logger.severe("Runtime exception occurred while getting sql job to cancel on attempt: "+ i, e);
+                    Thread.sleep(500);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    throw new RuntimeException("Interrupted during retry", ie);
+                }
+            }
+        }
+
+        if (sqlJob != null && !sqlJob.getStatus().isTerminal()) {
+            sqlJob.cancel();
+        }
     }
 }

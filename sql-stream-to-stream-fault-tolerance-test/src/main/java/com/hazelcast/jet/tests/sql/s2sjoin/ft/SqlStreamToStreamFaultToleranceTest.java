@@ -260,7 +260,7 @@ public class SqlStreamToStreamFaultToleranceTest extends AbstractJetSoakTest {
                 break;
             } catch (RuntimeException e) {
                 try {
-                    logger.severe("Runtime exception occurred while getting sql job to cancel on attempt: "+ i, e);
+                    logger.severe("Runtime exception occurred while getting sql job to cancel ", e);
                     Thread.sleep(500);
                 } catch (InterruptedException ie) {
                     Thread.currentThread().interrupt();

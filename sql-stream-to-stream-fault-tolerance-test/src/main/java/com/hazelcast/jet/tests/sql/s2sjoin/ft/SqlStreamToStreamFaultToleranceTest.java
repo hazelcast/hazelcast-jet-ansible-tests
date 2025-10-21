@@ -17,7 +17,6 @@
 package com.hazelcast.jet.tests.sql.s2sjoin.ft;
 
 import com.hazelcast.core.HazelcastInstance;
-import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.kafka.impl.HazelcastJsonValueDeserializer;
 import com.hazelcast.jet.kafka.impl.HazelcastJsonValueSerializer;
@@ -30,8 +29,6 @@ import com.hazelcast.jet.tests.common.sql.ItemProducer;
 import com.hazelcast.shaded.org.json.JSONObject;
 import com.hazelcast.sql.SqlResult;
 import com.hazelcast.sql.SqlService;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
@@ -55,7 +52,6 @@ public class SqlStreamToStreamFaultToleranceTest extends AbstractJetSoakTest {
     private static final int DEFAULT_PRODUCER_THREAD_COUNT = 2;
 
     private static final int RETRY_CANCEL_JOB_COUNT = 10;
-    private static final Logger log = LoggerFactory.getLogger(SqlStreamToStreamFaultToleranceTest.class);
 
     private final int queryTimeout = propertyInt("queryTimeout", Integer.parseInt(DEFAULT_QUERY_TIMEOUT_MILLIS));
     private final String sourceName;
@@ -257,7 +253,7 @@ public class SqlStreamToStreamFaultToleranceTest extends AbstractJetSoakTest {
 
     private void cancelJobWithRetry(HazelcastInstance client, String sqlName) {
         Job sqlJob = null;
-        for  (int i=0; i< RETRY_CANCEL_JOB_COUNT; i++) {
+        for  (int i = 0; i < RETRY_CANCEL_JOB_COUNT; i++) {
             try {
                 sqlJob = client.getJet().getJob(sqlName);
                 logger.info("Sql job located without exception");

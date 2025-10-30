@@ -53,7 +53,7 @@ public final class Main {
                 .rebalance()
                 .map(t -> {
                     if (index % 10 == 0) {
-                        throw new RuntimeException();
+                        throw new RuntimeException("Expected:DontWorry!");
                     }
                     return t;
                 })
@@ -75,7 +75,7 @@ public final class Main {
                 .rebalance()
                 .map(t -> {
                     if (index % 10 == 0) {
-                        throw new RuntimeException();
+                        throw new RuntimeException("Expected:DontWorry!");
                     }
                     return t;
                 })

@@ -252,10 +252,13 @@ public class SqlStreamToStreamFaultToleranceTest extends AbstractJetSoakTest {
     }
 
     private void cancelJobWithRetry(HazelcastInstance client, String sqlName) {
-        Job sqlJob = null;
         for  (int i = 0; i < RETRY_CANCEL_JOB_COUNT; i++) {
             try {
-                sqlJob = client.getJet().getJob(sqlName);
+                Job sqlJob = client.getJet().getJob(sqlName);
+                if (sqlJob == null || sqlJob.getStatus().isTerminal()){
+                    continue;
+                }
+                sqlJob.cancel();
                 logger.info("Sql job located without exception");
                 break;
             } catch (RuntimeException e) {
@@ -267,10 +270,6 @@ public class SqlStreamToStreamFaultToleranceTest extends AbstractJetSoakTest {
                     throw new RuntimeException("Interrupted during retry", ie);
                 }
             }
-        }
-
-        if (sqlJob != null && !sqlJob.getStatus().isTerminal()) {
-            sqlJob.cancel();
         }
     }
 }

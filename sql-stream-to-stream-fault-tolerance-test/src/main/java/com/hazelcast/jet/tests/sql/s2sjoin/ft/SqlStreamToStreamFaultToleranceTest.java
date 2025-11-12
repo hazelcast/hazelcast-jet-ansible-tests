@@ -259,7 +259,7 @@ public class SqlStreamToStreamFaultToleranceTest extends AbstractJetSoakTest {
                     continue;
                 }
                 sqlJob.cancel();
-                logger.info("Sql job located without exception");
+                logger.severe("Exception during trying to get or cancel the job");
                 break;
             } catch (RuntimeException e) {
                 try {

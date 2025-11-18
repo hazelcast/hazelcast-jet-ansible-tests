@@ -51,6 +51,8 @@ public class SqlStreamToStreamFaultToleranceTest extends AbstractSoakTest {
     private static final int DEFAULT_SNAPSHOT_INTERVAL = 5000;
     private static final int DEFAULT_PRODUCER_THREAD_COUNT = 2;
 
+    private static final int RETRY_CANCEL_JOB_COUNT = 10;
+
     private final int queryTimeout = propertyInt("queryTimeout", Integer.parseInt(DEFAULT_QUERY_TIMEOUT_MILLIS));
     private final String sourceName;
     private final String viewName1 = "view1_" + randomName();
@@ -120,10 +122,7 @@ public class SqlStreamToStreamFaultToleranceTest extends AbstractSoakTest {
             logger.severe("Failure in job verify", e);
             throw e;
         } finally {
-            Job sqlJob = client.getJet().getJob(sqlName);
-            if (sqlJob != null && !sqlJob.getStatus().isTerminal()) {
-                sqlJob.cancel();
-            }
+            cancelJobWithRetry(client, sqlName);
             producerTask.stopProducingEvents();
             verifier.finish();
         }
@@ -250,5 +249,28 @@ public class SqlStreamToStreamFaultToleranceTest extends AbstractSoakTest {
                         + "OPTIONS ( " + propertiesToOptions(kafkaProps) + ")"
         );
         AbstractSoakTest.assertEquals(0L, createDataConnResult.updateCount());
+    }
+
+    private void cancelJobWithRetry(HazelcastInstance client, String sqlName) {
+        Job sqlJob = null;
+        for  (int i = 0; i < RETRY_CANCEL_JOB_COUNT; i++) {
+            try {
+                sqlJob = client.getJet().getJob(sqlName);
+                logger.info("Sql job located without exception");
+                break;
+            } catch (RuntimeException e) {
+                try {
+                    logger.severe("Runtime exception occurred while getting sql job to cancel ", e);
+                    Thread.sleep(500);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    throw new RuntimeException("Interrupted during retry", ie);
+                }
+            }
+        }
+
+        if (sqlJob != null && !sqlJob.getStatus().isTerminal()) {
+            sqlJob.cancel();
+        }
     }
 }

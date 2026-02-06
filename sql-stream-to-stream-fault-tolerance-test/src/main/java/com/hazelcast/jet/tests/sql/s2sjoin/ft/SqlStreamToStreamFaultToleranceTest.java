@@ -255,7 +255,7 @@ public class SqlStreamToStreamFaultToleranceTest extends AbstractJetSoakTest {
         for  (int i = 0; i < RETRY_CANCEL_JOB_COUNT; i++) {
             try {
                 Job sqlJob = client.getJet().getJob(sqlName);
-                if (sqlJob == null || sqlJob.getStatus().isTerminal()){
+                if (sqlJob == null || sqlJob.getStatus().isTerminal()) {
                     continue;
                 }
                 sqlJob.cancel();

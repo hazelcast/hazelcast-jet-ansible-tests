@@ -3,29 +3,31 @@
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
-
-    <artifactId>grpc-test</artifactId>
-
     <parent>
-        <artifactId>hazelcast-jet-ansible-tests</artifactId>
         <groupId>com.hazelcast.jet.tests</groupId>
+        <artifactId>hazelcast-jet-ansible-tests</artifactId>
         <version>5.7.0-SNAPSHOT</version>
     </parent>
+
+    <artifactId>map-journal-lost-events</artifactId>
+
     <properties>
         <main.basedir>${project.parent.basedir}</main.basedir>
-        <protobuf.version>3.21.12</protobuf.version>
-        <grpc.version>1.57.2</grpc.version>
-        <javax.annotation-api.version>1.3.2</javax.annotation-api.version>
     </properties>
 
+    <dependencies>
+        <dependency>
+            <groupId>com.hazelcast.jet.tests</groupId>
+            <artifactId>soak-tests-common</artifactId>
+            <version>${hazelcast.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.hazelcast.jet.tests</groupId>
+            <artifactId>event-journal-test</artifactId>
+            <version>${hazelcast.version}</version>
+        </dependency>
+    </dependencies>
     <build>
-        <extensions>
-            <extension>
-                <groupId>kr.motd.maven</groupId>
-                <artifactId>os-maven-plugin</artifactId>
-                <version>1.6.2</version>
-            </extension>
-        </extensions>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -33,7 +35,7 @@
                 <configuration>
                     <archive>
                         <manifest>
-                            <mainClass>com.hazelcast.jet.tests.grpc.GrpcTest</mainClass>
+                            <mainClass>com.hazelcast.jet.tests.mapjournal.LostEventsMapJournalTest</mainClass>
                         </manifest>
                     </archive>
                 </configuration>
@@ -55,7 +57,7 @@
                                 <transformer
                                         implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                                     <manifestEntries>
-                                        <Main-Class>com.hazelcast.jet.tests.grpc.GrpcTest</Main-Class>
+                                        <Main-Class>com.hazelcast.jet.tests.mapjournal.LostEventsMapJournalTest</Main-Class>
                                     </manifestEntries>
                                 </transformer>
                             </transformers>
@@ -73,54 +75,13 @@
                             <artifactSet>
                                 <includes>
                                     <include>com.hazelcast.jet.tests:*</include>
-                                    <include>com.hazelcast.jet.tests.grpc:*</include>
+                                    <include>com.hazelcast.jet.tests.mapjournal:*</include>
                                 </includes>
                             </artifactSet>
                         </configuration>
                     </execution>
                 </executions>
             </plugin>
-            <plugin>
-                <groupId>org.xolstice.maven.plugins</groupId>
-                <artifactId>protobuf-maven-plugin</artifactId>
-                <version>0.6.1</version>
-                <executions>
-                    <execution>
-                        <id>java</id>
-                        <goals>
-                            <goal>compile</goal>
-                            <goal>compile-custom</goal>
-                        </goals>
-                        <configuration>
-                            <!--suppress UnresolvedMavenProperty -->
-                            <protocArtifact>com.google.protobuf:protoc:${protobuf.version}:exe:${os.detected.classifier}</protocArtifact>
-                            <pluginId>grpc-java</pluginId>
-                            <!--suppress UnresolvedMavenProperty -->
-                            <pluginArtifact>io.grpc:protoc-gen-grpc-java:${grpc.version}:exe:${os.detected.classifier}</pluginArtifact>
-                            <outputDirectory>${project.build.directory}/generated-sources/protobuf/java</outputDirectory>
-                            <clearOutputDirectory>false</clearOutputDirectory>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
         </plugins>
     </build>
-
-    <dependencies>
-        <dependency>
-            <groupId>com.hazelcast.jet.tests</groupId>
-            <artifactId>soak-tests-common</artifactId>
-            <version>${hazelcast.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>com.hazelcast.jet</groupId>
-            <artifactId>hazelcast-jet-grpc</artifactId>
-            <version>${hazelcast.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>javax.annotation</groupId>
-            <artifactId>javax.annotation-api</artifactId>
-            <version>${javax.annotation-api.version}</version>
-        </dependency>
-    </dependencies>
 </project>

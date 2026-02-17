@@ -143,8 +143,14 @@ public class EventJournalTest extends AbstractJetSoakTest {
         Pipeline pipeline = Pipeline.create();
 
         pipeline.readFrom(Sources.<Long, Long, Long>remoteMapJournal(MAP_NAME, remoteClusterClientConfig,
-                START_FROM_OLDEST, EventJournalMapEvent::getNewValue, e -> e.getType() == EntryEventType.ADDED))
-                .withTimestamps(t -> t, lagMs).setName("Read from map(" + MAP_NAME + ")")
+                START_FROM_OLDEST, EventJournalMapEvent::getNewValue,
+                        e -> {
+                            if (e.isAfterLostEvents()) {
+                                throw new IllegalStateException("Some events get lost");
+                            }
+                            return e.getType() == EntryEventType.ADDED;
+                        }))
+                .withTimestamps(t-> t, lagMs).setName("Read from map(" + MAP_NAME + ")")
                 .setLocalParallelism(partitionCount / memberSize)
                 .window(sliding(windowSize, slideBy))
                 .groupingKey(wholeItem())

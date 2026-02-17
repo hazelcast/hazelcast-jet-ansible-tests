@@ -251,6 +251,15 @@ public class StatefulMapTest extends AbstractJetSoakTest {
                                      entry(transactionId, endEvent.timestamp() - startEvent.timestamp()) : null;
                          },
                          (startEnd, transactionId, wm) -> {
+                             TransactionEvent startEvent = startEnd[0];
+                             TransactionEvent endEvent = startEnd[1];
+
+                             if (startEvent != null && endEvent != null) {
+                                 return (endEvent.timestamp() - startEvent.timestamp()) > 0;
+                             }
+                             return false;
+                         },
+                         (startEnd, transactionId, c) -> {
                              if (startEnd[0] != null && startEnd[1] == null) {
                                  if (transactionId > 0) {
                                      System.out.println("StatefulMapTest Timeout for txId: " + transactionId);

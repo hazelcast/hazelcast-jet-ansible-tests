@@ -43,7 +43,6 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.locks.LockSupport;
 
 import static com.hazelcast.jet.Util.entry;
-import static com.hazelcast.jet.Util.mapEventNewValue;
 import static com.hazelcast.jet.Util.mapPutEvents;
 import static com.hazelcast.jet.core.JobStatus.FAILED;
 import static com.hazelcast.jet.pipeline.JournalInitialPosition.START_FROM_OLDEST;
@@ -129,7 +128,14 @@ public class AsyncTransformTest extends AbstractJetSoakTest {
         Pipeline p = Pipeline.create();
 
         StreamStage<Long> sourceStage = p.readFrom(Sources.<Long, Long, Long>remoteMapJournal(SOURCE,
-                remoteClusterClientConfig, START_FROM_OLDEST, mapEventNewValue(), mapPutEvents()))
+                remoteClusterClientConfig, START_FROM_OLDEST,
+                        event-> {
+                            if (event.isAfterLostEvents()) {
+                                throw new IllegalStateException("Some events get lost after key" + event.getKey());
+                            }
+                            return event.getNewValue();
+                        }
+                        , mapPutEvents()))
                                          .withoutTimestamps().setName("Stream from map(" + SOURCE + ")");
 
         long maxSchedulerDelayMillisLocal = maxSchedulerDelayMillis;

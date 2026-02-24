@@ -146,7 +146,7 @@ public class EventJournalTest extends AbstractJetSoakTest {
                 START_FROM_OLDEST, EventJournalMapEvent::getNewValue,
                         e -> {
                             if (e.isAfterLostEvents()) {
-                                throw new IllegalStateException("Some events get lost");
+                                throw new IllegalStateException("Some events get lost after key" + e.getKey());
                             }
                             return e.getType() == EntryEventType.ADDED;
                         }))

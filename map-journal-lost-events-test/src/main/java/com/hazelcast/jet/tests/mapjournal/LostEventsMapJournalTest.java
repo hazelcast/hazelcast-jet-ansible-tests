@@ -67,24 +67,20 @@ public class LostEventsMapJournalTest extends AbstractJetSoakTest {
     }
 
     @Override
-    protected boolean runOnlyAsClient() {
-        return true;
-    }
-
-    @Override
     protected void init(HazelcastInstance client) throws Exception {
         snapshotIntervalMs = propertyInt("snapshotIntervalMs", DEFAULT_SNAPSHOT_INTERVAL);
         partitionsSize = client.getPartitionService().getPartitions().size();
+    }
+
+    @Override
+    protected void test(HazelcastInstance client, String name) throws Throwable {
         MapConfig mapConfig = new MapConfig(OUTPUT);
         mapConfig.getEventJournalConfig()
                 .setCapacity(BIG_EVENT_JOURNAL_CAPACITY)
                 .setEnabled(true);
         client.getConfig().addMapConfig(mapConfig);
         producer = new BasicEventJournalProducer(client, SOURCE, JOURNAL_CAPACITY_PER_PARTITION * partitionsSize);
-    }
 
-    @Override
-    protected void test(HazelcastInstance client, String name) throws Throwable {
         JobConfig jobConfig = new JobConfig();
         jobConfig.setName(name);
         jobConfig.setSnapshotIntervalMillis(snapshotIntervalMs);

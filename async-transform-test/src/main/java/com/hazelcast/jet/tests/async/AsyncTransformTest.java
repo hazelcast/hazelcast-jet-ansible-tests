@@ -21,7 +21,6 @@ import com.hazelcast.client.config.ClientConfig;
 import com.hazelcast.config.Config;
 import com.hazelcast.config.MapConfig;
 import com.hazelcast.core.HazelcastInstance;
-import com.hazelcast.function.FunctionEx;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.config.ProcessingGuarantee;
@@ -34,10 +33,8 @@ import com.hazelcast.jet.tests.common.AbstractJetSoakTest;
 import com.hazelcast.jet.tests.common.BasicEventJournalProducer;
 import com.hazelcast.jet.tests.eventjournal.EventJournalConsumer;
 import com.hazelcast.logging.ILogger;
-import com.hazelcast.map.EventJournalMapEvent;
 import com.hazelcast.map.IMap;
 
-import java.io.Serializable;
 import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.concurrent.CompletableFuture;
@@ -46,6 +43,7 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.locks.LockSupport;
 
 import static com.hazelcast.jet.Util.entry;
+import static com.hazelcast.jet.Util.mapEventNewValue;
 import static com.hazelcast.jet.Util.mapPutEvents;
 import static com.hazelcast.jet.core.JobStatus.FAILED;
 import static com.hazelcast.jet.pipeline.JournalInitialPosition.START_FROM_OLDEST;
@@ -107,7 +105,6 @@ public class AsyncTransformTest extends AbstractJetSoakTest {
         jobConfig.setName(name);
         jobConfig.setSnapshotIntervalMillis(snapshotIntervalMs);
         jobConfig.setProcessingGuarantee(ProcessingGuarantee.EXACTLY_ONCE);
-        jobConfig.addClass(LookupFunEX.class);
         Job job = client.getJet().newJob(pipeline(), jobConfig);
 
         Verifier orderedVerifier = new Verifier(remoteClient, ORDERED_SINK);
@@ -132,8 +129,7 @@ public class AsyncTransformTest extends AbstractJetSoakTest {
         Pipeline p = Pipeline.create();
 
         StreamStage<Long> sourceStage = p.readFrom(Sources.<Long, Long, Long>remoteMapJournal(SOURCE,
-                remoteClusterClientConfig, START_FROM_OLDEST,
-                        new LookupFunEX<>(), mapPutEvents()))
+                remoteClusterClientConfig, START_FROM_OLDEST, mapEventNewValue(), mapPutEvents()))
                                          .withoutTimestamps().setName("Stream from map(" + SOURCE + ")");
 
         long maxSchedulerDelayMillisLocal = maxSchedulerDelayMillis;
@@ -156,17 +152,6 @@ public class AsyncTransformTest extends AbstractJetSoakTest {
         }
         if (remoteClient != null) {
             remoteClient.shutdown();
-        }
-    }
-
-    static class LookupFunEX<K, V> implements FunctionEx<EventJournalMapEvent<K, V>, V>, Serializable {
-
-        @Override
-        public V applyEx(EventJournalMapEvent<K, V> event) throws Exception {
-            if (event.isAfterLostEvents()) {
-                throw new IllegalStateException("Some events get lost after key" + event.getKey());
-            }
-            return event.getNewValue();
         }
     }
 

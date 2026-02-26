@@ -16,7 +16,6 @@
 
 package com.hazelcast.jet.tests.mapjournal;
 
-import com.hazelcast.client.HazelcastClient;
 import com.hazelcast.config.MapConfig;
 import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.jet.Job;
@@ -50,8 +49,9 @@ import static com.hazelcast.jet.tests.common.Util.sleepMinutes;
 
 public class LostEventsMapJournalTest extends AbstractJetSoakTest {
 
-    private static final String SOURCE = LostEventsMapJournalTest.class.getSimpleName();
-    private static final String OUTPUT = SOURCE + "-OUTPUT";
+    private static final String CLASS_NAME = LostEventsMapJournalTest.class.getSimpleName();
+    private static final String SOURCE = CLASS_NAME + "-INPUT";
+    private static final String OUTPUT = CLASS_NAME + "-OUTPUT";
     private static final int DEFAULT_SNAPSHOT_INTERVAL = 5000;
 
     private static final int JOURNAL_CAPACITY_PER_PARTITION = 30;
@@ -60,11 +60,15 @@ public class LostEventsMapJournalTest extends AbstractJetSoakTest {
     private long snapshotIntervalMs;
     private int partitionsSize;
 
-    private transient HazelcastInstance remoteClient;
     private transient BasicEventJournalProducer producer;
 
     public static void main(String[] args) throws Exception {
         new LostEventsMapJournalTest().run(args);
+    }
+
+    @Override
+    protected boolean runOnlyAsClient() {
+        return true;
     }
 
     @Override
@@ -76,8 +80,7 @@ public class LostEventsMapJournalTest extends AbstractJetSoakTest {
                 .setCapacity(BIG_EVENT_JOURNAL_CAPACITY)
                 .setEnabled(true);
         client.getConfig().addMapConfig(mapConfig);
-        remoteClient = HazelcastClient.newHazelcastClient(remoteClusterClientConfig());
-        producer = new BasicEventJournalProducer(remoteClient, SOURCE, JOURNAL_CAPACITY_PER_PARTITION * partitionsSize);
+        producer = new BasicEventJournalProducer(client, SOURCE, JOURNAL_CAPACITY_PER_PARTITION * partitionsSize);
     }
 
     @Override
@@ -90,7 +93,7 @@ public class LostEventsMapJournalTest extends AbstractJetSoakTest {
 
         producer.start();
 
-        IMap<Long, Long> mapOutput = remoteClient.getMap(OUTPUT);
+        IMap<Long, Long> mapOutput = client.getMap(OUTPUT);
 
         LoggingService loggingService = client.getLoggingService();
         QueueVerifier queueVerifier = new QueueVerifier(loggingService,
@@ -117,9 +120,6 @@ public class LostEventsMapJournalTest extends AbstractJetSoakTest {
         if (producer != null) {
             producer.stop();
         }
-        if (remoteClient != null) {
-            remoteClient.shutdown();
-        }
     }
 
     /**
@@ -128,14 +128,13 @@ public class LostEventsMapJournalTest extends AbstractJetSoakTest {
      */
     private Pipeline pipeline() {
         Pipeline p = Pipeline.create();
-        IMap<Long, Long> map = remoteClient.getMap(SOURCE);
 
         ServiceFactory<?, PartitionService> partitionService = ServiceFactories.sharedService(
                 ctx -> ctx.hazelcastInstance().getPartitionService());
         ServiceFactory<?, IMap<Long, Long>> sourceMapService = ServiceFactories.sharedService(
                 ctx -> ctx.hazelcastInstance().getMap(SOURCE));
 
-        var source = Sources.mapJournalEntries(map, START_FROM_OLDEST);
+        var source = Sources.<Long, Long>mapJournalEntries(SOURCE, START_FROM_OLDEST);
         var input = p.readFrom(source);
 
         //otherwise createFn serialization issues.

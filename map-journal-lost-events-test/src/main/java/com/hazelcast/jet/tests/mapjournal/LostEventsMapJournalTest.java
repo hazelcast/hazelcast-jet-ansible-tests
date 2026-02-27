@@ -111,7 +111,7 @@ public class LostEventsMapJournalTest extends AbstractJetSoakTest {
             }
             consumer.drain(e -> queueVerifier.offer(e.getKey()));
 
-            sleepSeconds(5);
+            sleepSeconds(1);
             mapOutput.clear();
         }
         queueVerifier.close();

@@ -116,6 +116,7 @@ public class EventJournalTest extends AbstractJetSoakTest {
                         countPerTicker, (long) e.getNewValue());
                 queueVerifier.offer(e.getKey());
             });
+            logger.info("Result Map size: " + resultMap.size());
             if (isEmpty) {
                 SECONDS.sleep(1);
             }

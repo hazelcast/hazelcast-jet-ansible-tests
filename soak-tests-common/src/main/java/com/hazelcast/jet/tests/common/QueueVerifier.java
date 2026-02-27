@@ -58,7 +58,9 @@ public class QueueVerifier extends Thread {
 
     public void offer(long item) {
         if (!running) {
-            StringBuilder builder = new StringBuilder("PriorityQueue -> key: ").append(key).append(" - items: ");
+            StringBuilder builder = new StringBuilder("PriorityQueue with size -> ")
+                    .append(queue.size())
+                    .append(" -> key: ").append(key).append(" - items: ");
             for (int i = 0; i < LOG_QUEUE_LIMIT; i++) {
                 builder.append(queue.poll()).append(", ");
             }
@@ -78,9 +80,12 @@ public class QueueVerifier extends Thread {
     public void run() {
         while (running) {
             Long next = queue.peek();
+            if (queue.size() % 100 == 0) {
+                logger.info("Queue size: " + queue.size());
+            }
             if (next == null) {
                 //Queue is empty, sleep
-                logger.info("Queue is empty");
+                logger.info("Queue is empty with size: " + queue.size());
                 // we need to check this also for next == null branch, otherwise we will not fail for getting null
                 // repeatedly
                 if (lastCheck == -1) {

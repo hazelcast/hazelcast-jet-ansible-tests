@@ -106,7 +106,8 @@ public class EventJournalTest extends AbstractJetSoakTest {
                 "Verifier[" + RESULTS_MAP_NAME + "]", windowCount).startVerification();
 
         IMap<Long, Long> resultMap = remoteClient.getMap(RESULTS_MAP_NAME);
-        EventJournalConsumer<Long, Long> consumer = new EventJournalConsumer<>(resultMap, mapPutEvents(), partitionCount);
+        EventJournalConsumer<Long, Long> consumer = new EventJournalConsumer<>(
+                resultMap, mapPutEvents(), partitionCount,  loggingService, "EventJournalTest");
 
         long begin = System.currentTimeMillis();
         while (System.currentTimeMillis() - begin < durationInMillis) {

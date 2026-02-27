@@ -45,7 +45,7 @@ import static com.hazelcast.jet.Util.mapPutEvents;
 import static com.hazelcast.jet.core.JobStatus.FAILED;
 import static com.hazelcast.jet.pipeline.JournalInitialPosition.START_FROM_OLDEST;
 import static com.hazelcast.jet.tests.common.Util.getJobStatusWithRetry;
-import static com.hazelcast.jet.tests.common.Util.sleepMinutes;
+import static com.hazelcast.jet.tests.common.Util.sleepSeconds;
 
 public class LostEventsMapJournalTest extends AbstractJetSoakTest {
 
@@ -55,11 +55,13 @@ public class LostEventsMapJournalTest extends AbstractJetSoakTest {
     private static final int DEFAULT_SNAPSHOT_INTERVAL = 5000;
 
     private static final int DEFAULT_JOURNAL_CAPACITY_PER_PARTITION = 30;
+    private static final int DEFAULT_ALLOWED_LAG = 100;
     private static final int BIG_EVENT_JOURNAL_CAPACITY = 1_500_000;
 
     private long snapshotIntervalMs;
     private int ringBufferSize;
     private int partitionsSize;
+    private int lag;
 
     private transient BasicEventJournalProducer producer;
 
@@ -71,6 +73,7 @@ public class LostEventsMapJournalTest extends AbstractJetSoakTest {
     protected void init(HazelcastInstance client) throws Exception {
         snapshotIntervalMs = propertyInt("snapshotIntervalMs", DEFAULT_SNAPSHOT_INTERVAL);
         ringBufferSize = propertyInt("ringBufferSize", DEFAULT_JOURNAL_CAPACITY_PER_PARTITION);
+        lag = propertyInt("lagMs", DEFAULT_ALLOWED_LAG);
         partitionsSize = client.getPartitionService().getPartitions().size();
         logger.info("LostEventsMapJournalTest have " + partitionsSize + " partitions");
     }
@@ -88,7 +91,7 @@ public class LostEventsMapJournalTest extends AbstractJetSoakTest {
         jobConfig.setName(name);
         jobConfig.setSnapshotIntervalMillis(snapshotIntervalMs);
         jobConfig.setProcessingGuarantee(ProcessingGuarantee.EXACTLY_ONCE);
-        Job job = client.getJet().newJob(pipeline(), jobConfig);
+        Job job = client.getJet().newJob(pipeline(lag), jobConfig);
 
         producer.start();
 
@@ -98,7 +101,8 @@ public class LostEventsMapJournalTest extends AbstractJetSoakTest {
         QueueVerifier queueVerifier = new QueueVerifier(loggingService,
                 "Verifier[" + OUTPUT + "]", 1).startVerification();
 
-        EventJournalConsumer<Long, Long> consumer = new EventJournalConsumer<>(mapOutput, mapPutEvents(), partitionsSize);
+        EventJournalConsumer<Long, Long> consumer = new EventJournalConsumer<>(
+                mapOutput, mapPutEvents(), partitionsSize, loggingService, "LostEventsMapJournalTest");
 
         long begin = System.currentTimeMillis();
         while (System.currentTimeMillis() - begin < durationInMillis) {
@@ -107,7 +111,7 @@ public class LostEventsMapJournalTest extends AbstractJetSoakTest {
             }
             consumer.drain(e -> queueVerifier.offer(e.getKey()));
 
-            sleepMinutes(1);
+            sleepSeconds(5);
             mapOutput.clear();
         }
         queueVerifier.close();
@@ -125,7 +129,7 @@ public class LostEventsMapJournalTest extends AbstractJetSoakTest {
      * based on idea suggested by <a href="https://github.com/shultseva/hazelcast-mono/pull/4/changes#top">PR</a>
      * @return pipeline as shown in PR
      */
-    private Pipeline pipeline() {
+    private Pipeline pipeline(int lag) {
         Pipeline p = Pipeline.create();
 
         ServiceFactory<?, PartitionService> partitionService = ServiceFactories.sharedService(
@@ -170,6 +174,12 @@ public class LostEventsMapJournalTest extends AbstractJetSoakTest {
                         }
                 )
                 .setName("lost-event-detector") // save in memory last emitted event and detect lost events
+                .peek(into-> {
+                    var tuple = (Tuple3<Long, Long, Long>)  into;
+                   return "after lost-event-detector tuple is key " + tuple.f0() +
+                           " from " + tuple.f1() +
+                           " to " + tuple.f2();
+                })
                 .flatMapUsingService(
                         sourceMapService,
                         (m, trigger) -> {
@@ -180,12 +190,16 @@ public class LostEventsMapJournalTest extends AbstractJetSoakTest {
                             var set = m.entrySet(
                                     Predicates.partitionPredicate(
                                             sampleKey,
-                                            entry -> entry.getValue() > from  && entry.getValue() < to
-                                    )
+                                            entry -> entry.getValue() > (from - lag) &&
+                                                    entry.getValue() < (to + lag))
                             );
                             return Traversers.traverseIterable(set);
                         }
                 )
+                .peek(entry-> {
+                    Map.Entry<Long, Long> e = (Map.Entry<Long, Long>) entry;
+                    return "key is " + e.getKey() + " value is " + e.getValue();
+                })
                 .setName("lost-events-stream");
 
         input.withoutTimestamps()

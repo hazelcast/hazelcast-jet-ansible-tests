@@ -35,6 +35,7 @@ import com.hazelcast.jet.tests.common.AbstractJetSoakTest;
 import com.hazelcast.jet.tests.common.BasicEventJournalProducer;
 import com.hazelcast.jet.tests.eventjournal.EventJournalConsumer;
 import com.hazelcast.logging.ILogger;
+import com.hazelcast.logging.LoggingService;
 import com.hazelcast.map.IMap;
 
 import java.io.Serializable;
@@ -211,10 +212,12 @@ public class AsyncTransformTest extends AbstractJetSoakTest {
         private volatile Throwable error;
 
         Verifier(HazelcastInstance client, String mapName) {
-            logger = client.getLoggingService().getLogger(Verifier.class.getSimpleName() + "-" + mapName);
+            LoggingService loggingService  = client.getLoggingService();
+            logger = loggingService.getLogger(Verifier.class.getSimpleName() + "-" + mapName);
             int partitionCount = client.getPartitionService().getPartitions().size();
             map = client.getMap(mapName);
-            consumer = new EventJournalConsumer<>(map, mapPutEvents(), partitionCount);
+            consumer = new EventJournalConsumer<>(map, mapPutEvents(), partitionCount,
+                    loggingService, "AsyncTransformTest");
             thread = new Thread(this::run);
             thread.start();
         }

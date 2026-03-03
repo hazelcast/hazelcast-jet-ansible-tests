@@ -170,6 +170,7 @@
                 <module>sql-stream-to-stream-fault-tolerance-test</module>
                 <module>sql-tumble-window-test</module>
                 <module>subset-routing-test</module>
+                <module>map-journal-lost-events-test</module>
             </modules>
         </profile>
         <profile>
@@ -228,6 +229,7 @@
                 <module>grpc-test</module>
                 <module>sort-test</module>
                 <module>file-ingestion-test</module>
+                <module>map-journal-lost-events-test</module>
 
                 <!-- For now client tests are included in jet profile -->
                 <module>subset-routing-test</module>

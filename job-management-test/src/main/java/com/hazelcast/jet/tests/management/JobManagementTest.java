@@ -16,8 +16,6 @@
 
 package com.hazelcast.jet.tests.management;
 
-import com.hazelcast.config.Config;
-import com.hazelcast.config.MapConfig;
 import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.JobStateSnapshot;
@@ -26,7 +24,7 @@ import com.hazelcast.jet.config.ProcessingGuarantee;
 import com.hazelcast.jet.pipeline.Pipeline;
 import com.hazelcast.jet.pipeline.Sources;
 import com.hazelcast.jet.tests.common.AbstractJetSoakTest;
-import com.hazelcast.map.IMap;
+import com.hazelcast.jet.tests.common.BasicEventJournalProducer;
 
 import java.util.concurrent.CancellationException;
 
@@ -35,21 +33,17 @@ import static com.hazelcast.jet.Util.mapPutEvents;
 import static com.hazelcast.jet.core.JobStatus.RUNNING;
 import static com.hazelcast.jet.core.JobStatus.SUSPENDED;
 import static com.hazelcast.jet.pipeline.JournalInitialPosition.START_FROM_OLDEST;
-import static com.hazelcast.jet.tests.common.Util.sleepMillis;
 import static com.hazelcast.jet.tests.common.Util.sleepMinutes;
-import static com.hazelcast.jet.tests.common.Util.sleepSeconds;
 import static com.hazelcast.jet.tests.common.Util.waitForJobStatus;
 
 public class JobManagementTest extends AbstractJetSoakTest {
 
     private static final int DEFAULT_SNAPSHOT_INTERVAL = 5000;
     private static final int EVENT_JOURNAL_CAPACITY = 1_500_000;
-    private static final int MAP_CLEAR_THRESHOLD = 5000;
-    private static final int PRODUCER_SLEEP_MILLIS = 5;
 
     private static final String SOURCE = JobManagementTest.class.getSimpleName();
 
-    private Producer producer;
+    private BasicEventJournalProducer producer;
     private int snapshotIntervalMs;
 
     public static void main(String[] args) throws Exception {
@@ -59,14 +53,7 @@ public class JobManagementTest extends AbstractJetSoakTest {
     @Override
     public void init(HazelcastInstance client) {
         snapshotIntervalMs = propertyInt("snapshotIntervalMs", DEFAULT_SNAPSHOT_INTERVAL);
-
-        Config config = client.getConfig();
-        MapConfig mapConfig = new MapConfig(SOURCE);
-        mapConfig.getEventJournalConfig()
-                 .setCapacity(EVENT_JOURNAL_CAPACITY)
-                 .setEnabled(true);
-        config.addMapConfig(mapConfig);
-        producer = new Producer(client.getMap(SOURCE));
+        producer = new BasicEventJournalProducer(client, SOURCE, EVENT_JOURNAL_CAPACITY);
         producer.start();
     }
 
@@ -137,45 +124,4 @@ public class JobManagementTest extends AbstractJetSoakTest {
          .writeTo(VerificationProcessor.sink());
         return p;
     }
-
-    static class Producer {
-
-        private final IMap<Long, Long> map;
-        private final Thread thread;
-
-        private volatile boolean producing = true;
-
-        Producer(IMap<Long, Long> map) {
-            this.map = map;
-            this.thread = new Thread(this::run);
-        }
-
-        void run() {
-            long counter = 0;
-            while (producing) {
-                try {
-                    map.set(counter, counter);
-                } catch (Exception e) {
-                    e.printStackTrace();
-                    sleepSeconds(1);
-                    continue;
-                }
-                counter++;
-                if (counter % MAP_CLEAR_THRESHOLD == 0) {
-                    map.clear();
-                }
-                sleepMillis(PRODUCER_SLEEP_MILLIS);
-            }
-        }
-
-        void start() {
-            thread.start();
-        }
-
-        void stop() throws InterruptedException {
-            producing = false;
-            thread.join();
-        }
-    }
-
 }

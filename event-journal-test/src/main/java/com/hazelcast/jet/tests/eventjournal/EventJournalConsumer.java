@@ -18,11 +18,14 @@ package com.hazelcast.jet.tests.eventjournal;
 
 import com.hazelcast.client.impl.proxy.ClientMapProxy;
 import com.hazelcast.function.PredicateEx;
+import com.hazelcast.logging.ILogger;
+import com.hazelcast.logging.LoggingService;
 import com.hazelcast.map.EventJournalMapEvent;
 import com.hazelcast.map.IMap;
 import com.hazelcast.ringbuffer.ReadResultSet;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
@@ -37,9 +40,11 @@ public class EventJournalConsumer<K, V> {
     private final int partitionCount;
     private final long[] offsets;
     private final PredicateEx<EventJournalMapEvent<K, V>> predicate;
+    private final ILogger logger;
 
     public EventJournalConsumer(IMap<K, V> map, PredicateEx<EventJournalMapEvent<K, V>> predicate,
-                                int partitionCount) {
+                                int partitionCount,  LoggingService loggingService, String name) {
+        this.logger = loggingService.getLogger(name);
         this.proxy = (ClientMapProxy<K, V>) map;
         this.predicate = predicate;
         this.partitionCount = partitionCount;
@@ -61,6 +66,7 @@ public class EventJournalConsumer<K, V> {
             offsets[i] = offsets[i] + resultSet.readCount();
             isEmpty = isEmpty & resultSet.readCount() == 0;
         }
+        logger.info("Partitions offsets are: " + Arrays.toString(offsets));
         return isEmpty;
     }
 

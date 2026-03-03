@@ -21,9 +21,11 @@ import com.hazelcast.client.config.ClientConfig;
 import com.hazelcast.config.Config;
 import com.hazelcast.config.MapConfig;
 import com.hazelcast.core.HazelcastInstance;
+import com.hazelcast.function.FunctionEx;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.config.ProcessingGuarantee;
+import com.hazelcast.jet.pipeline.JournalSourceEntry;
 import com.hazelcast.jet.pipeline.Pipeline;
 import com.hazelcast.jet.pipeline.ServiceFactory;
 import com.hazelcast.jet.pipeline.Sinks;
@@ -33,8 +35,10 @@ import com.hazelcast.jet.tests.common.AbstractJetSoakTest;
 import com.hazelcast.jet.tests.common.BasicEventJournalProducer;
 import com.hazelcast.jet.tests.eventjournal.EventJournalConsumer;
 import com.hazelcast.logging.ILogger;
+import com.hazelcast.logging.LoggingService;
 import com.hazelcast.map.IMap;
 
+import java.io.Serializable;
 import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.concurrent.CompletableFuture;
@@ -43,7 +47,7 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.locks.LockSupport;
 
 import static com.hazelcast.jet.Util.entry;
-import static com.hazelcast.jet.Util.mapEventNewValue;
+import static com.hazelcast.jet.Util.mapEventToJournalEntry;
 import static com.hazelcast.jet.Util.mapPutEvents;
 import static com.hazelcast.jet.core.JobStatus.FAILED;
 import static com.hazelcast.jet.pipeline.JournalInitialPosition.START_FROM_OLDEST;
@@ -105,6 +109,7 @@ public class AsyncTransformTest extends AbstractJetSoakTest {
         jobConfig.setName(name);
         jobConfig.setSnapshotIntervalMillis(snapshotIntervalMs);
         jobConfig.setProcessingGuarantee(ProcessingGuarantee.EXACTLY_ONCE);
+        jobConfig.addClass(MapFuncEx.class);
         Job job = client.getJet().newJob(pipeline(), jobConfig);
 
         Verifier orderedVerifier = new Verifier(remoteClient, ORDERED_SINK);
@@ -128,9 +133,12 @@ public class AsyncTransformTest extends AbstractJetSoakTest {
     private Pipeline pipeline() {
         Pipeline p = Pipeline.create();
 
-        StreamStage<Long> sourceStage = p.readFrom(Sources.<Long, Long, Long>remoteMapJournal(SOURCE,
-                remoteClusterClientConfig, START_FROM_OLDEST, mapEventNewValue(), mapPutEvents()))
-                                         .withoutTimestamps().setName("Stream from map(" + SOURCE + ")");
+        StreamStage<Long> sourceStage = p.readFrom(
+                Sources.<JournalSourceEntry<Long, Long>, Long, Long>remoteMapJournal(
+                        SOURCE, remoteClusterClientConfig, START_FROM_OLDEST, mapEventToJournalEntry(), mapPutEvents()))
+                                         .withoutTimestamps()
+                .setName("Stream from map(" + SOURCE + ")")
+                .map(new MapFuncEx<>());
 
         long maxSchedulerDelayMillisLocal = maxSchedulerDelayMillis;
         ServiceFactory<?, Scheduler> contextFactory = sharedService(
@@ -152,6 +160,17 @@ public class AsyncTransformTest extends AbstractJetSoakTest {
         }
         if (remoteClient != null) {
             remoteClient.shutdown();
+        }
+    }
+
+    static class MapFuncEx<K, V> implements FunctionEx<JournalSourceEntry<K, V>, V>, Serializable {
+
+        @Override
+        public V applyEx(JournalSourceEntry<K, V> event) throws Exception {
+            if (event.isAfterLostEvents()) {
+                throw new IllegalStateException("Some events get lost after key" + event.getKey());
+            }
+            return event.getValue();
         }
     }
 
@@ -193,10 +212,12 @@ public class AsyncTransformTest extends AbstractJetSoakTest {
         private volatile Throwable error;
 
         Verifier(HazelcastInstance client, String mapName) {
-            logger = client.getLoggingService().getLogger(Verifier.class.getSimpleName() + "-" + mapName);
+            LoggingService loggingService  = client.getLoggingService();
+            logger = loggingService.getLogger(Verifier.class.getSimpleName() + "-" + mapName);
             int partitionCount = client.getPartitionService().getPartitions().size();
             map = client.getMap(mapName);
-            consumer = new EventJournalConsumer<>(map, mapPutEvents(), partitionCount);
+            consumer = new EventJournalConsumer<>(map, mapPutEvents(), partitionCount,
+                    loggingService, "AsyncTransformTest");
             thread = new Thread(this::run);
             thread.start();
         }

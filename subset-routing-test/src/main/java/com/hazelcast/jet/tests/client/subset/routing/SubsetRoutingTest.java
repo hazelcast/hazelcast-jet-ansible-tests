@@ -19,9 +19,9 @@ package com.hazelcast.jet.tests.client.subset.routing;
 
 import com.hazelcast.client.config.ClientConfig;
 import com.hazelcast.client.config.ClusterRoutingConfig;
+import com.hazelcast.client.config.RoutingMode;
 import com.hazelcast.client.impl.clientside.HazelcastClientInstanceImpl;
 import com.hazelcast.client.impl.clientside.HazelcastClientProxy;
-import com.hazelcast.client.impl.connection.tcp.RoutingMode;
 import com.hazelcast.cluster.Member;
 import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.jet.tests.common.AbstractClientSoakTest;

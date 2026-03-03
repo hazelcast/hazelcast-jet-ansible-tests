@@ -39,7 +39,6 @@ public class BasicEventJournalProducer {
     private final Thread thread;
     private final ILogger logger;
 
-
     private volatile boolean producing = true;
 
     public BasicEventJournalProducer(HazelcastInstance client, String mapName, int capacity) {

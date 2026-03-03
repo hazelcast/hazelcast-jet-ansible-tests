@@ -174,12 +174,6 @@ public class LostEventsMapJournalTest extends AbstractJetSoakTest {
                         }
                 )
                 .setName("lost-event-detector") // save in memory last emitted event and detect lost events
-                .peek(into-> {
-                    var tuple = (Tuple3<Long, Long, Long>)  into;
-                   return "after lost-event-detector tuple is key " + tuple.f0() +
-                           " from " + tuple.f1() +
-                           " to " + tuple.f2();
-                })
                 .flatMapUsingService(
                         sourceMapService,
                         (m, trigger) -> {
@@ -196,10 +190,6 @@ public class LostEventsMapJournalTest extends AbstractJetSoakTest {
                             return Traversers.traverseIterable(set);
                         }
                 )
-                .peek(entry-> {
-                    Map.Entry<Long, Long> e = (Map.Entry<Long, Long>) entry;
-                    return "key is " + e.getKey() + " value is " + e.getValue();
-                })
                 .setName("lost-events-stream");
 
         input.withoutTimestamps()

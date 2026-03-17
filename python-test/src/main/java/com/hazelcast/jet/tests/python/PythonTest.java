@@ -23,8 +23,6 @@ import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.pipeline.Pipeline;
 import com.hazelcast.jet.pipeline.Sinks;
 import com.hazelcast.jet.pipeline.Sources;
-import com.hazelcast.jet.python.PythonServiceConfig;
-import com.hazelcast.jet.python.PythonTransforms;
 import com.hazelcast.jet.tests.common.AbstractJetSoakTest;
 import com.hazelcast.map.IMap;
 
@@ -36,6 +34,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
 
+import static com.hazelcast.jet.python.PythonExtension.python;
 import static com.hazelcast.jet.impl.util.Util.uncheckCall;
 import static com.hazelcast.jet.tests.common.Util.sleepSeconds;
 import static com.hazelcast.query.Predicates.alwaysTrue;
@@ -115,14 +114,14 @@ public class PythonTest extends AbstractJetSoakTest {
     }
 
     private Pipeline pipeline() {
-        PythonServiceConfig cfg = new PythonServiceConfig()
-                .setBaseDir(baseDir.toString())
-                .setHandlerModule(PYTHON_HANDLER_MODULE)
-                .setHandlerFunction(PYTHON_HANDLER_FUNCTION);
         Pipeline p = Pipeline.create();
         p.readFrom(Sources.map(sourceMap, alwaysTrue(), Map.Entry::getValue))
-         .apply(PythonTransforms.mapUsingPythonBatch(cfg))
-         .writeTo(Sinks.list(sinkList));
+                .using(python())
+                .baseDir(baseDir.toString())
+                .handlerModule(PYTHON_HANDLER_MODULE)
+                .handlerFunction(PYTHON_HANDLER_FUNCTION)
+                .map()
+                .writeTo(Sinks.list(sinkList));
 
         return p;
     }

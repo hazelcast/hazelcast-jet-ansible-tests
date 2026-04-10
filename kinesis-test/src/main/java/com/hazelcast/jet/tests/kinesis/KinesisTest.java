@@ -16,7 +16,6 @@
 
 package com.hazelcast.jet.tests.kinesis;
 
-import com.amazonaws.SDKGlobalConfiguration;
 import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.config.JobConfig;
@@ -30,7 +29,7 @@ import com.hazelcast.jet.pipeline.SourceBuilder;
 import com.hazelcast.jet.pipeline.StreamSource;
 import com.hazelcast.jet.tests.common.AbstractJetSoakTest;
 
-import com.hazelcast.shaded.com.amazonaws.regions.Regions;
+import com.hazelcast.shaded.software.amazon.awssdk.regions.Region;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -69,7 +68,6 @@ public class KinesisTest extends AbstractJetSoakTest {
     private boolean testFailed;
 
     public static void main(String[] args) throws Exception {
-        System.setProperty(SDKGlobalConfiguration.AWS_CBOR_DISABLE_SYSTEM_PROPERTY, "true");
         new KinesisTest().run(args);
     }
 
@@ -77,7 +75,7 @@ public class KinesisTest extends AbstractJetSoakTest {
     protected void init(HazelcastInstance client) {
         awsConfig = new AwsConfig()
                 .withEndpoint(property("endpoint", "http://localhost:4566"))
-                .withRegion(Regions.US_EAST_1.getName())
+                .withRegion(Region.US_EAST_1.id())
                 .withCredentials(property("accessKey", "accessKey"), property("secretKey", "secretKey"));
 
         shardCount = propertyInt("shardCount", DEFAULT_SHARD_COUNT);

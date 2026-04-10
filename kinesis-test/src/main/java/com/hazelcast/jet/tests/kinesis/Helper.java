@@ -16,17 +16,19 @@
 
 package com.hazelcast.jet.tests.kinesis;
 
-import com.hazelcast.shaded.com.amazonaws.SdkClientException;
-import com.hazelcast.shaded.com.amazonaws.services.kinesis.AmazonKinesisAsync;
-import com.hazelcast.shaded.com.amazonaws.services.kinesis.model.CreateStreamRequest;
-import com.hazelcast.shaded.com.amazonaws.services.kinesis.model.DescribeStreamSummaryRequest;
-import com.hazelcast.shaded.com.amazonaws.services.kinesis.model.ExpiredNextTokenException;
-import com.hazelcast.shaded.com.amazonaws.services.kinesis.model.InvalidArgumentException;
-import com.hazelcast.shaded.com.amazonaws.services.kinesis.model.LimitExceededException;
-import com.hazelcast.shaded.com.amazonaws.services.kinesis.model.ResourceInUseException;
-import com.hazelcast.shaded.com.amazonaws.services.kinesis.model.ResourceNotFoundException;
-import com.hazelcast.shaded.com.amazonaws.services.kinesis.model.StreamDescriptionSummary;
-import com.hazelcast.shaded.com.amazonaws.services.kinesis.model.StreamStatus;
+import com.hazelcast.shaded.software.amazon.awssdk.core.exception.SdkClientException;
+import com.hazelcast.shaded.software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
+import com.hazelcast.shaded.software.amazon.awssdk.services.kinesis.model.CreateStreamRequest;
+import com.hazelcast.shaded.software.amazon.awssdk.services.kinesis.model.DeleteStreamRequest;
+import com.hazelcast.shaded.software.amazon.awssdk.services.kinesis.model.DescribeStreamSummaryRequest;
+import com.hazelcast.shaded.software.amazon.awssdk.services.kinesis.model.ExpiredNextTokenException;
+import com.hazelcast.shaded.software.amazon.awssdk.services.kinesis.model.InvalidArgumentException;
+import com.hazelcast.shaded.software.amazon.awssdk.services.kinesis.model.LimitExceededException;
+import com.hazelcast.shaded.software.amazon.awssdk.services.kinesis.model.ListStreamsRequest;
+import com.hazelcast.shaded.software.amazon.awssdk.services.kinesis.model.ResourceInUseException;
+import com.hazelcast.shaded.software.amazon.awssdk.services.kinesis.model.ResourceNotFoundException;
+import com.hazelcast.shaded.software.amazon.awssdk.services.kinesis.model.StreamDescriptionSummary;
+import com.hazelcast.shaded.software.amazon.awssdk.services.kinesis.model.StreamStatus;
 import com.hazelcast.jet.JetException;
 import com.hazelcast.jet.retry.IntervalFunction;
 import com.hazelcast.jet.retry.RetryStrategies;
@@ -37,6 +39,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.Callable;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeUnit;
 
 import static com.hazelcast.jet.impl.util.ExceptionUtil.rethrow;
@@ -49,10 +52,10 @@ public class Helper {
             .intervalFunction(IntervalFunction.exponentialBackoffWithCap(250L, 2.0, 1000L))
             .build();
 
-    private final AmazonKinesisAsync kinesis;
+    private final KinesisAsyncClient kinesis;
     private final ILogger logger;
 
-    Helper(AmazonKinesisAsync kinesis, ILogger logger) {
+    Helper(KinesisAsyncClient kinesis, ILogger logger) {
         this.kinesis = kinesis;
         this.logger = logger;
     }
@@ -63,10 +66,11 @@ public class Helper {
         }
 
         callSafely(() -> {
-            CreateStreamRequest request = new CreateStreamRequest();
-            request.setShardCount(shardCount);
-            request.setStreamName(stream);
-            return kinesis.createStream(request);
+            CreateStreamRequest request = CreateStreamRequest.builder()
+                    .shardCount(shardCount)
+                    .streamName(stream)
+                    .build();
+            return kinesis.createStream(request).join();
         }, format("stream[%s] creation", stream));
 
         waitForStreamToActivate(stream);
@@ -74,13 +78,15 @@ public class Helper {
 
     public void deleteStream(String stream) {
         if (streamExists(stream)) {
-            callSafely(() -> kinesis.deleteStream(stream), format("stream[%s] deletion", stream));
+            callSafely(() -> kinesis.deleteStream(
+                    DeleteStreamRequest.builder().streamName(stream).build()
+            ).join(), format("stream[%s] deletion", stream));
             waitForStreamToDisappear(stream);
         }
     }
 
     private List<String> listStreams() {
-        return kinesis.listStreams().getStreamNames();
+        return kinesis.listStreams(ListStreamsRequest.builder().build()).join().streamNames();
     }
 
     private boolean streamExists(String stream) {
@@ -121,13 +127,13 @@ public class Helper {
     }
 
     private StreamStatus getStreamStatus(String stream) {
-        DescribeStreamSummaryRequest request = new DescribeStreamSummaryRequest();
-        request.setStreamName(stream);
+        DescribeStreamSummaryRequest request = DescribeStreamSummaryRequest.builder()
+                .streamName(stream)
+                .build();
 
-        StreamDescriptionSummary description = kinesis.describeStreamSummary(request).getStreamDescriptionSummary();
-        String statusString = description.getStreamStatus();
-
-        return StreamStatus.valueOf(statusString);
+        StreamDescriptionSummary description = kinesis.describeStreamSummary(request)
+                .join().streamDescriptionSummary();
+        return description.streamStatus();
     }
 
     private <T> T callSafely(Callable<T> callable, String action) {
@@ -135,35 +141,41 @@ public class Helper {
         while (true) {
             try {
                 return callable.call();
-            } catch (LimitExceededException lee) {
-                String message = "The requested resource exceeds the maximum number allowed, " +
-                        "or the number of concurrent stream requests exceeds the maximum number allowed. " +
-                        "Will retry. The action: " + action;
-                logger.warning(message, lee);
-            } catch (ExpiredNextTokenException ente) {
-                String message = "The pagination token passed to the operation is expired. " +
-                        "Will retry. The action: " + action;
-                logger.warning(message, ente);
-            } catch (ResourceInUseException riue) {
-                String message = "The resource is not available for this operation. For successful operation, the " +
-                        "resource must be in the ACTIVE state. Will retry. The action: " + action;
-                logger.warning(message, riue);
-            } catch (ResourceNotFoundException rnfe) {
-                String message = "The requested resource could not be found. " +
-                        "The stream might not be specified correctly. The action: " + action;
-                throw new JetException(message, rnfe);
-            } catch (InvalidArgumentException iae) {
-                String message = "A specified parameter exceeds its restrictions, is not supported, or can't be used." +
-                        " The action: " + action;
-                throw new JetException(message, iae);
-            } catch (SdkClientException sce) {
-                String message = "Amazon SDK failure, ignoring and retrying. The action: " + action;
-                logger.warning(message, sce);
             } catch (Exception e) {
-                throw rethrow(e);
+                // CompletableFuture.join() wraps exceptions in CompletionException, unwrap to handle the actual cause
+                handleException(e instanceof CompletionException && e.getCause() != null ? e.getCause() : e, action);
             }
-
             wait(++attempt, action);
+        }
+    }
+
+    private void handleException(Throwable e, String action) {
+        if (e instanceof LimitExceededException) {
+            String message = "The requested resource exceeds the maximum number allowed, " +
+                    "or the number of concurrent stream requests exceeds the maximum number allowed. " +
+                    "Will retry. The action: " + action;
+            logger.warning(message, e);
+        } else if (e instanceof ExpiredNextTokenException) {
+            String message = "The pagination token passed to the operation is expired. " +
+                    "Will retry. The action: " + action;
+            logger.warning(message, e);
+        } else if (e instanceof ResourceInUseException) {
+            String message = "The resource is not available for this operation. For successful operation, the " +
+                    "resource must be in the ACTIVE state. Will retry. The action: " + action;
+            logger.warning(message, e);
+        } else if (e instanceof ResourceNotFoundException) {
+            String message = "The requested resource could not be found. " +
+                    "The stream might not be specified correctly. The action: " + action;
+            throw new JetException(message, e);
+        } else if (e instanceof InvalidArgumentException) {
+            String message = "A specified parameter exceeds its restrictions, is not supported, or can't be used." +
+                    " The action: " + action;
+            throw new JetException(message, e);
+        } else if (e instanceof SdkClientException) {
+            String message = "Amazon SDK failure, ignoring and retrying. The action: " + action;
+            logger.warning(message, e);
+        } else {
+            throw rethrow(e);
         }
     }
 

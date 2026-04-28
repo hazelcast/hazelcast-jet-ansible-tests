@@ -56,12 +56,13 @@ public class LostEventsMapJournalTest extends AbstractJetSoakTest {
 
     private static final int DEFAULT_JOURNAL_CAPACITY_PER_PARTITION = 30;
     private static final int DEFAULT_ALLOWED_LAG = 100;
-    private static final int BIG_EVENT_JOURNAL_CAPACITY = 1_500_000;
+    private static final int DEFAULT_TTL_SECONDS = 120;
 
     private long snapshotIntervalMs;
     private int ringBufferSize;
     private int partitionsSize;
     private int lag;
+    private int ttlSeconds;
 
     private transient BasicEventJournalProducer producer;
 
@@ -74,6 +75,7 @@ public class LostEventsMapJournalTest extends AbstractJetSoakTest {
         snapshotIntervalMs = propertyInt("snapshotIntervalMs", DEFAULT_SNAPSHOT_INTERVAL);
         ringBufferSize = propertyInt("ringBufferSize", DEFAULT_JOURNAL_CAPACITY_PER_PARTITION);
         lag = propertyInt("lagMs", DEFAULT_ALLOWED_LAG);
+        ttlSeconds = propertyInt("ttlSeconds", DEFAULT_TTL_SECONDS);
         partitionsSize = client.getPartitionService().getPartitions().size();
         logger.info("LostEventsMapJournalTest have " + partitionsSize + " partitions");
     }
@@ -82,10 +84,10 @@ public class LostEventsMapJournalTest extends AbstractJetSoakTest {
     protected void test(HazelcastInstance client, String name) throws Throwable {
         MapConfig mapConfig = new MapConfig(OUTPUT);
         mapConfig.getEventJournalConfig()
-                .setCapacity(BIG_EVENT_JOURNAL_CAPACITY)
+                .setCapacity(ringBufferSize * partitionsSize)
                 .setEnabled(true);
         client.getConfig().addMapConfig(mapConfig);
-        producer = new BasicEventJournalProducer(client, SOURCE, ringBufferSize * partitionsSize);
+        producer = new BasicEventJournalProducer(client, SOURCE, ringBufferSize * partitionsSize, ttlSeconds);
 
         JobConfig jobConfig = new JobConfig();
         jobConfig.setName(name);

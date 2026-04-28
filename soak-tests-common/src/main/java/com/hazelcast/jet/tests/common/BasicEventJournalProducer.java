@@ -38,12 +38,22 @@ public class BasicEventJournalProducer {
     private final IMap<Long, Long> map;
     private final Thread thread;
     private final ILogger logger;
+    private final Integer ttlSeconds;
 
     private volatile boolean producing = true;
 
     public BasicEventJournalProducer(HazelcastInstance client, String mapName, int capacity) {
+        this(client, mapName, capacity, null);
+    }
+
+    public BasicEventJournalProducer(HazelcastInstance client, String mapName, int capacity, Integer ttlSeconds) {
         Config config = client.getConfig();
         MapConfig mapConfig = new MapConfig(mapName);
+        this.ttlSeconds = ttlSeconds;
+        if (ttlSeconds != null) {
+            mapConfig.setTimeToLiveSeconds(ttlSeconds);
+        }
+
         mapConfig.getEventJournalConfig()
                 .setCapacity(capacity)
                 .setEnabled(true);
@@ -68,7 +78,7 @@ public class BasicEventJournalProducer {
                 continue;
             }
             counter++;
-            if (counter % MAP_CLEAR_THRESHOLD == 0) {
+            if (counter % MAP_CLEAR_THRESHOLD == 0 && ttlSeconds == null) {
                 map.clear();
             }
             sleepMillis(PRODUCER_SLEEP_MILLIS);

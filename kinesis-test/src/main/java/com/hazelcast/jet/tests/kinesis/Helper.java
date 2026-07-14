@@ -16,6 +16,7 @@
 
 package com.hazelcast.jet.tests.kinesis;
 
+import com.hazelcast.internal.util.ExceptionUtil;
 import com.hazelcast.shaded.software.amazon.awssdk.core.exception.SdkClientException;
 import com.hazelcast.shaded.software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import com.hazelcast.shaded.software.amazon.awssdk.services.kinesis.model.CreateStreamRequest;
@@ -42,7 +43,6 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeUnit;
 
-import static com.hazelcast.jet.impl.util.ExceptionUtil.rethrow;
 import static java.lang.String.format;
 
 public class Helper {
@@ -175,7 +175,7 @@ public class Helper {
             String message = "Amazon SDK failure, ignoring and retrying. The action: " + action;
             logger.warning(message, e);
         } else {
-            throw rethrow(e);
+            throw ExceptionUtil.rethrow(e);
         }
     }
 

@@ -16,6 +16,7 @@
 
 package com.hazelcast.jet.tests.vector;
 
+import com.hazelcast.client.HazelcastClient;
 import com.hazelcast.config.vector.Metric;
 import com.hazelcast.config.vector.VectorCollectionConfig;
 import com.hazelcast.config.vector.VectorIndexConfig;
@@ -63,6 +64,8 @@ public class VectorCollectionTest extends AbstractJetSoakTest {
     private int clearIntervalThreshold;
     private int searchLimit;
 
+    private transient HazelcastInstance remoteClient;
+
     public static void main(String[] args) throws Exception {
         new VectorCollectionTest().run(args);
     }
@@ -83,6 +86,7 @@ public class VectorCollectionTest extends AbstractJetSoakTest {
 
     @Override
     protected void test(HazelcastInstance client, String name) throws Throwable {
+        remoteClient = HazelcastClient.newHazelcastClient(remoteClusterClientConfig());
         VectorIndexConfig indexConfig = new VectorIndexConfig();
         indexConfig.setName(INDEX_NAME);
         indexConfig.setDimension(dimension);
@@ -95,11 +99,12 @@ public class VectorCollectionTest extends AbstractJetSoakTest {
         vectorCollectionConfig.setName(VECTOR_COLLECTION_NAME);
         vectorCollectionConfig.setVectorIndexConfigs(List.of(indexConfig));
 
-        client.getConfig().addVectorCollectionConfig(vectorCollectionConfig);
+        remoteClient.getConfig().addVectorCollectionConfig(vectorCollectionConfig);
 
-        VectorCollection<Integer, String> vectorCollection = client.getVectorCollection(VECTOR_COLLECTION_NAME);
+        VectorCollection<Integer, String> vectorCollection = remoteClient.getVectorCollection(VECTOR_COLLECTION_NAME);
 
-        int countAdded = 0;
+        int clearCounter = 0;
+        int totalCounter = 0;
 
         SearchOptions searchOptions = SearchOptions.builder()
                 .includeValue()
@@ -108,21 +113,26 @@ public class VectorCollectionTest extends AbstractJetSoakTest {
         long begin = System.currentTimeMillis();
         while (System.currentTimeMillis() - begin < durationInMillis) {
             //add + update + optimize + search + clear
-            addItemToVectorCollection(vectorCollection, countAdded);
-            updateItemInVectorCollection(vectorCollection, countAdded);
+            addItemToVectorCollection(vectorCollection, totalCounter);
+            updateItemInVectorCollection(vectorCollection, totalCounter);
 
-            if (countAdded % optimizeIntervalThreshold == 0) {
+            if (clearCounter % 1000 == 0){
+                logger.info(String.format("Added %d items in vector collection", totalCounter));
+            }
+
+            if (clearCounter % optimizeIntervalThreshold == 0) {
                 optimizeVectorCollection(vectorCollection);
             }
 
-            if (countAdded % searchIntervalThreshold == 0 && countAdded > searchLimit) {
+            if (clearCounter % searchIntervalThreshold == 0 && clearCounter > searchLimit) {
                 performSearchOnVectorCollection(vectorCollection, searchOptions);
             }
 
-            countAdded++;
-            if (countAdded % clearIntervalThreshold == 0) {
+            clearCounter++;
+            totalCounter++;
+            if (clearCounter % clearIntervalThreshold == 0) {
                 clearVectorCollection(vectorCollection);
-                countAdded = 0;
+                clearCounter = 0;
             }
             sleepMillis(2);
         }
@@ -132,7 +142,9 @@ public class VectorCollectionTest extends AbstractJetSoakTest {
 
     @Override
     protected void teardown(Throwable t)  {
-
+        if (remoteClient != null) {
+            remoteClient.shutdown();
+        }
     }
 
     private void clearVectorCollection(VectorCollection<Integer, String> vectorCollection) {

@@ -18,10 +18,10 @@ package com.hazelcast.jet.tests.cdc.source;
 
 import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.jet.Job;
-import com.hazelcast.enterprise.jet.cdc.ChangeRecord;
-import com.hazelcast.enterprise.jet.cdc.Operation;
-import com.hazelcast.enterprise.jet.cdc.RecordPart;
-import com.hazelcast.enterprise.jet.cdc.mysql.MySqlCdcSources;
+import com.hazelcast.jet.cdc.ChangeRecord;
+import com.hazelcast.jet.cdc.Operation;
+import com.hazelcast.jet.cdc.RecordPart;
+import com.hazelcast.jet.cdc.mysql.MySqlCdcSources;
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.config.ProcessingGuarantee;
 import com.hazelcast.jet.pipeline.Pipeline;
@@ -156,10 +156,8 @@ public class CdcSourceTest extends AbstractJetSoakTest {
                 .setDatabasePort(3306)
                 .setDatabaseUser("debezium")
                 .setDatabasePassword("Dbz,1234")
-                .setDatabaseName("cdc_source_test_db")
+                .setClusterName(DATABASE_NAME)
                 .setDatabaseClientId(clusterName.contains(STABLE_CLUSTER) ? 444444 : 555555)
-                .setSchemaIncludeList(DATABASE_NAME)
-                .setTableIncludeList(DATABASE_NAME + "." + tableName)
                 .build();
 
         Sink<Integer> insertSink = Sinks.fromProcessor("insertVerificationProcessor",

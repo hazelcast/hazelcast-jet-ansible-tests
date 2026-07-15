@@ -156,8 +156,10 @@ public class CdcSourceTest extends AbstractJetSoakTest {
                 .setDatabasePort(3306)
                 .setDatabaseUser("debezium")
                 .setDatabasePassword("Dbz,1234")
-                .setClusterName(DATABASE_NAME)
+                .setDatabaseName(DATABASE_NAME)
                 .setDatabaseClientId(clusterName.contains(STABLE_CLUSTER) ? 444444 : 555555)
+                .setSchemaIncludeList(DATABASE_NAME)
+                .setTableIncludeList(DATABASE_NAME + "." + tableName)
                 .build();
 
         Sink<Integer> insertSink = Sinks.fromProcessor("insertVerificationProcessor",

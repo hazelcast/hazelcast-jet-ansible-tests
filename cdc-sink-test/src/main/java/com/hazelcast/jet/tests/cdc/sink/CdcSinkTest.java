@@ -244,6 +244,7 @@ public class CdcSinkTest extends AbstractJetSoakTest {
                 messageId,
                 op,
                 key,
+                () -> "notUsed",
                 oldValue,
                 newValue,
                 "table",

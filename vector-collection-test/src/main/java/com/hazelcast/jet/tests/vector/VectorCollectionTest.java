@@ -116,7 +116,7 @@ public class VectorCollectionTest extends AbstractJetSoakTest {
             addItemToVectorCollection(vectorCollection, totalCounter);
             updateItemInVectorCollection(vectorCollection, totalCounter);
 
-            if (clearCounter % 1000 == 0){
+            if (clearCounter % 1000 == 0) {
                 logger.info(String.format("Added %d items in vector collection", totalCounter));
             }
 

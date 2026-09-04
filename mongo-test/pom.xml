@@ -23,7 +23,7 @@
                 <configuration>
                     <archive>
                         <manifest>
-                            <mainClass>com.hazelcast.jet.tests.mongo.PulsarTest</mainClass>
+                            <mainClass>com.hazelcast.jet.tests.mongo.MongoTest</mainClass>
                         </manifest>
                     </archive>
                 </configuration>

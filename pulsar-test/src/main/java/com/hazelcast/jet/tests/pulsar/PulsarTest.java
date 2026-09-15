@@ -37,10 +37,29 @@ import static com.hazelcast.jet.pulsar.PulsarSchema.string;
 import static com.hazelcast.jet.pulsar.PulsarSources.pulsarConsumerBuilder;
 import static com.hazelcast.jet.tests.common.Util.sleepMillis;
 
+/**
+ * locally to run you will need pulsar prepared and running in a way:
+ * docker run -d \
+ *   --name pulsar \
+ *   -p 6650:6650 \
+ *   -p 8080:8080 \
+ *   apachepulsar/pulsar:4.1.2 \
+ *   sh -c 'sed -i "s/^transactionCoordinatorEnabled=false/transactionCoordinatorEnabled=true/" \n
+ *   conf/standalone.conf && bin/pulsar standalone'
+ * -
+ *   wait for it to run and add topics:
+ *      docker exec pulsar bin/pulsar-admin topics create persistent://public/default/incomingGreetings
+ *      docker exec pulsar bin/pulsar-admin topics create persistent://public/default/middleTopic
+ *      docker exec pulsar bin/pulsar-admin topics create persistent://public/default/endTopic
+ * -
+ *   maybe you will also need to add dead letter queue topic -> but should be fine
+ */
+
 public class PulsarTest extends AbstractJetSoakTest {
     public static final String INPUT_TOPIC = "incomingGreetings";
     public static final String MIDDLE_TOPIC = "middleTopic";
     public static final String END_TOPIC = "endTopic";
+    public static final String DEAD_LETTER_TOPIC = "errors";
 
     private String brokerUrl;
     private String httpServiceUrl;
@@ -52,8 +71,8 @@ public class PulsarTest extends AbstractJetSoakTest {
 
     @Override
     public void init(final HazelcastInstance client) {
-        brokerUrl = "pulsar://" + property("pulsarIp", "127.0.0.1") + "6650";
-        httpServiceUrl = "http://" + property("pulsarIp", "127.0.0.1") + "8080";
+        brokerUrl = "pulsar://" + property("pulsarIp", "127.0.0.1") + ":6650";
+        httpServiceUrl = "http://" + property("pulsarIp", "127.0.0.1") + ":8080";
         try {
            pulsarClient = PulsarClient.builder()
                     .serviceUrl(brokerUrl)
@@ -71,11 +90,12 @@ public class PulsarTest extends AbstractJetSoakTest {
      * It goes through one pipeline to middle topic, then to end topic.
      */
     @Override
-    public void test(final HazelcastInstance client, final String name) {
+    public void test(final HazelcastInstance client, final String name) throws Exception {
         final long begin = System.currentTimeMillis();
 
         DeadLetterPolicy deadLetterPolicy = DeadLetterPolicy.builder()
-                                                            .deadLetterTopic("errors")
+                                                            .deadLetterTopic(DEAD_LETTER_TOPIC)
+                                                            .maxRedeliverCount(1)
                                                             .build();
         Pipeline p1 = Pipeline.create();
         DataConnectionRef dataConnectionRef = DataConnectionRef.dataConnectionRef("pulsarInstance");
@@ -135,14 +155,20 @@ public class PulsarTest extends AbstractJetSoakTest {
         client.getJet().newJob(p2, jobConfig2);
 
         MessageProducer producer = new MessageProducer(brokerUrl);
-        MessageConsumer consumer = new MessageConsumer(brokerUrl);
+        MessageConsumer consumer = new MessageConsumer(brokerUrl, client.getLoggingService());
 
         while (System.currentTimeMillis() - begin < durationInMillis) {
             producer.sendGreeting();
             sleepMillis(300);
         }
 
-        consumer.verifyLast(producer.totalSent());;
+        int totalSent = producer.totalSent();
+        if (!consumer.awaitDrain(totalSent)) {
+            logger.warning("Timed out waiting for the pipeline to catch up with the producer, "
+                    + "verification below will report exactly what is missing/duplicated");
+        }
+        consumer.verifyExactlyOnce(totalSent);
+        consumer.verifyDeadLetterQueueIsEmpty();
     }
 
     @Override

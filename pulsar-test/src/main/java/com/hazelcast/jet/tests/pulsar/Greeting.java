@@ -13,12 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package com.hazelcast.jet.tests.pulsar;
 
 import java.io.Serial;
 import java.io.Serializable;
 
-public record Greeting (String name, String favouriteMeal) implements Serializable {
+public record Greeting(String name, String favouriteMeal) implements Serializable {
 
     @Serial
     private static final long serialVersionUID = 1L;

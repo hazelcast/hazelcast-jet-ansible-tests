@@ -16,6 +16,7 @@
 
 package com.hazelcast.jet.tests.pulsar;
 
+import com.hazelcast.client.HazelcastClient;
 import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.config.ProcessingGuarantee;
@@ -64,6 +65,7 @@ public class PulsarTest extends AbstractJetSoakTest {
     private String brokerUrl;
     private String httpServiceUrl;
     private PulsarClient pulsarClient;
+    private transient HazelcastInstance remoteClient;
 
     public static void main(final String[] args) throws Exception {
         new PulsarTest().run(args);
@@ -80,9 +82,6 @@ public class PulsarTest extends AbstractJetSoakTest {
         } catch (PulsarClientException e) {
             throw new RuntimeException(e);
         }
-
-        client.getConfig().addDataConnectionConfig(PulsarDataConnection.pulsarDataConnectionConf("pulsarInstance",
-                brokerUrl, httpServiceUrl, true));
     }
 
     /**
@@ -92,6 +91,10 @@ public class PulsarTest extends AbstractJetSoakTest {
     @Override
     public void test(final HazelcastInstance client, final String name) throws Exception {
         final long begin = System.currentTimeMillis();
+
+        remoteClient = HazelcastClient.newHazelcastClient(remoteClusterClientConfig());
+        remoteClient.getConfig().addDataConnectionConfig(PulsarDataConnection.pulsarDataConnectionConf("pulsarInstance",
+                brokerUrl, httpServiceUrl, true));
 
         DeadLetterPolicy deadLetterPolicy = DeadLetterPolicy.builder()
                                                             .deadLetterTopic(DEAD_LETTER_TOPIC)
@@ -151,11 +154,11 @@ public class PulsarTest extends AbstractJetSoakTest {
                 .setName("Messages to end topic")
                 .setProcessingGuarantee(ProcessingGuarantee.EXACTLY_ONCE);
 
-        client.getJet().newJob(p1, jobConfig1);
-        client.getJet().newJob(p2, jobConfig2);
+        remoteClient.getJet().newJob(p1, jobConfig1);
+        remoteClient.getJet().newJob(p2, jobConfig2);
 
         MessageProducer producer = new MessageProducer(brokerUrl);
-        MessageConsumer consumer = new MessageConsumer(brokerUrl, client.getLoggingService());
+        MessageConsumer consumer = new MessageConsumer(brokerUrl, remoteClient.getLoggingService());
 
         while (System.currentTimeMillis() - begin < durationInMillis) {
             producer.sendGreeting();
@@ -177,6 +180,10 @@ public class PulsarTest extends AbstractJetSoakTest {
             pulsarClient.close();
         } catch (PulsarClientException e) {
             throw new RuntimeException(e);
+        } finally {
+            if (remoteClient != null) {
+                remoteClient.shutdown();
+            }
         }
     }
 

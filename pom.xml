@@ -217,6 +217,7 @@
                 <module>mongo-sql-test</module>
                 <module>mongo-test</module>
                 <module>missing-permission-test</module>
+                <module>pulsar-test</module>
                 <module>python-test</module>
                 <module>return-result-to-caller-test</module>
                 <module>rolling-aggregate-test</module>

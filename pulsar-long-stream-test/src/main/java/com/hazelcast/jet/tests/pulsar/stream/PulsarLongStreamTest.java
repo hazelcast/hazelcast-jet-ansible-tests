@@ -19,6 +19,7 @@ package com.hazelcast.jet.tests.pulsar.stream;
 import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.jet.Job;
 import com.hazelcast.jet.config.JobConfig;
+import com.hazelcast.jet.core.JobStatus;
 import com.hazelcast.jet.pipeline.DataConnectionRef;
 import com.hazelcast.jet.pipeline.Pipeline;
 import com.hazelcast.jet.pulsar.PulsarConsumerBuilder;
@@ -237,11 +238,20 @@ public class PulsarLongStreamTest extends AbstractJetSoakTest {
 
     private static void assertJobStatusEventually(final Job job) {
         for (int i = 0; i < ASSERTION_ATTEMPTS; i++) {
-            if (job.getStatus().equals(RUNNING)) {
+            // getJobStatusWithRetry (not a bare job.getStatus()) so a transient JobNotFoundException
+            // right after submission - e.g. before the job is visible on every member/coordinator -
+            // is retried instead of instantly failing this thread.
+            final JobStatus status = getJobStatusWithRetry(job);
+            if (status == RUNNING) {
                 return;
-            } else {
-                sleepMillis(ASSERTION_SLEEP_MS);
             }
+            if (status == FAILED) {
+                // job.join() rethrows the job's actual failure cause instead of the generic
+                // "does not have expected status" message below, which otherwise swallows the real
+                // reason the job failed and makes this unnecessarily hard to diagnose from logs.
+                job.join();
+            }
+            sleepMillis(ASSERTION_SLEEP_MS);
         }
         throw new AssertionError("Job " + job.getName() + " does not have expected status: " + RUNNING
                 + ". Job status: " + job.getStatus());

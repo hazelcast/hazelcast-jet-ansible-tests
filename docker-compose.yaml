@@ -1,4 +1,4 @@
-# This is to help debug locally Kafka related tests
+# This is to help debug Kafka- and Pulsar-related tests locally.
 version: '3.8'
 services:
   zookeeper:
@@ -23,3 +23,14 @@ services:
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
     depends_on:
       - zookeeper
+
+  # Standalone Pulsar broker for debugging pulsar-sql-test / pulsar-cycle-test /
+  # pulsar-long-stream-test locally. Exposes the broker (6650) and the admin/HTTP
+  # API (8080) that PulsarSqlTest defaults to (127.0.0.1) when no -DpulsarIp is set.
+  pulsar:
+    image: apachepulsar/pulsar:3.3.2
+    container_name: pulsar
+    ports:
+      - "6650:6650"
+      - "8080:8080"
+    command: bin/pulsar standalone

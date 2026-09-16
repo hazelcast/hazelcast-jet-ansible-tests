@@ -14,13 +14,14 @@
  * limitations under the License.
  */
 
-package com.hazelcast.jet.tests.pulsar;
+package com.hazelcast.jet.tests.pulsar.sql;
 
-import java.io.Serial;
 import java.io.Serializable;
 
-public record Greeting(String name, String favouriteMeal) implements Serializable {
-
-    @Serial
-    private static final long serialVersionUID = 1L;
+/**
+ * Shape of the JSON value body written into the Pulsar topic by the {@code json-flat}
+ * mapping used in {@link PulsarSqlTest}, used to natively cross-check the topic
+ * content with a plain {@code PulsarClient} reader.
+ */
+public record PulsarSqlRow(String docId, int docIndex) implements Serializable {
 }

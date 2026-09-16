@@ -173,6 +173,23 @@
                                 <includes>
                                     <include>com.hazelcast.jet.tests:*</include>
                                     <include>com.hazelcast.jet.tests.s3:*</include>
+                                    <!-- Needed: FileIngestionTest/CsvSink/AvroUser import classes that
+                                         only exist inside these classifier builds (CsvSink imports the
+                                         shaded com.hazelcast.shaded.com.fasterxml.jackson.dataformat.csv
+                                         classes bundled in hazelcast-jet-csv; AvroUser uses plain
+                                         org.apache.avro.* classes bundled in hazelcast-jet-avro).
+                                         Without these the shade plugin's default "everything excluded
+                                         unless matched" behavior drops them, causing a
+                                         NoClassDefFoundError at runtime (e.g. for
+                                         com.hazelcast.shaded.com.fasterxml.jackson.dataformat.csv.CsvMapper),
+                                         same root cause as kinesis-test's hazelcast-jet-kinesis fix. -->
+                                    <include>com.hazelcast.jet:hazelcast-jet-csv</include>
+                                    <include>com.hazelcast.jet:hazelcast-jet-avro</include>
+                                    <include>com.hazelcast.jet:hazelcast-jet-files-s3</include>
+                                    <!-- FileIngestionTest also imports the plain (non-shaded)
+                                         software.amazon.awssdk.* S3 client classes directly - same gap
+                                         s3-test's pom already works around with this same include. -->
+                                    <include>software.amazon.awssdk:*</include>
                                 </includes>
                             </artifactSet>
                         </configuration>

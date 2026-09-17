@@ -54,6 +54,14 @@ public final class RemoteControllerClient {
     private static final int VERIFICATION_DURATION_GAP = 15;
     private static final int SLEEP_BETWEEN_CLUSTER_RESTART_SECONDS = 30;
     private static final int ASSERTION_RETRY_COUNT = 120;
+    // jet_shutdown_mode is GRACEFUL for real (Jenkins-driven) runs, which makes a member wait for
+    // its own partition/replica migration to finish before the JVM actually exits - unlike
+    // TERMINATE, that time scales with how much partition data the member is holding, so it can
+    // legitimately take much longer than ASSERTION_RETRY_COUNT's 2-minute budget once a soak run
+    // has been pushing data through the cluster for a while. Used for both the per-member stop()
+    // (systemctl stop hazelcast-jet-isolatedd, still subject to the same shutdown hook policy) and
+    // the full hz-cluster-admin cluster shutdown - both wait on the same graceful-shutdown path.
+    private static final int SHUTDOWN_ASSERTION_RETRY_COUNT = 600;
     private static final String JAVA_PROCESS_CHECK = "jps | grep HazelcastMemberStarter | wc -l";
 
     private static int logCounter;
@@ -88,22 +96,47 @@ public final class RemoteControllerClient {
         int[] counter = new int[]{0};
         Iterables.cycle(members).forEach(member -> {
             try {
-                stop(member, jetHome);
-                sleepMinutes(sleepBetweenRestart);
-                start(member);
-                sleepMinutes(sleepBetweenRestart);
+                try {
+                    stop(member, jetHome);
+                    sleepMinutes(sleepBetweenRestart);
+                    start(member);
+                    sleepMinutes(sleepBetweenRestart);
+                } catch (Exception e) {
+                    // A single member failing to confirm stop/start (e.g. its JVM process not
+                    // exiting promptly on an otherwise-completed graceful shutdown) used to
+                    // System.exit(1) the whole controller here, permanently abandoning the
+                    // isolated cluster for the rest of a multi-hour run - every dual-cluster test's
+                    // Dynamic thread would then fail for the remainder of the run with no cluster to
+                    // talk to, even though this was really a one-member hiccup. Log it and move on
+                    // to the next member/cycle instead; best-effort attempt to make sure this
+                    // member is actually back up before continuing.
+                    logger.severe("Restart cycle failed for member [" + member + "], skipping to next"
+                            + " cycle instead of aborting the whole controller: " + e, e);
+                    uncheckRun(() -> attemptRecoveryStart(member));
+                }
 
                 counter[0]++;
                 if (counter[0] % memberCount == 0) {
-                    shutdownCluster(member, jetHome, members);
-                    sleepSeconds(SLEEP_BETWEEN_CLUSTER_RESTART_SECONDS);
-                    startCluster(members);
+                    try {
+                        shutdownCluster(member, jetHome, members);
+                        sleepSeconds(SLEEP_BETWEEN_CLUSTER_RESTART_SECONDS);
+                    } catch (Exception e) {
+                        // shutdownCluster() already issued the cluster-wide shutdown command before
+                        // this could throw (e.g. assertClusterShutdown timing out on one member), so
+                        // the cluster is in a stopped or half-stopped state regardless of whether we
+                        // could confirm it - always attempt startCluster() below rather than leaving
+                        // it down for the rest of the run just because the verification failed.
+                        logger.severe("Cluster shutdown verification failed, restarting cluster anyway: "
+                                + e, e);
+                    } finally {
+                        startCluster(members);
+                    }
                     sleepMinutes(sleepBetweenRestart);
                 }
 
             } catch (Exception e) {
-                e.printStackTrace();
-                System.exit(1);
+                logger.severe("Unrecoverable error in restart cycle for member [" + member + "], skipping"
+                        + " to next cycle: " + e, e);
             }
             if (System.currentTimeMillis() - begin > duration) {
                 System.out.println("Exiting Remote Controller Client");
@@ -115,6 +148,20 @@ public final class RemoteControllerClient {
     private static void startCluster(List<Member> members) {
         logger.info("Start cluster");
         members.forEach(m -> uncheckRun(() -> start(m)));
+    }
+
+    /**
+     * Best-effort attempt to bring a single member back up after its own stop/start cycle failed
+     * (see the catch around stop()/start() in main()) - swallows any further failure since this is
+     * just a best-effort recovery step, not something worth aborting the whole controller over.
+     */
+    private static void attemptRecoveryStart(Member member) {
+        try {
+            start(member);
+        } catch (Exception e) {
+            logger.severe("Recovery start also failed for member [" + member + "], will retry on its"
+                    + " next scheduled cycle: " + e, e);
+        }
     }
 
     private static void shutdownCluster(Member member, String jetHome, List<Member> members) throws Exception {
@@ -174,14 +221,14 @@ public final class RemoteControllerClient {
     }
 
     private static void assertMemberStarted(Member member) throws Exception {
-        assertWithRetry("Start member [" + member + "] assertion failed", () -> {
+        assertWithRetry("Start member [" + member + "] assertion failed", ASSERTION_RETRY_COUNT, () -> {
             String result = call(member, JAVA_PROCESS_CHECK);
             return result != null && result.trim().equals("1");
         });
     }
 
     private static void assertMemberStopped(Member member) throws Exception {
-        assertWithRetry("Stop member [" + member + "] assertion failed", () -> {
+        assertWithRetry("Stop member [" + member + "] assertion failed", SHUTDOWN_ASSERTION_RETRY_COUNT, () -> {
             String result = call(member, JAVA_PROCESS_CHECK);
             return result != null && result.trim().equals("0");
         });
@@ -193,8 +240,9 @@ public final class RemoteControllerClient {
         }
     }
 
-    private static void assertWithRetry(String message, SupplierEx<Boolean> runnable) throws Exception {
-        for (int i = 0; i < ASSERTION_RETRY_COUNT; i++) {
+    private static void assertWithRetry(String message, int retryCount, SupplierEx<Boolean> runnable)
+            throws Exception {
+        for (int i = 0; i < retryCount; i++) {
             if (runnable.get()) {
                 return;
             }

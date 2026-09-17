@@ -17,13 +17,11 @@
 package com.hazelcast.jet.tests.vector;
 
 import com.hazelcast.client.HazelcastClient;
-import com.hazelcast.client.HazelcastClientNotActiveException;
 import com.hazelcast.config.vector.Metric;
 import com.hazelcast.config.vector.VectorCollectionConfig;
 import com.hazelcast.config.vector.VectorIndexConfig;
 import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.jet.tests.common.AbstractJetSoakTest;
-import com.hazelcast.spi.exception.TargetDisconnectedException;
 import com.hazelcast.vector.SearchOptions;
 import com.hazelcast.vector.SearchResults;
 import com.hazelcast.vector.VectorCollection;
@@ -31,7 +29,6 @@ import com.hazelcast.vector.VectorDocument;
 import com.hazelcast.vector.VectorValues;
 
 import java.util.List;
-import java.util.concurrent.CompletionException;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 
@@ -55,16 +52,6 @@ public class VectorCollectionTest extends AbstractJetSoakTest {
     private static final int DEFAULT_SEARCH_THRESHOLD = 1500;
     private static final int DEFAULT_CLEAR_THRESHOLD = 7000;
     private static final int DEFAULT_SEARCH_LIMIT = 50;
-
-    // The Dynamic/isolated cluster this test's remote client connects to (see group_vars/tests)
-    // periodically restarts members as part of its soak-testing restart mechanism. An in-flight
-    // invocation to a member that goes down mid-call surfaces synchronously as
-    // TargetDisconnectedException/HazelcastClientNotActiveException even though the client's own
-    // connection-retry settings keep the underlying connection alive - such an invocation's outcome
-    // is "indeterminate" per TargetDisconnectedException's javadoc, but every operation retried below
-    // (put/set by key, clear, optimize, search) is safe to simply retry.
-    private static final int OPERATION_RETRY_COUNT = 5;
-    private static final long OPERATION_RETRY_SLEEP_MILLIS = 1000;
 
     private int dimension;
     private int maxDegree;
@@ -126,31 +113,30 @@ public class VectorCollectionTest extends AbstractJetSoakTest {
         long begin = System.currentTimeMillis();
         while (System.currentTimeMillis() - begin < durationInMillis) {
             //add + update + optimize + search + clear
-            int item = totalCounter;
-            retryOnDisconnect(() -> addItemToVectorCollection(vectorCollection, item));
-            retryOnDisconnect(() -> updateItemInVectorCollection(vectorCollection, item));
+            addItemToVectorCollection(vectorCollection, totalCounter);
+            updateItemInVectorCollection(vectorCollection, totalCounter);
 
             if (clearCounter % 1000 == 0) {
                 logger.info(String.format("Added %d items in vector collection", totalCounter));
             }
 
             if (clearCounter % optimizeIntervalThreshold == 0) {
-                retryOnDisconnect(() -> optimizeVectorCollection(vectorCollection));
+                optimizeVectorCollection(vectorCollection);
             }
 
             if (clearCounter % searchIntervalThreshold == 0 && clearCounter > searchLimit) {
-                retryOnDisconnect(() -> performSearchOnVectorCollection(vectorCollection, searchOptions));
+                performSearchOnVectorCollection(vectorCollection, searchOptions);
             }
 
             clearCounter++;
             totalCounter++;
             if (clearCounter % clearIntervalThreshold == 0) {
-                retryOnDisconnect(() -> clearVectorCollection(vectorCollection));
+                clearVectorCollection(vectorCollection);
                 clearCounter = 0;
             }
             sleepMillis(2);
         }
-        retryOnDisconnect(() -> clearVectorCollection(vectorCollection));
+        clearVectorCollection(vectorCollection);
 
     }
 
@@ -159,33 +145,6 @@ public class VectorCollectionTest extends AbstractJetSoakTest {
         if (remoteClient != null) {
             remoteClient.shutdown();
         }
-    }
-
-    /**
-     * Retries a vector-collection operation when it fails because the Dynamic/isolated cluster
-     * disconnected the member it was talking to (e.g. during that cluster's own periodic restart
-     * cycle), instead of letting the exception kill the whole soak test. All operations passed here
-     * (put/set by key, clear, optimize, search) are safe to repeat.
-     */
-    private void retryOnDisconnect(Runnable operation) {
-        for (int attempt = 1; ; attempt++) {
-            try {
-                operation.run();
-                return;
-            } catch (Exception e) {
-                Throwable cause = e instanceof CompletionException && e.getCause() != null ? e.getCause() : e;
-                if (attempt >= OPERATION_RETRY_COUNT || !isDisconnectRelated(cause)) {
-                    throw e;
-                }
-                logger.warning("Vector collection operation failed on attempt " + attempt + "/"
-                        + OPERATION_RETRY_COUNT + " due to a member disconnect, retrying: " + cause, e);
-                sleepMillis(OPERATION_RETRY_SLEEP_MILLIS);
-            }
-        }
-    }
-
-    private boolean isDisconnectRelated(Throwable t) {
-        return t instanceof TargetDisconnectedException || t instanceof HazelcastClientNotActiveException;
     }
 
     private void clearVectorCollection(VectorCollection<Integer, String> vectorCollection) {

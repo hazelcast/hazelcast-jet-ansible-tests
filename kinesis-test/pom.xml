@@ -15,14 +15,19 @@
     <properties>
         <main.basedir>${project.parent.basedir}</main.basedir>
         <guava.version>19.0</guava.version>
+        <aws.kinesis.sdk.version>2.54.13</aws.kinesis.sdk.version>
     </properties>
 
     <dependencies>
         <dependency>
             <groupId>com.hazelcast.jet</groupId>
             <artifactId>hazelcast-jet-kinesis</artifactId>
-            <classifier>jar-with-dependencies</classifier>
             <version>${hazelcast.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>kinesis</artifactId>
+            <version>${aws.kinesis.sdk.version}</version>
         </dependency>
         <dependency>
             <groupId>com.hazelcast.jet.tests</groupId>
@@ -80,14 +85,9 @@
                                 <includes>
                                     <include>com.hazelcast.jet.tests:*</include>
                                     <include>com.hazelcast.jet.tests.kinesis:*</include>
-                                    <!-- Needed: KinesisTest/Helper import the shaded AWS SDK classes
-                                         (com.hazelcast.shaded.software.amazon.awssdk.*) that only exist
-                                         inside this classifier build of hazelcast-jet-kinesis. Without
-                                         this include the shade plugin's default "everything excluded
-                                         unless matched" behavior drops them, causing a
-                                         NoClassDefFoundError at runtime for classes like
-                                         com.hazelcast.shaded.software.amazon.awssdk.regions.Region. -->
                                     <include>com.hazelcast.jet:hazelcast-jet-kinesis</include>
+                                    <include>software.amazon.awssdk:*</include>
+                                    <include>software.amazon.awssdk.thirdparty:*</include>
                                 </includes>
                             </artifactSet>
                         </configuration>

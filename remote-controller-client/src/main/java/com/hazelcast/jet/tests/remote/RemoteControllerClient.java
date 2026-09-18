@@ -101,7 +101,7 @@ public final class RemoteControllerClient {
                     sleepMinutes(sleepBetweenRestart);
                     start(member);
                     sleepMinutes(sleepBetweenRestart);
-                } catch (Exception e) {
+                } catch (Exception | AssertionError e) {
                     // A single member failing to confirm stop/start (e.g. its JVM process not
                     // exiting promptly on an otherwise-completed graceful shutdown) used to
                     // System.exit(1) the whole controller here, permanently abandoning the
@@ -120,7 +120,7 @@ public final class RemoteControllerClient {
                     try {
                         shutdownCluster(member, jetHome, members);
                         sleepSeconds(SLEEP_BETWEEN_CLUSTER_RESTART_SECONDS);
-                    } catch (Exception e) {
+                    } catch (Exception | AssertionError e) {
                         // shutdownCluster() already issued the cluster-wide shutdown command before
                         // this could throw (e.g. assertClusterShutdown timing out on one member), so
                         // the cluster is in a stopped or half-stopped state regardless of whether we
@@ -134,7 +134,7 @@ public final class RemoteControllerClient {
                     sleepMinutes(sleepBetweenRestart);
                 }
 
-            } catch (Exception e) {
+            } catch (Exception | AssertionError e) {
                 logger.severe("Unrecoverable error in restart cycle for member [" + member + "], skipping"
                         + " to next cycle: " + e, e);
             }
@@ -147,7 +147,19 @@ public final class RemoteControllerClient {
 
     private static void startCluster(List<Member> members) {
         logger.info("Start cluster");
-        members.forEach(m -> uncheckRun(() -> start(m)));
+        // One member's start-verification throwing (Exception or, from assertWithRetry,
+        // AssertionError) must not stop the remaining members from getting their own start
+        // attempt - this is called from the shutdownCluster failure path specifically to make sure
+        // every member is brought back up regardless of how the shutdown went, so a per-member
+        // catch here is required, not just a catch around the whole forEach.
+        members.forEach(m -> {
+            try {
+                start(m);
+            } catch (Exception | AssertionError e) {
+                logger.severe("Failed to start member [" + m + "] while starting cluster, continuing"
+                        + " with remaining members: " + e, e);
+            }
+        });
     }
 
     /**
@@ -158,7 +170,7 @@ public final class RemoteControllerClient {
     private static void attemptRecoveryStart(Member member) {
         try {
             start(member);
-        } catch (Exception e) {
+        } catch (Exception | AssertionError e) {
             logger.severe("Recovery start also failed for member [" + member + "], will retry on its"
                     + " next scheduled cycle: " + e, e);
         }

@@ -144,9 +144,6 @@ public class PulsarCycleTest extends AbstractJetSoakTest {
             }
         } finally {
             logger.info("Test finished with job count: " + jobCounter);
-            if (remoteClient != null) {
-                remoteClient.shutdown();
-            }
         }
     }
 
@@ -154,6 +151,9 @@ public class PulsarCycleTest extends AbstractJetSoakTest {
     protected void teardown(final Throwable t) {
         if (pulsarAdmin != null) {
             pulsarAdmin.close();
+        }
+        if (remoteClient != null) {
+            remoteClient.shutdown();
         }
     }
 
@@ -180,11 +180,7 @@ public class PulsarCycleTest extends AbstractJetSoakTest {
 
     private void deleteTopicAndCreateNewOne(final String topicName) throws PulsarAdminException {
         final String fullTopicName = TOPIC_NAMESPACE + topicName;
-        try {
-            pulsarAdmin.topics().delete(fullTopicName, true);
-        } catch (final PulsarAdminException e) {
-            logger.info("Topic " + fullTopicName + " did not exist yet, nothing to delete");
-        }
+        deleteTopic(fullTopicName);
         pulsarAdmin.topics().createNonPartitionedTopic(fullTopicName);
     }
 

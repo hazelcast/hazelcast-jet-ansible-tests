@@ -58,6 +58,7 @@ public class PulsarSqlTest extends AbstractJetSoakTest {
     private static final String DROP_MAPPING = "DROP MAPPING ";
     private static final int DEFAULT_ITEM_COUNT = 1_000;
     private static final int BATCH_ITEM_COUNT = 500;
+    private static final int DEFAULT_TOPIC_PARTITIONS = 4;
     private static final int LOG_JOB_COUNT_THRESHOLD = 50;
     private static final int SLEEP_BETWEEN_READS_SECONDS = 2;
     private static final int ASSERTION_ATTEMPTS = 1200;
@@ -74,6 +75,7 @@ public class PulsarSqlTest extends AbstractJetSoakTest {
     private String brokerUrl;
     private String httpServiceUrl;
     private int itemCount;
+    private int topicPartitions;
     private transient SqlService sqlService;
     private transient PulsarAdmin pulsarAdmin;
     private transient PulsarClient pulsarClient;
@@ -87,6 +89,7 @@ public class PulsarSqlTest extends AbstractJetSoakTest {
         brokerUrl = "pulsar://" + property("pulsarIp", "127.0.0.1") + ":6650";
         httpServiceUrl = "http://" + property("pulsarIp", "127.0.0.1") + ":8080";
         itemCount = propertyInt("itemCount", DEFAULT_ITEM_COUNT);
+        topicPartitions = propertyInt("topicPartitions", DEFAULT_TOPIC_PARTITIONS);
         sqlService = client.getSql();
         pulsarAdmin = PulsarAdmin.builder().serviceHttpUrl(httpServiceUrl).build();
         pulsarClient = PulsarClient.builder().serviceUrl(brokerUrl).build();
@@ -258,22 +261,33 @@ public class PulsarSqlTest extends AbstractJetSoakTest {
      * schema on the topic), and asking for a JSON reader schema on top of that makes the broker try
      * to add an incompatible JSON schema to an already-active BYTES-schema topic, which it rejects
      * with an {@code IncompatibleSchemaException}. Parsing the JSON body ourselves sidesteps that.
+     * <p>
+     * The topic is partitioned (see {@link #deleteTopicAndCreateNewOne}), and {@link Reader} - unlike
+     * {@link org.apache.pulsar.client.api.Consumer} - cannot be pointed at a partitioned topic's
+     * logical name directly ("Reader is not allowed to be used with a partitioned topic"); it only
+     * reads a single partition, addressed as {@code <topic>-partition-<index>}. So this opens one
+     * reader per partition in turn and pools the results together - insertion order across
+     * partitions isn't guaranteed anyway (routing is by {@code __key}), and this test only cares
+     * about the full set of docIds being present, not their order.
      */
     private void assertTopicContentsViaNativeClient(final String topicName, final int jobCounter)
             throws IOException {
         final Set<String> docIds = new HashSet<>();
-        try (Reader<byte[]> reader = pulsarClient.newReader(Schema.BYTES)
-                .topic(topicName)
-                .startMessageId(MessageId.earliest)
-                .readerName("nativeVerify-" + jobCounter)
-                .create()) {
-            for (int i = 0; i < itemCount; i++) {
-                final Message<byte[]> message = reader.readNext(NATIVE_READ_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-                if (message == null) {
-                    break;
+        for (int partition = 0; partition < topicPartitions && docIds.size() < itemCount; partition++) {
+            final String partitionTopicName = topicName + "-partition-" + partition;
+            try (Reader<byte[]> reader = pulsarClient.newReader(Schema.BYTES)
+                    .topic(partitionTopicName)
+                    .startMessageId(MessageId.earliest)
+                    .readerName("nativeVerify-" + jobCounter + "-p" + partition)
+                    .create()) {
+                while (docIds.size() < itemCount) {
+                    final Message<byte[]> message = reader.readNext(NATIVE_READ_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+                    if (message == null) {
+                        break;
+                    }
+                    final JSONObject json = new JSONObject(new String(message.getValue(), StandardCharsets.UTF_8));
+                    docIds.add(json.getString("docId"));
                 }
-                final JSONObject json = new JSONObject(new String(message.getValue(), StandardCharsets.UTF_8));
-                docIds.add(json.getString("docId"));
             }
         }
         assertEquals(itemCount, docIds.size());
@@ -283,18 +297,21 @@ public class PulsarSqlTest extends AbstractJetSoakTest {
 
     private void deleteTopicAndCreateNewOne(final String topicName) throws PulsarAdminException {
         final String fullTopicName = TOPIC_NAMESPACE + topicName;
-        try {
-            pulsarAdmin.topics().delete(fullTopicName, true);
-        } catch (final PulsarAdminException e) {
-            logger.fine("Topic " + fullTopicName + " did not exist yet, nothing to delete");
-        }
-        pulsarAdmin.topics().createNonPartitionedTopic(fullTopicName);
+        deleteTopic(topicName);
+        pulsarAdmin.topics().createPartitionedTopic(fullTopicName, topicPartitions);
     }
 
+    /**
+     * Deletes a (partitioned) topic, ignoring failures - this is also used defensively before
+     * creating a topic in case a previous run left one behind. Every topic this test creates is
+     * partitioned (see {@link #deleteTopicAndCreateNewOne}), so this always goes through
+     * {@code deletePartitionedTopic} - the plain {@code delete} call rejects a partitioned topic
+     * with "This is a Partitioned Topic, please try Partitioned-Topic-CLI to delete it".
+     */
     private void deleteTopic(final String topicName) {
         final String fullTopicName = TOPIC_NAMESPACE + topicName;
         try {
-            pulsarAdmin.topics().delete(fullTopicName, true);
+            pulsarAdmin.topics().deletePartitionedTopic(fullTopicName, true);
         } catch (final PulsarAdminException e) {
             logger.info("Topic " + fullTopicName + " could not be deleted, ignoring: " + e.getMessage());
         }

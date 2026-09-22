@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.hazelcast.jet.tests.mongo.stream;
+package com.hazelcast.jet.tests.common;
 
 import com.hazelcast.core.HazelcastInstanceNotActiveException;
 import com.hazelcast.jet.core.AbstractProcessor;
@@ -32,32 +32,49 @@ import static com.hazelcast.jet.datamodel.Tuple2.tuple2;
 import static com.hazelcast.jet.impl.pipeline.SinkImpl.Type.TOTAL_PARALLELISM_ONE;
 import static java.lang.String.format;
 
+/**
+ * Memory-bounded exactly-once verifier shared by the long-running stream soak tests
+ * (e.g. MongoLongStreamTest, PulsarLongStreamTest). Instead of holding every value seen
+ * over the whole soak run, it keeps only a small out-of-order window and advances a
+ * per-run counter as values arrive in order, flagging gaps and duplicates. Progress is
+ * published into a distributed map (named by the caller, so multiple tests can share
+ * this processor without colliding on the same map) so the driving test loop can poll
+ * it without holding a reference to this processor.
+ */
 public class VerificationProcessor extends AbstractProcessor {
 
-    public static final String CONSUMED_DOCS_MAP_NAME = "MongoLongStreamTest_latestCounter";
     private static final int QUEUE_SIZE_LIMIT = 5_000;
     private static final int PRINT_LOG_ITEMS = 5_000;
 
+    private final String mapName;
     private final String name;
     private final PriorityQueue<Long> queue = new PriorityQueue<>();
     private long counter;
     private ILogger logger;
     private IMap<String, Long> map;
 
-    public VerificationProcessor(String name) {
+    public VerificationProcessor(String mapName, String name) {
+        this.mapName = mapName;
         this.name = name;
     }
 
-    static Sink<Long> sink(String name) {
+    /**
+     * @param mapName name of the distributed map this verifier publishes its per-run
+     *                counter into; use a name specific to the calling test so
+     *                concurrently-running tests never share a map.
+     * @param name    name of this run, used as the key in the map (e.g. the cluster
+     *                name when a test runs on both clusters at once).
+     */
+    public static Sink<Long> sink(String mapName, String name) {
         return new SinkImpl<>(name,
-                forceTotalParallelismOne(ProcessorSupplier.of(() -> new VerificationProcessor(name)), name),
+                forceTotalParallelismOne(ProcessorSupplier.of(() -> new VerificationProcessor(mapName, name)), name),
                 TOTAL_PARALLELISM_ONE);
     }
 
     @Override
     protected void init(Context context) {
         logger = context.logger();
-        map = context.hazelcastInstance().getMap(CONSUMED_DOCS_MAP_NAME);
+        map = context.hazelcastInstance().getMap(mapName);
     }
 
     @Override

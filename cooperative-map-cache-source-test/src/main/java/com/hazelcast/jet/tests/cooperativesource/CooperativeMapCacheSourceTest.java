@@ -52,6 +52,7 @@ public class CooperativeMapCacheSourceTest extends AbstractJetSoakTest {
     private static final String SINK_QUERY_LOCAL_MAP = TEST_PREFIX + "_SinkQueryLocalMap";
     private static final String SINK_QUERY_REMOTE_MAP = TEST_PREFIX + "_SinkQueryRemoteMap";
     private static final String SOURCE_CACHE = TEST_PREFIX + "_SourceCache";
+    private static final int LOG_COUNTER = 10_000;
     private static final int SOURCE_MAP_ITEMS = 100_000;
     private static final int SOURCE_MAP_LAST_KEY = SOURCE_MAP_ITEMS - 1;
     private static final int SOURCE_CACHE_ITEMS = 100_000;
@@ -102,32 +103,38 @@ public class CooperativeMapCacheSourceTest extends AbstractJetSoakTest {
         executorServices.add(runTestInExecutorService(
                 threadIndex -> executeLocalMapJob(client, threadIndex),
                 threadIndex -> verifyLocalMapJob(client, threadIndex),
-                localMapSequence
+                localMapSequence,
+                "LocalMapJob"
         ));
         executorServices.add(runTestInExecutorService(
                 threadIndex -> executeRemoteMapJob(client, threadIndex),
                 threadIndex -> verifyRemoteMapJob(client, threadIndex),
-                remoteMapSequence
+                remoteMapSequence,
+                "RemoteMapJob"
         ));
         executorServices.add(runTestInExecutorService(
                 threadIndex -> executeQueryLocalMapJob(client, threadIndex),
                 threadIndex -> verifyQueryLocalMapJob(client, threadIndex),
-                queryLocalMapSequence
+                queryLocalMapSequence,
+                "QueryLocalMapJob"
         ));
         executorServices.add(runTestInExecutorService(
                 threadIndex -> executeQueryRemoteMapJob(client, threadIndex),
                 threadIndex -> verifyQueryRemoteMapJob(client, threadIndex),
-                queryRemoteMapSequence
+                queryRemoteMapSequence,
+                "QueryRemoteMapJob"
         ));
         executorServices.add(runTestInExecutorService(
                 threadIndex -> executeLocalCacheJob(client, threadIndex),
                 threadIndex -> verifyLocalCacheJob(client, threadIndex),
-                localCacheSequence
+                localCacheSequence,
+                "LocalCacheJob"
         ));
         executorServices.add(runTestInExecutorService(
                 threadIndex -> executeRemoteCacheJob(client, threadIndex),
                 threadIndex -> verifyRemoteCacheJob(client, threadIndex),
-                remoteCacheSequence
+                remoteCacheSequence,
+                "RemoteCacheJob"
         ));
 
         awaitExecutorServiceTermination(executorServices);
@@ -142,18 +149,23 @@ public class CooperativeMapCacheSourceTest extends AbstractJetSoakTest {
     }
 
     private ExecutorService runTestInExecutorService(Consumer<Integer> executeJob, Consumer<Integer> verify,
-                                                     int[] sequenceArray) {
+                                                     int[] sequenceArray, String description) {
         long begin = System.currentTimeMillis();
         ExecutorService executorService = Executors.newFixedThreadPool(threadCount);
         for (int i = 0; i < threadCount; i++) {
             final int threadIndex = i;
             executorService.submit(() -> {
+                int logCounter = 0;
                 while ((System.currentTimeMillis() - begin) < durationInMillis && exception == null) {
                     try {
                         executeJob.accept(threadIndex);
                         verify.accept(threadIndex);
                         sequenceArray[threadIndex]++;
                         sleepMillis(PAUSE_BETWEEN_JOBS);
+                        if (logCounter++ % LOG_COUNTER == 0) {
+                            logger.info(String.format("Jobs of %s in thread %d: %d is running with count %d",
+                                    description, threadIndex, sequenceArray[threadIndex], logCounter));
+                        }
                     } catch (Throwable e) {
                         exception = new Exception(e);
                     }

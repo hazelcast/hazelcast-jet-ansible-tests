@@ -61,6 +61,7 @@ public class HdfsWordCountTest extends AbstractJetSoakTest {
     private static final int DEFAULT_TOTAL = 4800000;
     private static final int DEFAULT_DISTINCT = 500000;
     private static final int PAUSE_BETWEEN_JOBS = 2_000;
+    private static final int LOG_COUNTER = 10_000;
 
     private String hdfsUri;
     private String inputPath;
@@ -105,11 +106,15 @@ public class HdfsWordCountTest extends AbstractJetSoakTest {
         for (int i = 0; i < threadCount; i++) {
             final int threadIndex = i;
             executorService.submit(() -> {
+                int loggerCount = 0;
                 while ((System.currentTimeMillis() - begin) < durationInMillis && exception == null) {
                     try {
                         executeJob(client, threadIndex);
                         verify(threadIndex);
                         sleepMillis(PAUSE_BETWEEN_JOBS);
+                        if (loggerCount++ % LOG_COUNTER == 0) {
+                            logger.info("HDFS job started: thread" + threadIndex + "with count: " + loggerCount);
+                        }
                     } catch (Throwable e) {
                         exception = new Exception(e);
                     }

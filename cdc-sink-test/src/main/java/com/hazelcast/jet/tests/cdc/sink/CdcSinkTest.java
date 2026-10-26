@@ -71,7 +71,7 @@ public class CdcSinkTest extends AbstractJetSoakTest {
     }
 
     @Override
-    public void init(HazelcastInstance client) throws Exception {
+    public void init(HazelcastInstance client) {
         sleepMsBetweenItem = propertyInt("sleepMsBetweenItem", DEFAULT_SLEEP_MS_BETWEEN_ITEM);
         preserveItemMod = propertyInt("preserveItemMod", DEFAULT_PRESERVE_ITEM_MOD);
         snapshotIntervalMs = propertyInt("snapshotIntervalMs", DEFAULT_SNAPSHOT_INTERVAL);
@@ -167,7 +167,7 @@ public class CdcSinkTest extends AbstractJetSoakTest {
             }
             sleepSeconds(1);
         }
-        throw new AssertionError();
+        throw new AssertionError(String.format("assertMap is failed after %d attempts", ASSERTION_RETRY_COUNT));
     }
 
     private boolean assertItems(String clusterName, int lastPreservedItem, IMap<Integer, String> map) {
@@ -196,7 +196,7 @@ public class CdcSinkTest extends AbstractJetSoakTest {
     }
 
     @Override
-    protected void teardown(Throwable t) throws Exception {
+    protected void teardown(Throwable t)  {
     }
 
     private void log(String message, String clusterName) {

@@ -55,6 +55,7 @@ import static software.amazon.awssdk.regions.Region.US_EAST_1;
 
 public class S3WordCountTest extends AbstractJetSoakTest {
 
+    private static final int LOG_COUNTER = 500;
     private static final int GET_OBJECT_RETRY_COUNT = 30;
     private static final long GET_OBJECT_RETRY_WAIT_TIME = TimeUnit.SECONDS.toNanos(1);
     private static final int S3_CLIENT_CONNECTION_TIMEOUT_SECONDS = 10;
@@ -115,6 +116,9 @@ public class S3WordCountTest extends AbstractJetSoakTest {
                 jobConfig.setName(name + "-" + jobNumber);
                 client.getJet().newJob(pipeline(), jobConfig).join();
                 verify(jobNumber);
+                if (jobNumber % LOG_COUNTER == 0) {
+                    logger.info(jobNumber + " job verified.");
+                }
                 sleepSeconds(sleepSeconds);
             } catch (Throwable e) {
                 if (isSocketRelatedException(e)) {

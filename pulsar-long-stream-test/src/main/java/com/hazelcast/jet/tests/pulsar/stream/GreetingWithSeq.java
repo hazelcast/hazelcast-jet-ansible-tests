@@ -19,14 +19,6 @@ package com.hazelcast.jet.tests.pulsar.stream;
 import java.io.Serial;
 import java.io.Serializable;
 
-/**
- * Message published to the input topic by {@link PulsarMessageProducer}. Carries a
- * {@code favouriteMeal} field (used to build the grouped/keyed {@code mapStateful} stage, the
- * "pipeline complexity" ported from {@code pulsar-test}'s {@code Greeting}) alongside a globally
- * monotonic {@code seq}, which is threaded untouched through both pipeline hops so that
- * {@link com.hazelcast.jet.tests.common.VerificationProcessor} keeps verifying the same single
- * global sequence it always has.
- */
 public record GreetingWithSeq(String name, String favouriteMeal, long seq) implements Serializable {
 
     @Serial

@@ -69,8 +69,6 @@
     <!-- See http://checkstyle.sf.net/config_whitespace.html -->
     <module name="FileTabCharacter"/>
 
-    <!-- Checks for Size Violations.                    -->
-    <!-- See http://checkstyle.sf.net/config_sizes.html -->
     <module name="LineLength">
         <property name="max" value="123"/>
     </module>
@@ -220,9 +218,6 @@
         </module>
         <module name="ReturnCount">
             <property name="max" value="8"/>
-            <!-- Newer Checkstyle versions added a separate, stricter default (1) for void
-                 methods/constructors/lambdas via maxForVoid. Match it to "max" so behavior stays
-                 the same as before the Checkstyle upgrade, instead of silently becoming stricter. -->
             <property name="maxForVoid" value="8"/>
         </module>
         <module name="NestedIfDepth">

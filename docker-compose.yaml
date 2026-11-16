@@ -28,7 +28,7 @@ services:
   # pulsar-long-stream-test locally. Exposes the broker (6650) and the admin/HTTP
   # API (8080) that PulsarSqlTest defaults to (127.0.0.1) when no -DpulsarIp is set.
   pulsar:
-    image: apachepulsar/pulsar:3.3.2
+    image: apachepulsar/pulsar:5.0.1
     container_name: pulsar
     ports:
       - "6650:6650"

@@ -19,14 +19,6 @@ package com.hazelcast.jet.tests.pulsar.stream;
 import java.io.Serial;
 import java.io.Serializable;
 
-/**
- * Message published to the middle topic: {@link GreetingWithSeq} enriched with the per-meal
- * running count ({@code howMany}) computed by the first hop's {@code mapStateful} stage. This is
- * purely additional/informational state - {@code seq} is carried through untouched from
- * {@link GreetingWithSeq}, so the second hop can project it back out and feed the same global,
- * monotonic sequence into {@link com.hazelcast.jet.tests.common.VerificationProcessor} that the
- * single-hop version of this test always has.
- */
 public record GreetingWithStatAndSeq(String name, String favouriteMeal, int howMany, long seq)
         implements Serializable {
 

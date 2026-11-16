@@ -18,10 +18,12 @@ package com.hazelcast.jet.tests.pulsar.sql;
 
 import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.jet.tests.common.AbstractJetSoakTest;
+import com.hazelcast.sql.HazelcastSqlException;
 import com.hazelcast.sql.SqlResult;
 import com.hazelcast.sql.SqlRow;
 import com.hazelcast.shaded.org.json.JSONObject;
 import com.hazelcast.sql.SqlService;
+import com.hazelcast.sql.SqlStatement;
 import org.apache.pulsar.client.admin.PulsarAdmin;
 import org.apache.pulsar.client.admin.PulsarAdminException;
 import org.apache.pulsar.client.api.Message;
@@ -32,6 +34,7 @@ import org.apache.pulsar.client.api.Schema;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Set;
@@ -41,18 +44,6 @@ import static com.hazelcast.jet.tests.common.Util.sleepMillis;
 import static com.hazelcast.jet.tests.common.Util.sleepSeconds;
 import static java.lang.String.format;
 
-/**
- * SQL-only soak test for the new Pulsar SQL connector, directly analogous to
- * {@code MongoSqlTest} but scoped to what the connector actually supports: unlike
- * {@code PulsarSqlConnector}, the Mongo SQL connector implements {@code updateProcessor}
- * and {@code deleteProcessor} and offers a {@code ChangeStream} object type, so
- * {@code MongoSqlTest} exercises UPDATE, DELETE and a long-lived change-stream mapping.
- * {@code PulsarSqlConnector} only implements {@code fullScanReader} (SELECT) and
- * {@code insertProcessor}/{@code sinkProcessor} (INSERT) - there is no SQL UPDATE or
- * DELETE support and no change-stream equivalent for Pulsar. This test is therefore
- * scoped to a {@code CREATE MAPPING} + {@code INSERT INTO} + {@code SELECT FROM}
- * round trip, cross-verified natively with a plain {@code PulsarClient} reader.
- */
 public class PulsarSqlTest extends AbstractJetSoakTest {
     private static final String SELECT_ALL_FROM = "SELECT __key FROM ";
     private static final String DROP_MAPPING = "DROP MAPPING ";
@@ -64,6 +55,7 @@ public class PulsarSqlTest extends AbstractJetSoakTest {
     private static final int ASSERTION_ATTEMPTS = 1200;
     private static final int ASSERTION_SLEEP_MS = 100;
     private static final int NATIVE_READ_TIMEOUT_SECONDS = 5;
+    private static final long SQL_READ_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(5);
 
     private static final String DATA_CONNECTION_NAME = "Pulsar";
     private static final String TOPIC_NAMESPACE = "persistent://public/default/";
@@ -170,41 +162,27 @@ public class PulsarSqlTest extends AbstractJetSoakTest {
 
     private void executeQueryWithNoErrorAssert(final String query, final Object... arguments) {
         try (SqlResult sqlResult = sqlService.execute(query, arguments)) {
-            // updateCount() is deprecated for removal since 5.6 and now always returns 0 for DML/DDL,
-            // so it can no longer be used to assert anything meaningful. isRowSet() is the still-supported
-            // way to confirm this was a non-row-returning (DDL/DML) statement; a failed statement would
-            // already have thrown out of execute(...) above.
             assertFalse(sqlResult.isRowSet());
         }
     }
 
-    /**
-     * Polls a plain (non-aggregate) SELECT until it returns the expected number of rows, counting
-     * them by iterating the result client-side. Pulsar mappings are always registered as streaming
-     * (unbounded) tables - see {@code PulsarTable}'s hardcoded {@code isStreaming=true} - so a
-     * pushed-down {@code SELECT COUNT(*)} is rejected by Calcite with "Streaming aggregation is
-     * supported only for window aggregation...".
-     * <p>
-     * Counting rows from a plain SELECT sidesteps that restriction, but the iteration itself has to
-     * stop reading as soon as {@code expectedCount} rows have been seen: since the source is
-     * genuinely unbounded, {@code Iterator#hasNext()} blocks waiting for the next message once the
-     * topic is caught up, and one will never arrive after the producer side has finished inserting.
-     * A plain {@code for}-each loop (as used here previously, and as {@link #assertMappingContentsViaSql}
-     * still does below) never calls {@code hasNext()} again once the underlying iterable is
-     * "exhausted" by definition for a bounded source - but this source never reports exhaustion, so
-     * that loop hangs forever the first time it actually reaches the tail of the topic.
-     */
     private void assertSqlResultsCountEventually(final long expectedCount, final String sql,
                                                  final Object... sqlArguments) {
         long count = -1;
         for (int i = 0; i < ASSERTION_ATTEMPTS; i++) {
             count = 0;
-            try (SqlResult sqlResult = sqlService.execute(sql, sqlArguments)) {
+            final SqlStatement statement = new SqlStatement(sql)
+                    .setParameters(Arrays.asList(sqlArguments))
+                    .setTimeoutMillis(SQL_READ_TIMEOUT_MS);
+            try (SqlResult sqlResult = sqlService.execute(statement)) {
                 final Iterator<SqlRow> it = sqlResult.iterator();
                 while (count < expectedCount && it.hasNext()) {
                     it.next();
                     count++;
                 }
+            } catch (final HazelcastSqlException e) {
+                // the statement timeout above cancelled a hasNext() call that was blocked waiting for a
+                // row that hadn't arrived yet - fall through and retry
             }
             if (count == expectedCount) {
                 return;
@@ -231,7 +209,7 @@ public class PulsarSqlTest extends AbstractJetSoakTest {
                 query.append(",");
             }
         }
-        if (query.length() != 0) {
+        if (!query.isEmpty()) {
             executeQueryWithNoErrorAssert(query.toString());
         }
     }
@@ -239,37 +217,26 @@ public class PulsarSqlTest extends AbstractJetSoakTest {
     private void assertMappingContentsViaSql(final String mappingName, final int jobCounter) {
         // Same reasoning as assertSqlResultsCountEventually: this is an unbounded streaming source,
         // so the loop must stop pulling once it has itemCount rows rather than waiting for the
-        // iterator to report it is exhausted, which it never will.
+        // iterator to report it is exhausted, which it never will. And, same as there, a genuinely
+        // missing row still blocks the last hasNext() call forever, so the statement timeout below
+        // forcefully cancels it instead - the resulting HazelcastSqlException just means docIds falls
+        // short of itemCount, which the assertEquals below reports clearly instead of hanging.
         final Set<String> docIds = new HashSet<>();
-        try (SqlResult sqlResult = sqlService.execute("SELECT docId FROM " + mappingName)) {
+        final SqlStatement statement = new SqlStatement("SELECT docId FROM " + mappingName)
+                .setTimeoutMillis(SQL_READ_TIMEOUT_MS);
+        try (SqlResult sqlResult = sqlService.execute(statement)) {
             final Iterator<SqlRow> it = sqlResult.iterator();
             while (docIds.size() < itemCount && it.hasNext()) {
                 docIds.add(it.next().getObject(0));
             }
+        } catch (final HazelcastSqlException e) {
+            // see the comment above - the statement timeout cancelled a blocked hasNext() call
         }
         assertEquals(itemCount, docIds.size());
         assertTrue(docIds.contains(docId(jobCounter, 0)));
         assertTrue(docIds.contains(docId(jobCounter, itemCount - 1)));
     }
 
-    /**
-     * Cross-verifies the mapping's SQL-visible content by reading the topic directly with a plain
-     * {@link PulsarClient} {@link Reader}, bypassing SQL entirely.
-     * <p>
-     * Reads as raw {@code Schema.BYTES} rather than {@code Schema.JSON(...)}: the SQL connector's
-     * {@code json-flat} writer publishes messages with no registered Pulsar schema (an "empty(BYTES)"
-     * schema on the topic), and asking for a JSON reader schema on top of that makes the broker try
-     * to add an incompatible JSON schema to an already-active BYTES-schema topic, which it rejects
-     * with an {@code IncompatibleSchemaException}. Parsing the JSON body ourselves sidesteps that.
-     * <p>
-     * The topic is partitioned (see {@link #deleteTopicAndCreateNewOne}), and {@link Reader} - unlike
-     * {@link org.apache.pulsar.client.api.Consumer} - cannot be pointed at a partitioned topic's
-     * logical name directly ("Reader is not allowed to be used with a partitioned topic"); it only
-     * reads a single partition, addressed as {@code <topic>-partition-<index>}. So this opens one
-     * reader per partition in turn and pools the results together - insertion order across
-     * partitions isn't guaranteed anyway (routing is by {@code __key}), and this test only cares
-     * about the full set of docIds being present, not their order.
-     */
     private void assertTopicContentsViaNativeClient(final String topicName, final int jobCounter)
             throws IOException {
         final Set<String> docIds = new HashSet<>();
@@ -301,13 +268,6 @@ public class PulsarSqlTest extends AbstractJetSoakTest {
         pulsarAdmin.topics().createPartitionedTopic(fullTopicName, topicPartitions);
     }
 
-    /**
-     * Deletes a (partitioned) topic, ignoring failures - this is also used defensively before
-     * creating a topic in case a previous run left one behind. Every topic this test creates is
-     * partitioned (see {@link #deleteTopicAndCreateNewOne}), so this always goes through
-     * {@code deletePartitionedTopic} - the plain {@code delete} call rejects a partitioned topic
-     * with "This is a Partitioned Topic, please try Partitioned-Topic-CLI to delete it".
-     */
     private void deleteTopic(final String topicName) {
         final String fullTopicName = TOPIC_NAMESPACE + topicName;
         try {

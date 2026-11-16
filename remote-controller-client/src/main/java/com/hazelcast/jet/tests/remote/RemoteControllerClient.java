@@ -54,13 +54,6 @@ public final class RemoteControllerClient {
     private static final int VERIFICATION_DURATION_GAP = 15;
     private static final int SLEEP_BETWEEN_CLUSTER_RESTART_SECONDS = 30;
     private static final int ASSERTION_RETRY_COUNT = 120;
-    // jet_shutdown_mode is GRACEFUL for real (Jenkins-driven) runs, which makes a member wait for
-    // its own partition/replica migration to finish before the JVM actually exits - unlike
-    // TERMINATE, that time scales with how much partition data the member is holding, so it can
-    // legitimately take much longer than ASSERTION_RETRY_COUNT's 2-minute budget once a soak run
-    // has been pushing data through the cluster for a while. Used for both the per-member stop()
-    // (systemctl stop hazelcast-jet-isolatedd, still subject to the same shutdown hook policy) and
-    // the full hz-cluster-admin cluster shutdown - both wait on the same graceful-shutdown path.
     private static final int SHUTDOWN_ASSERTION_RETRY_COUNT = 600;
     private static final String JAVA_PROCESS_CHECK = "jps | grep HazelcastMemberStarter | wc -l";
 
@@ -102,14 +95,6 @@ public final class RemoteControllerClient {
                     start(member);
                     sleepMinutes(sleepBetweenRestart);
                 } catch (Exception | AssertionError e) {
-                    // A single member failing to confirm stop/start (e.g. its JVM process not
-                    // exiting promptly on an otherwise-completed graceful shutdown) used to
-                    // System.exit(1) the whole controller here, permanently abandoning the
-                    // isolated cluster for the rest of a multi-hour run - every dual-cluster test's
-                    // Dynamic thread would then fail for the remainder of the run with no cluster to
-                    // talk to, even though this was really a one-member hiccup. Log it and move on
-                    // to the next member/cycle instead; best-effort attempt to make sure this
-                    // member is actually back up before continuing.
                     logger.severe("Restart cycle failed for member [" + member + "], skipping to next"
                             + " cycle instead of aborting the whole controller: " + e, e);
                     uncheckRun(() -> attemptRecoveryStart(member));
@@ -121,11 +106,6 @@ public final class RemoteControllerClient {
                         shutdownCluster(member, jetHome, members);
                         sleepSeconds(SLEEP_BETWEEN_CLUSTER_RESTART_SECONDS);
                     } catch (Exception | AssertionError e) {
-                        // shutdownCluster() already issued the cluster-wide shutdown command before
-                        // this could throw (e.g. assertClusterShutdown timing out on one member), so
-                        // the cluster is in a stopped or half-stopped state regardless of whether we
-                        // could confirm it - always attempt startCluster() below rather than leaving
-                        // it down for the rest of the run just because the verification failed.
                         logger.severe("Cluster shutdown verification failed, restarting cluster anyway: "
                                 + e, e);
                     } finally {
@@ -147,11 +127,6 @@ public final class RemoteControllerClient {
 
     private static void startCluster(List<Member> members) {
         logger.info("Start cluster");
-        // One member's start-verification throwing (Exception or, from assertWithRetry,
-        // AssertionError) must not stop the remaining members from getting their own start
-        // attempt - this is called from the shutdownCluster failure path specifically to make sure
-        // every member is brought back up regardless of how the shutdown went, so a per-member
-        // catch here is required, not just a catch around the whole forEach.
         members.forEach(m -> {
             try {
                 start(m);
@@ -162,11 +137,6 @@ public final class RemoteControllerClient {
         });
     }
 
-    /**
-     * Best-effort attempt to bring a single member back up after its own stop/start cycle failed
-     * (see the catch around stop()/start() in main()) - swallows any further failure since this is
-     * just a best-effort recovery step, not something worth aborting the whole controller over.
-     */
     private static void attemptRecoveryStart(Member member) {
         try {
             start(member);

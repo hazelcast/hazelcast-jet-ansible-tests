@@ -28,13 +28,6 @@ import java.util.Random;
 import static com.hazelcast.jet.impl.util.Util.uncheckRun;
 import static com.hazelcast.jet.tests.common.Util.sleepMillis;
 
-/**
- * Publishes an ever-increasing global sequence of {@link GreetingWithSeq} messages to the input
- * topic for the whole duration of the test. The {@code seq} field is the same globally-monotonic
- * counter the single-hop version of this test used to send as a bare {@code Long}; {@code name}
- * and {@code favouriteMeal} are additional payload fields feeding the grouped {@code
- * mapStateful} stage ported from {@code pulsar-test}.
- */
 public class PulsarMessageProducer {
     private static final int PRINT_LOG_SENT_ITEMS = 5_000;
 

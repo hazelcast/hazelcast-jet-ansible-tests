@@ -48,21 +48,6 @@ import static com.hazelcast.jet.tests.common.Util.sleepMillis;
 import static com.hazelcast.jet.tests.common.Util.sleepMinutes;
 import static com.hazelcast.jet.tests.common.Util.sleepSeconds;
 
-/**
- * Long-running exactly-once soak test for the Pulsar source/sink connectors introduced in
- * "Rework consumers to processors" [CTT-1423][CTT-1366][CTT-1362]. Mirrors {@code
- * MongoLongStreamTest}'s dual-cluster/restart architecture: a background producer keeps
- * publishing an ever-increasing global sequence of messages to a per-cluster input topic while a
- * two-hop Jet pipeline (ported from {@code pulsar-test}: a {@code favouriteMeal}-grouped {@code
- * mapStateful} counting stage plus a transactional, dead-letter-aware {@link
- * PulsarDataConnection}) streams them through a middle topic into a memory-bounded {@link
- * VerificationProcessor} sink that checks the original global sequence id - carried through both
- * hops untouched - arrives exactly once, without ever holding the whole run's history in memory.
- * The pipeline runs identically, and concurrently, on the "dynamic" cluster (whose members this
- * framework periodically restarts - the actual restart/snapshot-recovery coverage) and a separate
- * "stable" cluster - both use the same transactional data connection, since both run against a
- * genuine HazelcastClient.
- */
 public class PulsarLongStreamTest extends AbstractJetSoakTest {
     private static final String TOPIC_PREFIX = PulsarLongStreamTest.class.getSimpleName();
     private static final String CONSUMED_MESSAGES_MAP_NAME = TOPIC_PREFIX + "_latestCounter";
@@ -92,6 +77,8 @@ public class PulsarLongStreamTest extends AbstractJetSoakTest {
         timeoutForNoDataProcessedMin = propertyInt("timeoutForNoProcessedDataMin",
                 DEFAULT_TIMEOUT_FOR_NO_DATA_PROCESSED_MIN);
         pulsarAdmin = PulsarAdmin.builder().serviceHttpUrl(httpServiceUrl).build();
+        // EXACTLY_ONCE refuses to run unless broker-side deduplication is enabled
+        pulsarAdmin.namespaces().setDeduplicationStatus("public/default", true);
     }
 
     @Override
@@ -111,21 +98,6 @@ public class PulsarLongStreamTest extends AbstractJetSoakTest {
         deleteTopicAndCreateNewOne(middleTopic);
         deleteTopicAndCreateNewOne(deadLetterTopic);
 
-        // Both the "dynamic" and "stable" branches run against a genuine HazelcastClient, so both
-        // can use a real transactional PulsarDataConnection. hz-cli submit -f <clientYaml> (which
-        // is how the dynamic branch's "client" comes to life) builds one via
-        // HazelcastClient.newHazelcastClient(...) - see HazelcastCommandLine#getClientConfig /
-        // hzClientFn in hazelcast-mono - so client.getConfig() there is a live
-        // ClientDynamicClusterConfig exactly like the manually-created stable client, not a
-        // member's frozen startup-time Config. There is no need to fall back to a plain
-        // connectionSupplier for either branch.
-        //
-        // Against a real ansible-deployed cluster, DATA_CONNECTION_NAME is expected to already be
-        // configured on the cluster's members via the "data-connection" section templated into
-        // hazelcast.yaml.j2 - it exists from cluster startup, so it survives restarts and is
-        // shared by every soak test run against that cluster, rather than being pushed at runtime.
-        // Runtime registration is only needed - and only attempted - for a local run, where there
-        // is no ansible-managed member config to bake it into.
         final DataConnectionRef dataConnectionRef = DataConnectionRef.dataConnectionRef(DATA_CONNECTION_NAME);
         if (isRunLocal()) {
             client.getConfig().addDataConnectionConfig(PulsarDataConnection.pulsarDataConnectionConf(
@@ -238,17 +210,11 @@ public class PulsarLongStreamTest extends AbstractJetSoakTest {
 
     private static void assertJobStatusEventually(final Job job) {
         for (int i = 0; i < ASSERTION_ATTEMPTS; i++) {
-            // getJobStatusWithRetry (not a bare job.getStatus()) so a transient JobNotFoundException
-            // right after submission - e.g. before the job is visible on every member/coordinator -
-            // is retried instead of instantly failing this thread.
             final JobStatus status = getJobStatusWithRetry(job);
             if (status == RUNNING) {
                 return;
             }
             if (status == FAILED) {
-                // job.join() rethrows the job's actual failure cause instead of the generic
-                // "does not have expected status" message below, which otherwise swallows the real
-                // reason the job failed and makes this unnecessarily hard to diagnose from logs.
                 job.join();
             }
             sleepMillis(ASSERTION_SLEEP_MS);

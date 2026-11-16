@@ -218,9 +218,6 @@ public class MongoSqlTest extends AbstractJetSoakTest {
     private void executeQueryWithNoErrorAssert(final String query, final Object... arguments) {
         try (SqlResult sqlResult = sqlService.execute(query, arguments)) {
             // updateCount() is deprecated for removal since 5.6 and now always returns 0 for DML/DDL,
-            // so it can no longer be used to assert anything meaningful. isRowSet() is the still-supported
-            // way to confirm this was a non-row-returning (DDL/DML) statement; a failed statement would
-            // already have thrown out of execute(...) above.
             assertFalse(sqlResult.isRowSet());
         }
     }
@@ -483,7 +480,7 @@ public class MongoSqlTest extends AbstractJetSoakTest {
                 query.append(",");
             }
         }
-        if (query.length() != 0) {
+        if (!query.isEmpty()) {
             executeQueryWithNoErrorAssert(query.toString());
         }
     }

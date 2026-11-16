@@ -32,15 +32,6 @@ import static com.hazelcast.jet.datamodel.Tuple2.tuple2;
 import static com.hazelcast.jet.impl.pipeline.SinkImpl.Type.TOTAL_PARALLELISM_ONE;
 import static java.lang.String.format;
 
-/**
- * Memory-bounded exactly-once verifier shared by the long-running stream soak tests
- * (e.g. MongoLongStreamTest, PulsarLongStreamTest). Instead of holding every value seen
- * over the whole soak run, it keeps only a small out-of-order window and advances a
- * per-run counter as values arrive in order, flagging gaps and duplicates. Progress is
- * published into a distributed map (named by the caller, so multiple tests can share
- * this processor without colliding on the same map) so the driving test loop can poll
- * it without holding a reference to this processor.
- */
 public class VerificationProcessor extends AbstractProcessor {
 
     private static final int QUEUE_SIZE_LIMIT = 5_000;
@@ -58,13 +49,6 @@ public class VerificationProcessor extends AbstractProcessor {
         this.name = name;
     }
 
-    /**
-     * @param mapName name of the distributed map this verifier publishes its per-run
-     *                counter into; use a name specific to the calling test so
-     *                concurrently-running tests never share a map.
-     * @param name    name of this run, used as the key in the map (e.g. the cluster
-     *                name when a test runs on both clusters at once).
-     */
     public static Sink<Long> sink(String mapName, String name) {
         return new SinkImpl<>(name,
                 forceTotalParallelismOne(ProcessorSupplier.of(() -> new VerificationProcessor(mapName, name)), name),

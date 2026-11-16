@@ -47,24 +47,6 @@ import static com.hazelcast.jet.tests.common.Util.sleepMillis;
 import static com.hazelcast.jet.tests.common.Util.sleepSeconds;
 import static java.util.stream.Collectors.toList;
 
-/**
- * Repeated-cycle soak test for the new Pulsar processor-based connector, directly
- * analogous to {@code MongoTest}: every cycle recreates a fresh Pulsar topic, starts a
- * streaming read pipeline into a list sink, runs a bounded "batch" write pipeline into
- * the topic, runs a "batch" read-back pipeline from the topic into another list sink,
- * asserts both sinks contain exactly the expected content, then cancels the streaming
- * jobs and cleans up before starting the next cycle.
- * <p>
- * Unlike Mongo, Pulsar's Jet connector (see {@code PulsarSources}) only exposes
- * {@code StreamSource}s (the Consumer API and the Reader API) - there is no
- * {@code PulsarSources.batch(...)} analogous to {@code MongoSources.batch(...)}. The
- * "batch read-back" phase below is therefore adapted: a Reader-API {@code StreamSource}
- * is started against the topic (a fresh Reader always begins at {@code MessageId.earliest}
- * so it replays everything written to the fresh topic) and verification is driven by a
- * bounded polling loop that waits for the expected item count instead of waiting for the
- * (nonexistent) completion of a terminating batch source; the streaming job is then
- * cancelled explicitly once the expected count has been observed.
- */
 public class PulsarCycleTest extends AbstractJetSoakTest {
     private static final int DEFAULT_ITEM_COUNT = 5_000;
     private static final int LOG_JOB_COUNT_THRESHOLD = 50;
@@ -232,13 +214,6 @@ public class PulsarCycleTest extends AbstractJetSoakTest {
         client.getJet().newJob(toPulsar, jobConfig).join();
     }
 
-    /**
-     * There is no {@code PulsarSources.batch(...)} equivalent of {@code MongoSources.batch(...)}, so the
-     * "batch read-back" is adapted from a Reader-API {@code StreamSource}: a freshly created Reader always
-     * starts at {@code MessageId.earliest}, so on the fresh, just-written topic it replays every message
-     * that was written by {@link #executeWriteToPulsarPipeline}. The caller is responsible for cancelling
-     * the returned, never-completing job once {@link #assertBatchResults} observes the expected item count.
-     */
     private Job startBatchReadFromPulsarPipeline(final HazelcastInstance client,
                                                  final DataConnectionRef dataConnectionRef,
                                                  final String topicName, final int topicCounter) {
@@ -265,11 +240,6 @@ public class PulsarCycleTest extends AbstractJetSoakTest {
         return job;
     }
 
-    /**
-     * Waits (bounded) for the Reader-API "batch read-back" pipeline to have replayed every message
-     * written to the topic. See {@link #startBatchReadFromPulsarPipeline} for why a bounded poll is
-     * used here instead of joining a genuinely terminating batch job.
-     */
     private void assertBatchResults(final HazelcastInstance client, final int topicCounter) {
         for (int i = 0; i < SINK_ASSERTION_ATTEMPTS; i++) {
             final long actualTotalCount = client.getList(BATCH_SINK_LIST_NAME).size();

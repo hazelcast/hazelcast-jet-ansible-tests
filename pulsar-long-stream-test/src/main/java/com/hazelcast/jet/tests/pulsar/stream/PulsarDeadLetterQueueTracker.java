@@ -26,14 +26,7 @@ import org.apache.pulsar.client.api.Schema;
 import java.io.IOException;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
-/**
- * Watches a single cluster's dead letter topic for the whole lifetime of {@code test(...)},
- * simplified from {@code pulsar-test}'s {@code MessageConsumer}: this test already has its own
- * exactly-once mechanism via {@link com.hazelcast.jet.tests.common.VerificationProcessor}, so only
- * the dead-letter-queue-emptiness half of that class is ported here, parameterized per cluster
- * name so the concurrently-running dynamic and stable clusters each track their own dead letter
- * topic independently.
- */
+
 class PulsarDeadLetterQueueTracker {
 
     private final PulsarClient client;

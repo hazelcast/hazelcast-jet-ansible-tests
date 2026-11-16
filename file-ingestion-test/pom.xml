@@ -173,6 +173,10 @@
                                 <includes>
                                     <include>com.hazelcast.jet.tests:*</include>
                                     <include>com.hazelcast.jet.tests.s3:*</include>
+                                    <include>com.hazelcast.jet:hazelcast-jet-csv</include>
+                                    <include>com.hazelcast.jet:hazelcast-jet-avro</include>
+                                    <include>com.hazelcast.jet:hazelcast-jet-files-s3</include>
+                                    <include>software.amazon.awssdk:*</include>
                                 </includes>
                             </artifactSet>
                         </configuration>

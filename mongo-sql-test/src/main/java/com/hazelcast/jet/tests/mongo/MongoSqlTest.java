@@ -217,7 +217,8 @@ public class MongoSqlTest extends AbstractJetSoakTest {
 
     private void executeQueryWithNoErrorAssert(final String query, final Object... arguments) {
         try (SqlResult sqlResult = sqlService.execute(query, arguments)) {
-            assertEquals(0, sqlResult.updateCount());
+            // updateCount() is deprecated for removal since 5.6 and now always returns 0 for DML/DDL,
+            assertFalse(sqlResult.isRowSet());
         }
     }
 
@@ -479,7 +480,7 @@ public class MongoSqlTest extends AbstractJetSoakTest {
                 query.append(",");
             }
         }
-        if (query.length() != 0) {
+        if (!query.isEmpty()) {
             executeQueryWithNoErrorAssert(query.toString());
         }
     }

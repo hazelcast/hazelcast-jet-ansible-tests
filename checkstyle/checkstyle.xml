@@ -69,6 +69,10 @@
     <!-- See http://checkstyle.sf.net/config_whitespace.html -->
     <module name="FileTabCharacter"/>
 
+    <module name="LineLength">
+        <property name="max" value="123"/>
+    </module>
+
     <!-- Miscellaneous other checks.                   -->
     <!-- See http://checkstyle.sf.net/config_misc.html -->
     <module name="RegexpSingleline">
@@ -86,9 +90,6 @@
     </module>
 
     <module name="TreeWalker">
-        <!-- Activate comment suppression filters -->
-        <module name="FileContentsHolder"/>
-
         <!-- Needed for SuppressWarningsFilter to work -->
         <module name="SuppressWarningsHolder"/>
 
@@ -137,11 +138,6 @@
             <property name="processJavadoc" value="true"/>
         </module>
 
-        <!-- Checks for Size Violations.                    -->
-        <!-- See http://checkstyle.sf.net/config_sizes.html -->
-        <module name="LineLength">
-            <property name="max" value="123"/>
-        </module>
         <module name="MethodLength">
             <property name="tokens" value="METHOD_DEF"/>
             <property name="max" value="200"/>
@@ -222,6 +218,7 @@
         </module>
         <module name="ReturnCount">
             <property name="max" value="8"/>
+            <property name="maxForVoid" value="8"/>
         </module>
         <module name="NestedIfDepth">
             <property name="max" value="2"/>

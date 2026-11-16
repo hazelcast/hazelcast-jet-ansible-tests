@@ -54,6 +54,7 @@ public final class RemoteControllerClient {
     private static final int VERIFICATION_DURATION_GAP = 15;
     private static final int SLEEP_BETWEEN_CLUSTER_RESTART_SECONDS = 30;
     private static final int ASSERTION_RETRY_COUNT = 120;
+    private static final int SHUTDOWN_ASSERTION_RETRY_COUNT = 600;
     private static final String JAVA_PROCESS_CHECK = "jps | grep HazelcastMemberStarter | wc -l";
 
     private static int logCounter;
@@ -88,22 +89,34 @@ public final class RemoteControllerClient {
         int[] counter = new int[]{0};
         Iterables.cycle(members).forEach(member -> {
             try {
-                stop(member, jetHome);
-                sleepMinutes(sleepBetweenRestart);
-                start(member);
-                sleepMinutes(sleepBetweenRestart);
+                try {
+                    stop(member, jetHome);
+                    sleepMinutes(sleepBetweenRestart);
+                    start(member);
+                    sleepMinutes(sleepBetweenRestart);
+                } catch (Exception | AssertionError e) {
+                    logger.severe("Restart cycle failed for member [" + member + "], skipping to next"
+                            + " cycle instead of aborting the whole controller: " + e, e);
+                    uncheckRun(() -> attemptRecoveryStart(member));
+                }
 
                 counter[0]++;
                 if (counter[0] % memberCount == 0) {
-                    shutdownCluster(member, jetHome, members);
-                    sleepSeconds(SLEEP_BETWEEN_CLUSTER_RESTART_SECONDS);
-                    startCluster(members);
+                    try {
+                        shutdownCluster(member, jetHome, members);
+                        sleepSeconds(SLEEP_BETWEEN_CLUSTER_RESTART_SECONDS);
+                    } catch (Exception | AssertionError e) {
+                        logger.severe("Cluster shutdown verification failed, restarting cluster anyway: "
+                                + e, e);
+                    } finally {
+                        startCluster(members);
+                    }
                     sleepMinutes(sleepBetweenRestart);
                 }
 
-            } catch (Exception e) {
-                e.printStackTrace();
-                System.exit(1);
+            } catch (Exception | AssertionError e) {
+                logger.severe("Unrecoverable error in restart cycle for member [" + member + "], skipping"
+                        + " to next cycle: " + e, e);
             }
             if (System.currentTimeMillis() - begin > duration) {
                 System.out.println("Exiting Remote Controller Client");
@@ -114,7 +127,23 @@ public final class RemoteControllerClient {
 
     private static void startCluster(List<Member> members) {
         logger.info("Start cluster");
-        members.forEach(m -> uncheckRun(() -> start(m)));
+        members.forEach(m -> {
+            try {
+                start(m);
+            } catch (Exception | AssertionError e) {
+                logger.severe("Failed to start member [" + m + "] while starting cluster, continuing"
+                        + " with remaining members: " + e, e);
+            }
+        });
+    }
+
+    private static void attemptRecoveryStart(Member member) {
+        try {
+            start(member);
+        } catch (Exception | AssertionError e) {
+            logger.severe("Recovery start also failed for member [" + member + "], will retry on its"
+                    + " next scheduled cycle: " + e, e);
+        }
     }
 
     private static void shutdownCluster(Member member, String jetHome, List<Member> members) throws Exception {
@@ -174,14 +203,14 @@ public final class RemoteControllerClient {
     }
 
     private static void assertMemberStarted(Member member) throws Exception {
-        assertWithRetry("Start member [" + member + "] assertion failed", () -> {
+        assertWithRetry("Start member [" + member + "] assertion failed", ASSERTION_RETRY_COUNT, () -> {
             String result = call(member, JAVA_PROCESS_CHECK);
             return result != null && result.trim().equals("1");
         });
     }
 
     private static void assertMemberStopped(Member member) throws Exception {
-        assertWithRetry("Stop member [" + member + "] assertion failed", () -> {
+        assertWithRetry("Stop member [" + member + "] assertion failed", SHUTDOWN_ASSERTION_RETRY_COUNT, () -> {
             String result = call(member, JAVA_PROCESS_CHECK);
             return result != null && result.trim().equals("0");
         });
@@ -193,8 +222,9 @@ public final class RemoteControllerClient {
         }
     }
 
-    private static void assertWithRetry(String message, SupplierEx<Boolean> runnable) throws Exception {
-        for (int i = 0; i < ASSERTION_RETRY_COUNT; i++) {
+    private static void assertWithRetry(String message, int retryCount, SupplierEx<Boolean> runnable)
+            throws Exception {
+        for (int i = 0; i < retryCount; i++) {
             if (runnable.get()) {
                 return;
             }

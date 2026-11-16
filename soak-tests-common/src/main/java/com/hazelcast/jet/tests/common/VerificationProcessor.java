@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.hazelcast.jet.tests.mongo.stream;
+package com.hazelcast.jet.tests.common;
 
 import com.hazelcast.core.HazelcastInstanceNotActiveException;
 import com.hazelcast.jet.core.AbstractProcessor;
@@ -34,30 +34,31 @@ import static java.lang.String.format;
 
 public class VerificationProcessor extends AbstractProcessor {
 
-    public static final String CONSUMED_DOCS_MAP_NAME = "MongoLongStreamTest_latestCounter";
     private static final int QUEUE_SIZE_LIMIT = 5_000;
     private static final int PRINT_LOG_ITEMS = 5_000;
 
+    private final String mapName;
     private final String name;
     private final PriorityQueue<Long> queue = new PriorityQueue<>();
     private long counter;
     private ILogger logger;
     private IMap<String, Long> map;
 
-    public VerificationProcessor(String name) {
+    public VerificationProcessor(String mapName, String name) {
+        this.mapName = mapName;
         this.name = name;
     }
 
-    static Sink<Long> sink(String name) {
+    public static Sink<Long> sink(String mapName, String name) {
         return new SinkImpl<>(name,
-                forceTotalParallelismOne(ProcessorSupplier.of(() -> new VerificationProcessor(name)), name),
+                forceTotalParallelismOne(ProcessorSupplier.of(() -> new VerificationProcessor(mapName, name)), name),
                 TOTAL_PARALLELISM_ONE);
     }
 
     @Override
     protected void init(Context context) {
         logger = context.logger();
-        map = context.hazelcastInstance().getMap(CONSUMED_DOCS_MAP_NAME);
+        map = context.hazelcastInstance().getMap(mapName);
     }
 
     @Override

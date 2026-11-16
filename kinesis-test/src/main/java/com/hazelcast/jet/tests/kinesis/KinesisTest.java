@@ -29,7 +29,7 @@ import com.hazelcast.jet.pipeline.SourceBuilder;
 import com.hazelcast.jet.pipeline.StreamSource;
 import com.hazelcast.jet.tests.common.AbstractJetSoakTest;
 
-import com.hazelcast.shaded.software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.regions.Region;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;

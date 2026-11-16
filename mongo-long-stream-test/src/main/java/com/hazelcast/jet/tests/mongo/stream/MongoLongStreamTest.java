@@ -25,6 +25,7 @@ import com.hazelcast.jet.mongodb.impl.MongoUtilities;
 import com.hazelcast.jet.pipeline.Pipeline;
 import com.hazelcast.jet.pipeline.StreamSource;
 import com.hazelcast.jet.tests.common.AbstractJetSoakTest;
+import com.hazelcast.jet.tests.common.VerificationProcessor;
 import com.hazelcast.logging.ILogger;
 import com.mongodb.ConnectionString;
 import com.mongodb.MongoClientSettings;
@@ -48,6 +49,8 @@ import static java.util.concurrent.TimeUnit.MINUTES;
 
 public class MongoLongStreamTest extends AbstractJetSoakTest {
     private static final String MONGO_DATABASE = MongoLongStreamTest.class.getSimpleName();
+    private static final String CONSUMED_DOCS_MAP_NAME = MongoLongStreamTest.class.getSimpleName()
+            + "_latestCounter";
     private static final int ASSERTION_RETRY_COUNT = 60;
     private static final int DEFAULT_SNAPSHOT_INTERVAL = 5000;
     private static final int DEFAULT_TIMEOUT_FOR_NO_DATA_PROCESSED_MIN = 5;
@@ -99,7 +102,7 @@ public class MongoLongStreamTest extends AbstractJetSoakTest {
         fromMongo.readFrom(mongoSource)
                 .withNativeTimestamps(0)
                 .map(doc -> doc.getLong("docId"))
-                .writeTo(VerificationProcessor.sink(clusterName));
+                .writeTo(VerificationProcessor.sink(CONSUMED_DOCS_MAP_NAME, clusterName));
 
         final JobConfig jobConfig = new JobConfig();
 
@@ -170,13 +173,13 @@ public class MongoLongStreamTest extends AbstractJetSoakTest {
     }
 
     private static long getNumberOfProcessedDocs(final HazelcastInstance client, final String clusterName) {
-        final Map<String, Long> latestCounterMap = client.getMap(VerificationProcessor.CONSUMED_DOCS_MAP_NAME);
+        final Map<String, Long> latestCounterMap = client.getMap(CONSUMED_DOCS_MAP_NAME);
         return Optional.ofNullable(latestCounterMap.get(clusterName)).orElse(0L);
     }
 
     private static void assertCountEventually(final HazelcastInstance client, final long expectedTotalCount,
                                               final String clusterName) {
-        final Map<String, Long> latestCounterMap = client.getMap(VerificationProcessor.CONSUMED_DOCS_MAP_NAME);
+        final Map<String, Long> latestCounterMap = client.getMap(CONSUMED_DOCS_MAP_NAME);
         for (int i = 0; i < ASSERTION_RETRY_COUNT; i++) {
             final long actualTotalCount = latestCounterMap.get(clusterName);
             if (expectedTotalCount == actualTotalCount) {

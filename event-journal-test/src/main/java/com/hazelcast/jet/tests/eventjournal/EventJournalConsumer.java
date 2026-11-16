@@ -66,7 +66,7 @@ public class EventJournalConsumer<K, V> {
             offsets[i] = offsets[i] + resultSet.readCount();
             isEmpty = isEmpty & resultSet.readCount() == 0;
         }
-        logger.info("Partitions offsets are: " + Arrays.toString(offsets));
+        logger.fine("Partitions offsets are: " + Arrays.toString(offsets));
         return isEmpty;
     }
 

@@ -73,7 +73,7 @@ public class VerificationProcessor extends AbstractProcessor {
                 counter++;
             } else {
                 // duplicate key, ignore
-                logger.warning(String.format("[%s] Duplicate key %d, but counter was %d", name, peeked, counter));
+                logger.info(String.format("[%s] Duplicate key %d, but counter was %d", name, peeked, counter));
                 queue.remove();
             }
         }
@@ -81,7 +81,7 @@ public class VerificationProcessor extends AbstractProcessor {
             try {
                 map.setAsync(name, counter);
             } catch (HazelcastInstanceNotActiveException e) {
-                logger.warning(format("Setting the counter[%s] to %d failed with instance not active exception",
+                logger.info(format("Setting the counter[%s] to %d failed with instance not active exception",
                         name, counter), e);
             }
         }

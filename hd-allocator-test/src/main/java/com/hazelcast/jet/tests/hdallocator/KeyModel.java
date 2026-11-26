@@ -16,25 +16,28 @@
 
 package com.hazelcast.jet.tests.hdallocator;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 
 /**
- * What a worker knows about its keys: the last value it wrote successfully, the value of a write that failed but may
+ * What a worker knows about its keys: the last value it wrote successfully, the values of the writes that failed but may
  * still have been applied, and the disruption counter at the time the key was last confirmed.
+ * <p>
+ * A failed write can leave its value in the map, for example when the member stores the entry and then fails while it
+ * updates an index. So every failed write since the last successful one stays allowed, not only the latest.
  */
 final class KeyModel<T> {
 
     private final String mapName;
     private final Object[] expected;
-    private final Object[] pending;
-    private final boolean[] writeUnsure;
+    private final List<Object>[] pending;
     private final long[] confirmedAt;
 
     KeyModel(String mapName, int size) {
         this.mapName = mapName;
         this.expected = new Object[size];
-        this.pending = new Object[size];
-        this.writeUnsure = new boolean[size];
+        this.pending = newPending(size);
         this.confirmedAt = new long[size];
     }
 
@@ -42,14 +45,15 @@ final class KeyModel<T> {
     void confirmWrite(int key, T value, long disruptionsBeforeWrite) {
         expected[key] = value;
         pending[key] = null;
-        writeUnsure[key] = false;
         confirmedAt[key] = disruptionsBeforeWrite;
     }
 
     /** A write failed, so the member may or may not have applied it. */
     void writeMayHaveHappened(int key, T value) {
-        pending[key] = value;
-        writeUnsure[key] = true;
+        if (pending[key] == null) {
+            pending[key] = new ArrayList<>();
+        }
+        pending[key].add(value);
     }
 
     /** Throws an AssertionError when the value read from the map is not allowed for the key. */
@@ -62,7 +66,7 @@ final class KeyModel<T> {
         if (!isAllowed(key, actual)) {
             throw new AssertionError(mapName + ": key " + key + " holds " + Values.describe(actual)
                     + ", expected " + Values.describe(expected[key])
-                    + (writeUnsure[key] ? " or " + Values.describe(pending[key]) : ""));
+                    + (pending[key] != null ? " or one of " + describeAll(pending[key]) : ""));
         }
     }
 
@@ -79,7 +83,7 @@ final class KeyModel<T> {
 
     private void checkMissing(int key, long disruptionsNow) {
         boolean restartPossible = confirmedAt[key] != disruptionsNow;
-        if (expected[key] != null && !writeUnsure[key] && !restartPossible) {
+        if (expected[key] != null && pending[key] == null && !restartPossible) {
             throw new AssertionError(mapName + ": key " + key + " disappeared, expected "
                     + Values.describe(expected[key]));
         }
@@ -91,7 +95,29 @@ final class KeyModel<T> {
     }
 
     private boolean isAllowed(int key, Object actual) {
-        return Objects.deepEquals(actual, expected[key])
-                || (writeUnsure[key] && Objects.deepEquals(actual, pending[key]));
+        if (Objects.deepEquals(actual, expected[key])) {
+            return true;
+        }
+        if (pending[key] != null) {
+            for (Object value : pending[key]) {
+                if (Objects.deepEquals(actual, value)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static String describeAll(List<Object> values) {
+        StringBuilder text = new StringBuilder();
+        for (Object value : values) {
+            text.append(text.length() == 0 ? "" : ", ").append(Values.describe(value));
+        }
+        return text.toString();
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<Object>[] newPending(int size) {
+        return (List<Object>[]) new List[size];
     }
 }

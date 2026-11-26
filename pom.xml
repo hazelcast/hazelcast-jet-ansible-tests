@@ -173,6 +173,7 @@
                 <module>sql-tumble-window-test</module>
                 <module>subset-routing-test</module>
                 <module>map-journal-lost-events-test</module>
+                <module>hd-allocator-test</module>
                 <module>vector-collection-test</module>
             </modules>
         </profile>
@@ -255,6 +256,7 @@
                 <module>sql-stream-to-stream-join-test</module>
                 <module>sql-stream-to-stream-fault-tolerance-test</module>
                 <module>sql-tumble-window-test</module>
+                <module>hd-allocator-test</module>
             </modules>
         </profile>
     </profiles>
